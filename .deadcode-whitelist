@@ -10,9 +10,12 @@ internal/auth/auth.go:66:25: CredentialType.String
 internal/git/errors.go:35:22: PatchError.Error
 
 # Test helpers and mock utilities
+internal/contexteng/history/history.go:129:6: NewHistoryWithDefaults
 internal/agent/test_helpers.go:19:6: createTestAgentWithServices
 internal/agent/test_helpers.go:88:6: newAgentForTest
 internal/conversation/test_helpers.go:19:6: setupTestConv
+internal/cycle/service_test.go: testEvent.GetType
+internal/cycle/service_test.go: testEvent.GetTimestamp
 internal/llm/mock.go:242:6: WithResponse
 internal/llm/mock.go:249:6: WithError
 internal/llm/mock.go:256:6: WithToolCalls
@@ -20,3 +23,66 @@ internal/llm/mock.go:263:6: WithStreaming
 internal/llm/mock.go:276:6: WithCapabilities
 internal/llm/mock.go:283:6: WithModels
 internal/llm/mock.go:290:6: WithDelay
+internal/tools/approval_test.go:50:32: mockToolWithApproval.Name
+internal/tools/approval_test.go:51:32: mockToolWithApproval.Description
+internal/tools/approval_test.go:52:32: mockToolWithApproval.Schema
+internal/tools/approval_test.go:53:32: mockToolWithApproval.Execute
+
+# TUI testkit helpers (used only in test files)
+internal/ui/testkit/tuitest_helper.go:21:6: NewTUITest
+internal/ui/testkit/tuitest_helper.go:60:6: TUITestHelper.Start
+internal/ui/testkit/tuitest_helper.go:69:6: TUITestHelper.Stop
+internal/ui/testkit/tuitest_helper.go:76:6: TUITestHelper.WaitForOutput
+internal/ui/testkit/tuitest_helper.go:81:6: TUITestHelper.AssertContains
+internal/ui/testkit/tuitest_helper.go:92:6: TUITestHelper.AssertNotContains
+internal/ui/testkit/tuitest_helper.go:103:6: TUITestHelper.AssertANSISequence
+internal/ui/testkit/fake_tty.go:20:6: NewFakeTTY
+internal/ui/testkit/fake_tty.go:28:19: FakeTTY.Enter
+internal/ui/testkit/fake_tty.go:36:19: FakeTTY.Exit
+internal/ui/testkit/fake_tty.go:44:19: FakeTTY.Size
+internal/ui/testkit/fake_tty.go:51:19: FakeTTY.OnResize
+internal/ui/testkit/fake_tty.go:58:19: FakeTTY.SetSize
+internal/ui/testkit/fake_tty.go:73:19: FakeTTY.InRawMode
+internal/ui/testkit/fake_keyboard.go:18:6: NewFakeKeyboard
+internal/ui/testkit/fake_keyboard.go:25:24: FakeKeyboard.Events
+internal/ui/testkit/fake_keyboard.go:30:24: FakeKeyboard.InjectKey
+internal/ui/testkit/fake_keyboard.go:40:24: FakeKeyboard.InjectString
+internal/ui/testkit/fake_keyboard.go:47:24: FakeKeyboard.InjectEnter
+internal/ui/testkit/fake_keyboard.go:52:24: FakeKeyboard.InjectCtrlC
+internal/ui/testkit/fake_keyboard.go:57:24: FakeKeyboard.InjectCtrlD
+internal/ui/testkit/fake_keyboard.go:62:24: FakeKeyboard.InjectEscape
+internal/ui/testkit/fake_keyboard.go:67:24: FakeKeyboard.InjectPgUp
+internal/ui/testkit/fake_keyboard.go:72:24: FakeKeyboard.InjectPgDn
+internal/ui/testkit/fake_keyboard.go:77:24: FakeKeyboard.InjectBackspace
+internal/ui/testkit/fake_keyboard.go:82:24: FakeKeyboard.InjectPaste
+internal/ui/testkit/fake_keyboard.go:95:24: FakeKeyboard.Close
+internal/ui/testkit/fake_writer.go:19:6: NewFakeWriter
+internal/ui/testkit/fake_writer.go:24:22: FakeWriter.Write
+internal/ui/testkit/fake_writer.go:31:22: FakeWriter.Snapshot
+internal/ui/testkit/fake_writer.go:38:22: FakeWriter.Reset
+internal/ui/testkit/fake_writer.go:45:22: FakeWriter.Contains
+internal/ui/testkit/fake_writer.go:52:22: FakeWriter.ContainsANSI
+internal/ui/testkit/fake_writer.go:59:22: FakeWriter.StripANSI
+internal/ui/testkit/fake_writer.go:69:22: FakeWriter.Lines
+internal/ui/testkit/fake_writer.go:77:22: FakeWriter.WaitForContent
+internal/ui/testkit/fake_writer.go:95:22: FakeWriter.Len
+internal/ui/adapters/puretty.go:118:6: WithKeyboardEvents
+
+# LSP tool interface implementations (registered at runtime)
+internal/tools/find_symbol.go: FindSymbolTool.Description
+internal/tools/find_symbol.go: FindSymbolTool.Schema
+internal/tools/find_references.go: FindReferencesTool.Description
+internal/tools/find_references.go: FindReferencesTool.Schema
+internal/tools/rename_symbol.go: RenameSymbolTool.Description
+internal/tools/rename_symbol.go: RenameSymbolTool.Schema
+
+# Web tools interface implementations (registered at runtime)
+internal/tools/web_fetch.go: FetchURLTool.Description
+internal/tools/web_fetch.go: FetchURLTool.Schema
+internal/tools/web_search.go: WebSearchTool.Description
+internal/tools/web_search.go: WebSearchTool.Schema
+internal/tools/web_browser.go: OpenBrowserTool.Description
+internal/tools/web_browser.go: OpenBrowserTool.Schema
+internal/tools/web_screenshot.go: ScreenshotTool.Description
+internal/tools/web_screenshot.go: ScreenshotTool.Schema
+internal/tools/web_screenshot.go: screenshotProperties

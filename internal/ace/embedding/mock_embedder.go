@@ -4,6 +4,11 @@ import (
 	"context"
 )
 
+const (
+	mockEmbedModulus = 10
+	mockEmbedScale   = 0.1
+)
+
 // MockEmbedder is a simple mock implementation for testing.
 type MockEmbedder struct {
 	dimension  int
@@ -24,16 +29,17 @@ func (m *MockEmbedder) SetEmbedding(text string, embedding []float32) {
 }
 
 // Embed returns a predefined embedding or generates a simple one.
-func (m *MockEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (m *MockEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 	if embed, ok := m.embeddings[text]; ok {
 		return embed, nil
 	}
 
-	// Generate simple embedding based on text length
+	// Generate simple embedding based on text length.
 	embedding := make([]float32, m.dimension)
-	for i := 0; i < m.dimension; i++ {
-		embedding[i] = float32(len(text)%10) * 0.1
+	for i := range m.dimension {
+		embedding[i] = float32(len(text)%mockEmbedModulus) * mockEmbedScale
 	}
+
 	return embedding, nil
 }
 

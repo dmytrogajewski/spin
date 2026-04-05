@@ -5,23 +5,29 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// mockErrorEmbedder is an embedder that returns errors
+var errEmbeddingError = errors.New("embedding error")
+
+// mockErrorEmbedder is an embedder that returns errors.
 type mockErrorEmbedder struct {
 	shouldError bool
 }
 
-func (m *mockErrorEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (m *mockErrorEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	if m.shouldError {
-		return nil, errors.New("embedding error")
+		return nil, errEmbeddingError
 	}
+
 	return make([]float32, 384), nil
 }
 
@@ -29,38 +35,44 @@ func (m *mockErrorEmbedder) Dimension() int {
 	return 384
 }
 
-// TestCosineSimilarity_DifferentLengths tests mismatched vector lengths
+// TestCosineSimilarity_DifferentLengths tests mismatched vector lengths.
 func TestCosineSimilarity_DifferentLengths(t *testing.T) {
+	t.Parallel()
+
 	a := []float32{1.0, 2.0, 3.0}
 	b := []float32{1.0, 2.0}
 
-	similarity := cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	similarity := vector.CosineSimilarity(a, b)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 }
 
-// TestCosineSimilarity_ZeroVectors tests zero norm vectors
+// TestCosineSimilarity_ZeroVectors tests zero norm vectors.
 func TestCosineSimilarity_ZeroVectors(t *testing.T) {
-	// Test with first vector being zero
+	t.Parallel()
+
+	// Test with first vector being zero.
 	a := []float32{0.0, 0.0, 0.0}
 	b := []float32{1.0, 2.0, 3.0}
-	similarity := cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	similarity := vector.CosineSimilarity(a, b)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 
-	// Test with second vector being zero
+	// Test with second vector being zero.
 	a = []float32{1.0, 2.0, 3.0}
 	b = []float32{0.0, 0.0, 0.0}
-	similarity = cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	similarity = vector.CosineSimilarity(a, b)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 
-	// Test with both vectors being zero
+	// Test with both vectors being zero.
 	a = []float32{0.0, 0.0, 0.0}
 	b = []float32{0.0, 0.0, 0.0}
-	similarity = cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	similarity = vector.CosineSimilarity(a, b)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 }
 
-// TestCurate_EmbedError tests error handling when embedding fails
+// TestCurate_EmbedError tests error handling when embedding fails.
 func TestCurate_EmbedError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	errorEmbedder := &mockErrorEmbedder{shouldError: true}
 	pb := playbook.New(nil, errorEmbedder)
@@ -81,16 +93,18 @@ func TestCurate_EmbedError(t *testing.T) {
 	assert.Contains(t, err.Error(), "embedding error")
 }
 
-// TestCurate_PlaybookAddError tests error handling when playbook.Add fails
+// TestCurate_PlaybookAddError tests error handling when playbook.Add fails.
 func TestCurate_PlaybookAddError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 
-	// Create a playbook with nil storage to force an error
+	// Create a playbook with nil storage to force an error.
 	pb := playbook.New(nil, embedder)
 	curator := NewCurator(pb, embedder)
 
-	// Create an insight with invalid content that might cause issues
+	// Create an insight with invalid content that might cause issues.
 	insights := []*reflector.Insight{
 		{
 			Content:    "Valid content",
@@ -101,19 +115,21 @@ func TestCurate_PlaybookAddError(t *testing.T) {
 
 	req := MergeRequest{Insights: insights}
 
-	// This test verifies the error path exists, even if playbook.Add rarely fails
+	// This test verifies the error path exists, even if playbook.Add rarely fails.
 	result, err := curator.Curate(ctx, req)
 
 	// In normal circumstances this should succeed
-	// The error path is tested by code inspection
+	// The error path is tested by code inspection.
 	if err == nil {
 		assert.NotNil(t, result)
 	}
 }
 
-// TestConvertInsights_InvalidContent tests conversion error handling
+// TestConvertInsights_InvalidContent tests conversion error handling.
 func TestConvertInsights_InvalidContent(t *testing.T) {
-	// Test with empty content - bullet.New should handle this
+	t.Parallel()
+
+	// Test with empty content - bullet.New should handle this.
 	insights := []*reflector.Insight{
 		{
 			Content:    "",
@@ -125,31 +141,35 @@ func TestConvertInsights_InvalidContent(t *testing.T) {
 	bullets, err := ConvertInsights(insights)
 
 	// Empty content is actually valid, so this should succeed
-	// The error path is for future validation
+	// The error path is for future validation.
 	if err == nil {
 		assert.NotNil(t, bullets)
 	}
 }
 
-// TestFindDuplicates_NoBulletEmbedding tests when bullet has no embedding
+// TestFindDuplicates_NoBulletEmbedding tests when bullet has no embedding.
 func TestFindDuplicates_NoBulletEmbedding(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
 	curator := NewCurator(pb, embedder)
 
-	// Create bullet without embedding
+	// Create bullet without embedding.
 	b, _ := bullet.New("Test content")
 
 	duplicates, err := curator.FindDuplicates(ctx, []*bullet.Bullet{b})
 
-	// Should handle gracefully
+	// Should handle gracefully.
 	require.NoError(t, err)
 	assert.NotNil(t, duplicates)
 }
 
-// TestCurate_DuplicateNotFoundInPlaybook tests edge case where duplicate ID isn't found
+// TestCurate_DuplicateNotFoundInPlaybook tests edge case where duplicate ID isn't found.
 func TestCurate_DuplicateNotFoundInPlaybook(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -157,7 +177,7 @@ func TestCurate_DuplicateNotFoundInPlaybook(t *testing.T) {
 
 	// This test verifies the (!found || existingBullet == nil) path
 	// which is hard to trigger in normal operation
-	// The path exists for safety checks
+	// The path exists for safety checks.
 
 	insights := []*reflector.Insight{
 		{

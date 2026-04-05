@@ -4,97 +4,47 @@ import (
 	"testing"
 )
 
-func TestExecuteMeta_Validate(t *testing.T) {
-	tests := []struct {
-		name        string
-		meta        ExecuteMeta
-		expectError bool
-	}{
-		{
-			name: "valid execute meta",
-			meta: ExecuteMeta{
-				Command: "ls -la",
-				CWD:     "/tmp",
-				Impact:  "low",
-			},
-			expectError: false,
+var executeMetaValidateCases = []struct {
+	name        string
+	meta        ExecuteMeta
+	expectError bool
+}{
+	{
+		name:        "valid execute meta",
+		meta:        ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low"},
+		expectError: false,
+	},
+	{
+		name: "valid with optional fields",
+		meta: ExecuteMeta{
+			Command: "git status", CWD: "/home/user/project", Impact: "medium",
+			TimeoutSec: 30, ExitCode: intPtr(0), DurationMS: int64Ptr(1500), LinesOut: intPtr(10),
 		},
-		{
-			name: "valid with optional fields",
-			meta: ExecuteMeta{
-				Command:    "git status",
-				CWD:        "/home/user/project",
-				Impact:     "medium",
-				TimeoutSec: 30,
-				ExitCode:   intPtr(0),
-				DurationMS: int64Ptr(1500),
-				LinesOut:   intPtr(10),
-			},
-			expectError: false,
-		},
-		{
-			name: "missing command",
-			meta: ExecuteMeta{
-				CWD:    "/tmp",
-				Impact: "low",
-			},
-			expectError: true,
-		},
-		{
-			name: "missing cwd",
-			meta: ExecuteMeta{
-				Command: "ls -la",
-				Impact:  "low",
-			},
-			expectError: true,
-		},
-		{
-			name: "invalid impact",
-			meta: ExecuteMeta{
-				Command: "ls -la",
-				CWD:     "/tmp",
-				Impact:  "invalid",
-			},
-			expectError: true,
-		},
-		{
-			name: "negative exit code",
-			meta: ExecuteMeta{
-				Command:  "ls -la",
-				CWD:      "/tmp",
-				Impact:   "low",
-				ExitCode: intPtr(-1),
-			},
-			expectError: true,
-		},
-		{
-			name: "negative duration",
-			meta: ExecuteMeta{
-				Command:    "ls -la",
-				CWD:        "/tmp",
-				Impact:     "low",
-				DurationMS: int64Ptr(-100),
-			},
-			expectError: true,
-		},
-		{
-			name: "negative lines out",
-			meta: ExecuteMeta{
-				Command:  "ls -la",
-				CWD:      "/tmp",
-				Impact:   "low",
-				LinesOut: intPtr(-5),
-			},
-			expectError: true,
-		},
-	}
+		expectError: false,
+	},
+	{name: "missing command", meta: ExecuteMeta{CWD: "/tmp", Impact: "low"}, expectError: true},
+	{name: "missing cwd", meta: ExecuteMeta{Command: "ls -la", Impact: "low"}, expectError: true},
+	{name: "invalid impact", meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "invalid"}, expectError: true},
+	{name: "negative exit code", meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low", ExitCode: intPtr(-1)}, expectError: true},
+	{
+		name: "negative duration", expectError: true,
+		meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low", DurationMS: int64Ptr(-100)},
+	},
+	{name: "negative lines out", meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low", LinesOut: intPtr(-5)}, expectError: true},
+}
 
-	for _, tt := range tests {
+func TestExecuteMeta_Validate(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range executeMetaValidateCases {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.meta.Validate()
 			if tt.expectError && err == nil {
 				t.Errorf("Validate() expected error but got none")
 			}
+
 			if !tt.expectError && err != nil {
 				t.Errorf("Validate() unexpected error: %v", err)
 			}
@@ -103,6 +53,8 @@ func TestExecuteMeta_Validate(t *testing.T) {
 }
 
 func TestExecuteMeta_ImpactValues(t *testing.T) {
+	t.Parallel()
+
 	validImpacts := []string{"low", "medium", "high"}
 
 	for _, impact := range validImpacts {
@@ -120,7 +72,10 @@ func TestExecuteMeta_ImpactValues(t *testing.T) {
 }
 
 func TestExecuteMeta_ZeroValues(t *testing.T) {
-	// Test that zero values are valid
+	t.Parallel(
+	// Test that zero values are valid.
+	)
+
 	meta := ExecuteMeta{
 		Command:    "test",
 		CWD:        "/tmp",
@@ -138,6 +93,8 @@ func TestExecuteMeta_ZeroValues(t *testing.T) {
 }
 
 func TestExecuteMeta_Structure(t *testing.T) {
+	t.Parallel()
+
 	meta := ExecuteMeta{
 		Command:    "git status",
 		CWD:        "/home/user/project",
@@ -178,6 +135,8 @@ func TestExecuteMeta_Structure(t *testing.T) {
 }
 
 func TestExecuteMeta_EmptyValues(t *testing.T) {
+	t.Parallel()
+
 	meta := ExecuteMeta{}
 
 	if meta.Command != "" {
@@ -210,12 +169,15 @@ func TestExecuteMeta_EmptyValues(t *testing.T) {
 }
 
 func TestExecuteMeta_OptionalFields(t *testing.T) {
-	// Test that optional fields can be nil
+	t.Parallel(
+	// Test that optional fields can be nil.
+	)
+
 	meta := ExecuteMeta{
 		Command: "test",
 		CWD:     "/tmp",
 		Impact:  "low",
-		// ExitCode, DurationMS, LinesOut are nil
+		// ExitCode, DurationMS, LinesOut are nil.
 	}
 
 	err := meta.Validate()
@@ -223,7 +185,7 @@ func TestExecuteMeta_OptionalFields(t *testing.T) {
 		t.Errorf("Validate() error for nil optional fields: %v", err)
 	}
 
-	// Test that optional fields can be set
+	// Test that optional fields can be set.
 	meta.ExitCode = intPtr(1)
 	meta.DurationMS = int64Ptr(2000)
 	meta.LinesOut = intPtr(5)
@@ -235,6 +197,8 @@ func TestExecuteMeta_OptionalFields(t *testing.T) {
 }
 
 func TestExecuteMeta_EdgeCases(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		meta        ExecuteMeta
@@ -283,10 +247,13 @@ func TestExecuteMeta_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.meta.Validate()
 			if tt.expectError && err == nil {
 				t.Errorf("Validate() expected error but got none")
 			}
+
 			if !tt.expectError && err != nil {
 				t.Errorf("Validate() unexpected error: %v", err)
 			}
@@ -294,7 +261,7 @@ func TestExecuteMeta_EdgeCases(t *testing.T) {
 	}
 }
 
-// Helper functions for creating pointers
+// Helper functions for creating pointers.
 func intPtr(i int) *int {
 	return &i
 }

@@ -5,11 +5,12 @@ import (
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 )
 
 // PromptBuilder constructs reflection prompts for trajectories.
 type PromptBuilder struct {
-	// Future: configuration options can go here
+	// Future: configuration options can go here.
 }
 
 // NewPromptBuilder creates a new prompt builder.
@@ -22,6 +23,15 @@ func NewPromptBuilder() *PromptBuilder {
 func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) string {
 	var sb strings.Builder
 
+	pb.writeReflectionInstructions(&sb)
+	pb.writeTrajectoryDetails(&sb, traj)
+	pb.writeReflectionResponseFormat(&sb)
+
+	return sb.String()
+}
+
+// writeReflectionInstructions writes the system instructions for reflection.
+func (pb *PromptBuilder) writeReflectionInstructions(sb *strings.Builder) {
 	sb.WriteString("You are an expert analyst and educator. Your job is to diagnose the execution trajectory ")
 	sb.WriteString("and extract actionable insights for improving future coding tasks.\n\n")
 
@@ -32,31 +42,53 @@ func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) strin
 	sb.WriteString("- Provide actionable insights that could help avoid mistakes or replicate success in the future\n")
 	sb.WriteString("- Focus on the root cause, not just surface-level errors\n")
 	sb.WriteString("- Be specific about what should be done differently or what pattern should be remembered\n\n")
+}
 
+// writeTrajectoryDetails writes trajectory data including steps, events, and bullets.
+func (pb *PromptBuilder) writeTrajectoryDetails(sb *strings.Builder, traj *generator.Trajectory) {
 	sb.WriteString("**Trajectory:**\n")
-	sb.WriteString(fmt.Sprintf("Task: %s\n", traj.Query))
-	sb.WriteString(fmt.Sprintf("Success: %t\n\n", traj.Success))
+	fmt.Fprintf(sb, "Task: %s\n", traj.Query)
+	fmt.Fprintf(sb, "Success: %t\n\n", traj.Success)
 
-	// Include detailed execution steps if available
 	if len(traj.Steps) > 0 {
 		sb.WriteString("**Execution Steps:**\n")
+
 		for _, step := range traj.Steps {
-			sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", step.StepNumber+1, step.Type, step.Content))
+			fmt.Fprintf(sb, "%d. [%s] %s\n", step.StepNumber+1, step.Type, step.Content)
 		}
+
 		sb.WriteString("\n")
 	}
 
-	// Include retrieved bullets if available
+	if traj.Metadata.RetrievalEvents != nil {
+		if events, ok := traj.Metadata.RetrievalEvents.([]trajectory.RetrievalEvent); ok && len(events) > 0 {
+			sb.WriteString("**Retrieval Events:**\n")
+			sb.WriteString("(Shows when and why bullets were retrieved during execution)\n")
+
+			for _, event := range events {
+				fmt.Fprintf(sb, "Turn %d [%s]: Query=\"%s\" → Retrieved %d bullets\n",
+					event.Turn, event.Trigger, event.Query, len(event.BulletsAdded))
+			}
+
+			sb.WriteString("\n")
+		}
+	}
+
 	if len(traj.RetrievedBullets) > 0 {
 		sb.WriteString("**Retrieved Playbook Bullets:**\n")
+
 		for _, bullet := range traj.RetrievedBullets {
-			sb.WriteString(fmt.Sprintf("- [%s] %s\n", bullet.ID, bullet.Content))
+			fmt.Fprintf(sb, "- [%s] %s\n", bullet.ID, bullet.Content)
 		}
+
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(fmt.Sprintf("**Final Output:**\n%s\n\n", traj.Output))
+	fmt.Fprintf(sb, "**Final Output:**\n%s\n\n", traj.Output)
+}
 
+// writeReflectionResponseFormat writes the expected JSON response format.
+func (pb *PromptBuilder) writeReflectionResponseFormat(sb *strings.Builder) {
 	sb.WriteString("**Your output should be a JSON object with the following fields:**\n")
 	sb.WriteString("- reasoning: Your chain of thought, detailed analysis of what happened\n")
 	sb.WriteString("- error_identification: What specifically went wrong (or \"N/A\" if successful)\n")
@@ -76,8 +108,6 @@ func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) strin
 	sb.WriteString("  \"category\": \"success_pattern\",\n")
 	sb.WriteString("  \"confidence\": 0.95\n")
 	sb.WriteString("}\n")
-
-	return sb.String()
 }
 
 // BuildWithGroundTruth creates a reflection prompt with ground truth comparison.
@@ -85,6 +115,15 @@ func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) strin
 func (pb *PromptBuilder) BuildWithGroundTruth(traj *generator.Trajectory, groundTruth string, usedBullets []string) string {
 	var sb strings.Builder
 
+	pb.writeGroundTruthInstructions(&sb)
+	pb.writeGroundTruthContext(&sb, traj, groundTruth, usedBullets)
+	pb.writeGroundTruthResponseFormat(&sb, usedBullets)
+
+	return sb.String()
+}
+
+// writeGroundTruthInstructions writes the system instructions for ground truth comparison.
+func (pb *PromptBuilder) writeGroundTruthInstructions(sb *strings.Builder) {
 	sb.WriteString("You are an expert analyst and educator. Your job is to diagnose why the execution went wrong ")
 	sb.WriteString("by analyzing the gap between the actual outcome and the expected outcome.\n\n")
 
@@ -96,35 +135,47 @@ func (pb *PromptBuilder) BuildWithGroundTruth(traj *generator.Trajectory, ground
 	sb.WriteString("- Focus on the root cause, not just surface-level errors\n")
 	sb.WriteString("- Be specific about what should have been done differently\n")
 	sb.WriteString("- Analyze which playbook bullets were helpful, harmful, or neutral\n\n")
+}
 
+// writeGroundTruthContext writes the task, trace, outcome, and bullet sections.
+func (pb *PromptBuilder) writeGroundTruthContext(
+	sb *strings.Builder, traj *generator.Trajectory,
+	groundTruth string, usedBullets []string,
+) {
 	sb.WriteString("**Task:**\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", traj.Query))
+	fmt.Fprintf(sb, "%s\n\n", traj.Query)
 
 	sb.WriteString("**Execution Trace:**\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", traj.Output))
+	fmt.Fprintf(sb, "%s\n\n", traj.Output)
 
 	sb.WriteString("**Actual Outcome:**\n")
-	sb.WriteString(fmt.Sprintf("Success: %t\n\n", traj.Success))
+	fmt.Fprintf(sb, "Success: %t\n\n", traj.Success)
 
 	if groundTruth != "" {
 		sb.WriteString("**Expected Outcome:**\n")
-		sb.WriteString(fmt.Sprintf("%s\n\n", groundTruth))
+		fmt.Fprintf(sb, "%s\n\n", groundTruth)
 	}
 
 	if len(usedBullets) > 0 {
 		sb.WriteString("**Playbook Bullets Used:**\n")
+
 		for _, bulletID := range usedBullets {
-			sb.WriteString(fmt.Sprintf("- %s\n", bulletID))
+			fmt.Fprintf(sb, "- %s\n", bulletID)
 		}
+
 		sb.WriteString("\n")
 	}
+}
 
+// writeGroundTruthResponseFormat writes the expected JSON response format with optional bullet tags.
+func (pb *PromptBuilder) writeGroundTruthResponseFormat(sb *strings.Builder, usedBullets []string) {
 	sb.WriteString("**Your output should be a JSON object with the following fields:**\n")
 	sb.WriteString("- reasoning: Your chain of thought, detailed analysis and calculations\n")
 	sb.WriteString("- error_identification: What specifically went wrong in the execution?\n")
 	sb.WriteString("- root_cause_analysis: Why did this error occur? What was misunderstood?\n")
 	sb.WriteString("- correct_approach: What should have been done instead?\n")
 	sb.WriteString("- key_insight: What strategy, formula, or principle should be remembered to avoid this error?\n")
+
 	if len(usedBullets) > 0 {
 		sb.WriteString("- bullet_tags: A list of JSON objects with bullet_id and tag for each bullet used\n")
 		sb.WriteString("  - tag can be: 'helpful' (aided correct solution), 'harmful' (led to error), 'neutral' (no impact)\n")
@@ -137,15 +188,15 @@ func (pb *PromptBuilder) BuildWithGroundTruth(traj *generator.Trajectory, ground
 	sb.WriteString("  \"root_cause_analysis\": \"[Why did this error occur? What concept was misunderstood?]\",\n")
 	sb.WriteString("  \"correct_approach\": \"[What should the model have done instead?]\",\n")
 	sb.WriteString("  \"key_insight\": \"[What strategy, formula, or principle should be remembered to avoid this error?]\"")
+
 	if len(usedBullets) > 0 {
 		sb.WriteString(",\n  \"bullet_tags\": [\n")
 		sb.WriteString("    {\"id\": \"B001\", \"tag\": \"helpful\"},\n")
 		sb.WriteString("    {\"id\": \"B002\", \"tag\": \"harmful\"}\n")
 		sb.WriteString("  ]")
 	}
-	sb.WriteString("\n}\n")
 
-	return sb.String()
+	sb.WriteString("\n}\n")
 }
 
 // BuildRefinementPrompt creates a prompt for refining existing insights.
@@ -154,13 +205,16 @@ func (pb *PromptBuilder) BuildRefinementPrompt(insights []*Insight) string {
 
 	sb.WriteString("You are refining actionable coding insights to make them more specific and actionable.\n\n")
 	sb.WriteString("# Current Insights\n")
+
 	for i, insight := range insights {
-		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, insight.Content))
-		sb.WriteString(fmt.Sprintf("   Category: %s\n", insight.Category))
-		sb.WriteString(fmt.Sprintf("   Confidence: %.2f\n", insight.Confidence))
+		fmt.Fprintf(&sb, "%d. %s\n", i+1, insight.Content)
+		fmt.Fprintf(&sb, "   Category: %s\n", insight.Category)
+		fmt.Fprintf(&sb, "   Confidence: %.2f\n", insight.Confidence)
+
 		if len(insight.Evidence) > 0 {
-			sb.WriteString(fmt.Sprintf("   Evidence: %s\n", strings.Join(insight.Evidence, "; ")))
+			fmt.Fprintf(&sb, "   Evidence: %s\n", strings.Join(insight.Evidence, "; "))
 		}
+
 		sb.WriteString("\n")
 	}
 
@@ -185,11 +239,12 @@ func (pb *PromptBuilder) BuildBatchTrajectory(trajs []*generator.Trajectory) str
 
 	sb.WriteString("You are analyzing multiple execution trajectories to extract patterns and insights.\n\n")
 	sb.WriteString("# Trajectories\n")
+
 	for i, traj := range trajs {
-		sb.WriteString(fmt.Sprintf("## Trajectory %d (ID: %s)\n", i+1, traj.ID))
-		sb.WriteString(fmt.Sprintf("Query: %s\n", traj.Query))
-		sb.WriteString(fmt.Sprintf("Success: %t\n", traj.Success))
-		sb.WriteString(fmt.Sprintf("Output: %s\n\n", traj.Output))
+		fmt.Fprintf(&sb, "## Trajectory %d (ID: %s)\n", i+1, traj.ID)
+		fmt.Fprintf(&sb, "Query: %s\n", traj.Query)
+		fmt.Fprintf(&sb, "Success: %t\n", traj.Success)
+		fmt.Fprintf(&sb, "Output: %s\n\n", traj.Output)
 	}
 
 	sb.WriteString("# Task\n")

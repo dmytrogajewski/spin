@@ -82,6 +82,7 @@ var TagColors = map[BlockType]Color{
 	BlockTypeGrep:       ColorYellow,
 	BlockTypeApplyPatch: ColorGreen,
 	BlockTypeSummary:    ColorCyan,
+	BlockTypeTool:       ColorCyan,
 	BlockTypeTesting:    ColorBlue,
 	BlockTypeNotice:     ColorMuted,
 	BlockTypeError:      ColorRed,
@@ -93,5 +94,6 @@ func GetTagColor(bt BlockType) Color {
 	if color, ok := TagColors[bt]; ok {
 		return color
 	}
+
 	return ColorMuted
 }

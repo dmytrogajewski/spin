@@ -1,23 +1,27 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 func TestGatherEnvironment(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
-	// Create some test files
+	// Create some test files.
 	testFile := filepath.Join(workDir, "test.go")
-	err := os.WriteFile(testFile, []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}"), 0644)
+	err := os.WriteFile(testFile, []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}"), 0o600)
 	require.NoError(t, err)
 
-	env, err := GatherEnvironment(workDir)
+	env, err := GatherEnvironment(context.Background(), workDir)
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.Equal(t, workDir, env.WorkDir)
@@ -28,52 +32,56 @@ func TestGatherEnvironment(t *testing.T) {
 }
 
 func TestGatherEnvironment_WithOptions(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
-	// Create some test files
-	for i := 0; i < 5; i++ {
+	// Create some test files.
+	for i := range 5 {
 		testFile := filepath.Join(workDir, "test"+string(rune(i+'0'))+".go")
-		err := os.WriteFile(testFile, []byte("package main"), 0644)
+		err := os.WriteFile(testFile, []byte("package main"), 0o600)
 		require.NoError(t, err)
 	}
 
-	// Test with max files limit
-	env, err := GatherEnvironment(workDir, WithMaxFiles(2))
+	// Test with max files limit.
+	env, err := GatherEnvironment(context.Background(), workDir, WithMaxFiles(2))
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.LessOrEqual(t, len(env.Files), 2)
 }
 
 func TestGatherEnvironment_WithSkipGit(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
-	env, err := GatherEnvironment(workDir, WithSkipGit(true))
+	env, err := GatherEnvironment(context.Background(), workDir, WithSkipGit(true))
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.Nil(t, env.Git)
 }
 
 func TestGatherEnvironment_WithMaxDepth(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
-	// Create nested directories
+	// Create nested directories.
 	subDir := filepath.Join(workDir, "subdir")
-	err := os.Mkdir(subDir, 0755)
+	err := os.Mkdir(subDir, 0o750)
 	require.NoError(t, err)
 
 	testFile := filepath.Join(subDir, "test.go")
-	err = os.WriteFile(testFile, []byte("package main"), 0644)
+	err = os.WriteFile(testFile, []byte("package main"), 0o600)
 	require.NoError(t, err)
 
-	env, err := GatherEnvironment(workDir, WithMaxDepth(1))
+	env, err := GatherEnvironment(context.Background(), workDir, WithMaxDepth(1))
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 }
 
 func TestGatherEnvironment_EmptyDirectory(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
-	env, err := GatherEnvironment(workDir)
+	env, err := GatherEnvironment(context.Background(), workDir)
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.Equal(t, workDir, env.WorkDir)
@@ -81,12 +89,16 @@ func TestGatherEnvironment_EmptyDirectory(t *testing.T) {
 }
 
 func TestGatherEnvironment_NonExistentDirectory(t *testing.T) {
-	env, err := GatherEnvironment("/non/existent/directory")
+	t.Parallel()
+
+	env, err := GatherEnvironment(context.Background(), "/non/existent/directory")
 	require.Error(t, err)
 	assert.Nil(t, env)
 }
 
 func TestEnvironmentOption_WithMaxFiles(t *testing.T) {
+	t.Parallel()
+
 	cfg := &environmentConfig{}
 	opt := WithMaxFiles(100)
 	opt(cfg)
@@ -94,6 +106,8 @@ func TestEnvironmentOption_WithMaxFiles(t *testing.T) {
 }
 
 func TestEnvironmentOption_WithMaxDepth(t *testing.T) {
+	t.Parallel()
+
 	cfg := &environmentConfig{}
 	opt := WithMaxDepth(5)
 	opt(cfg)
@@ -101,6 +115,8 @@ func TestEnvironmentOption_WithMaxDepth(t *testing.T) {
 }
 
 func TestEnvironmentOption_WithSkipGit(t *testing.T) {
+	t.Parallel()
+
 	cfg := &environmentConfig{}
 	opt := WithSkipGit(true)
 	opt(cfg)
@@ -108,44 +124,63 @@ func TestEnvironmentOption_WithSkipGit(t *testing.T) {
 }
 
 func TestGatherOSInfo(t *testing.T) {
-	osInfo := gatherOSInfo()
+	t.Parallel()
+
+	osInfo := gatherOSInfo(context.Background())
 	assert.NotEmpty(t, osInfo.OS)
 	assert.NotEmpty(t, osInfo.Arch)
 }
 
-func TestDetectLanguageFromExt(t *testing.T) {
+func TestDetectLanguage(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Create sample files so content-based detection works for ambiguous extensions.
+	writeFile := func(name, content string) string {
+		p := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o600))
+
+		return p
+	}
+
 	tests := []struct {
 		name     string
-		ext      string
+		path     string
+		filename string
 		expected string
 	}{
-		{"Go file", ".go", "go"},
-		{"Python file", ".py", "python"},
-		{"JavaScript file", ".js", "javascript"},
-		{"TypeScript file", ".ts", "typescript"},
-		{"Java file", ".java", "java"},
-		{"C file", ".c", "c"},
-		{"C++ file", ".cpp", "cpp"},
-		{"Rust file", ".rs", "rust"},
-		{"Unknown extension", ".xyz", "Unknown"},
-		{"Empty extension", "", "Unknown"},
+		{"Go file", writeFile("main.go", "package main"), "main.go", "Go"},
+		{"Python file", writeFile("main.py", "print('hi')"), "main.py", "Python"},
+		{"JavaScript file", writeFile("app.js", "console.log('hi')"), "app.js", "JavaScript"},
+		{"TypeScript file", writeFile("app.ts", "const x: string = 'hi'"), "app.ts", "TypeScript"},
+		{"Java file", writeFile("Main.java", "class Main {}"), "Main.java", "Java"},
+		{"C file", writeFile("main.c", "#include <stdio.h>"), "main.c", "C"},
+		{"C++ file", writeFile("main.cpp", "#include <iostream>"), "main.cpp", "C++"},
+		{"Rust file", writeFile("main.rs", "fn main() {}"), "main.rs", "Rust"},
+		{"Makefile", writeFile("Makefile", "all:\n\techo hi"), "Makefile", "Makefile"},
+		{"Dockerfile", writeFile("Dockerfile", "FROM alpine"), "Dockerfile", "Dockerfile"},
+		{"Unknown extension", writeFile("file.xyz", ""), "file.xyz", "Unknown"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := detectLanguageFromExt(tt.ext)
+			t.Parallel()
+
+			result := detectLanguage(tt.path, tt.filename)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func TestCountLines(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
-	// Create a test file with known line count
+	// Create a test file with known line count.
 	testFile := filepath.Join(workDir, "test.txt")
 	content := "line1\nline2\nline3\n"
-	err := os.WriteFile(testFile, []byte(content), 0644)
+	err := os.WriteFile(testFile, []byte(content), 0o600)
 	require.NoError(t, err)
 
 	lines := countLines(testFile)
@@ -153,11 +188,15 @@ func TestCountLines(t *testing.T) {
 }
 
 func TestCountLines_NonExistentFile(t *testing.T) {
+	t.Parallel()
+
 	lines := countLines("/non/existent/file.txt")
 	assert.Equal(t, 0, lines)
 }
 
 func TestDetectProjectType(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		files    []FileInfo
@@ -166,7 +205,7 @@ func TestDetectProjectType(t *testing.T) {
 		{
 			name: "Go project",
 			files: []FileInfo{
-				{Path: "main.go", Language: "go"},
+				{Path: "main.go", Language: "Go"},
 				{Path: "go.mod", Language: ""},
 			},
 			expected: "go",
@@ -174,7 +213,7 @@ func TestDetectProjectType(t *testing.T) {
 		{
 			name: "Python project",
 			files: []FileInfo{
-				{Path: "main.py", Language: "python"},
+				{Path: "main.py", Language: "Python"},
 				{Path: "requirements.txt", Language: ""},
 			},
 			expected: "python",
@@ -182,7 +221,7 @@ func TestDetectProjectType(t *testing.T) {
 		{
 			name: "JavaScript project",
 			files: []FileInfo{
-				{Path: "index.js", Language: "javascript"},
+				{Path: "index.js", Language: "JavaScript"},
 				{Path: "package.json", Language: ""},
 			},
 			expected: "nodejs",
@@ -198,6 +237,8 @@ func TestDetectProjectType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := detectProjectType(tt.files)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -205,27 +246,33 @@ func TestDetectProjectType(t *testing.T) {
 }
 
 func TestDetectLanguages(t *testing.T) {
+	t.Parallel()
+
 	files := []FileInfo{
-		{Path: "main.go", Language: "go"},
-		{Path: "test.py", Language: "python"},
-		{Path: "script.js", Language: "javascript"},
-		{Path: "README.md", Language: ""},
+		{Path: "main.go", Language: "Go"},
+		{Path: "test.py", Language: "Python"},
+		{Path: "script.js", Language: "JavaScript"},
+		{Path: "README.md", Language: "Markdown"},
 	}
 
 	languages := detectLanguages(files)
-	assert.Contains(t, languages, "go")
-	assert.Contains(t, languages, "python")
-	assert.Contains(t, languages, "javascript")
-	// README.md with empty language might add an entry, so check at least 3
-	assert.GreaterOrEqual(t, len(languages), 3)
+	assert.Contains(t, languages, "Go")
+	assert.Contains(t, languages, "Python")
+	assert.Contains(t, languages, "JavaScript")
+	assert.NotContains(t, languages, "Markdown") // Markup, not programming.
+	assert.Len(t, languages, 3)
 }
 
 func TestDetectLanguages_EmptyFiles(t *testing.T) {
+	t.Parallel()
+
 	languages := detectLanguages([]FileInfo{})
 	assert.Empty(t, languages)
 }
 
 func TestFilterEnvironment(t *testing.T) {
+	t.Parallel()
+
 	env := []string{
 		"PATH=/usr/bin:/bin",
 		"HOME=/home/user",
@@ -236,21 +283,23 @@ func TestFilterEnvironment(t *testing.T) {
 		"PORT=8080",
 	}
 
-	filtered := filterEnvironment(env)
+	filtered := execx.FilterEnvironment(env, sensitivePrefixes, sensitiveSubstrings)
 
-	// Should include non-sensitive variables
+	// Should include non-sensitive variables.
 	assert.Contains(t, filtered, "PATH")
 	assert.Contains(t, filtered, "HOME")
 	assert.Contains(t, filtered, "USER")
 	assert.Contains(t, filtered, "DEBUG")
 	assert.Contains(t, filtered, "PORT")
 
-	// Should exclude sensitive variables
+	// Should exclude sensitive variables.
 	assert.NotContains(t, filtered, "SECRET_KEY")
 	assert.NotContains(t, filtered, "API_KEY")
 }
 
 func TestEnvironment_String(t *testing.T) {
+	t.Parallel()
+
 	env := &Environment{
 		WorkDir:     "/test/dir",
 		ProjectType: "go",
@@ -269,12 +318,14 @@ func TestEnvironment_String(t *testing.T) {
 }
 
 func TestEnvironment_Structure(t *testing.T) {
+	t.Parallel()
+
 	env := &Environment{
 		WorkDir:     "/test/dir",
 		ProjectType: "go",
 		Languages:   []string{"go"},
 		Files: []FileInfo{
-			{Path: "main.go", Size: 100, Language: "go", Lines: 10},
+			{Path: "main.go", Size: 100, Language: "Go", Lines: 10},
 		},
 		Environment: map[string]string{
 			"PATH": "/usr/bin",
@@ -305,6 +356,8 @@ func TestEnvironment_Structure(t *testing.T) {
 }
 
 func TestOSInfo_Structure(t *testing.T) {
+	t.Parallel()
+
 	osInfo := OSInfo{
 		OS:     "linux",
 		Arch:   "amd64",
@@ -319,6 +372,8 @@ func TestOSInfo_Structure(t *testing.T) {
 }
 
 func TestGitInfo_Structure(t *testing.T) {
+	t.Parallel()
+
 	gitInfo := GitInfo{
 		Root:           "/path/to/repo",
 		Branch:         "main",
@@ -339,20 +394,24 @@ func TestGitInfo_Structure(t *testing.T) {
 }
 
 func TestFileInfo_Structure(t *testing.T) {
+	t.Parallel()
+
 	fileInfo := FileInfo{
 		Path:     "test.go",
 		Size:     1024,
-		Language: "go",
+		Language: "Go",
 		Lines:    50,
 	}
 
 	assert.Equal(t, "test.go", fileInfo.Path)
 	assert.Equal(t, int64(1024), fileInfo.Size)
-	assert.Equal(t, "go", fileInfo.Language)
+	assert.Equal(t, "Go", fileInfo.Language)
 	assert.Equal(t, 50, fileInfo.Lines)
 }
 
 func TestRemote_Structure(t *testing.T) {
+	t.Parallel()
+
 	remote := Remote{
 		Name: "origin",
 		URL:  "https://github.com/user/repo.git",

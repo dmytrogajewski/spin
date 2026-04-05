@@ -13,15 +13,6 @@ Tests for basic Spin functionality:
 
 These tests use **real binaries** and **real config files** to validate production behavior.
 
-### TUI E2E Tests (`tui_e2e_test.go`)
-
-Interactive terminal UI tests:
-- **Launch and initialization**: Logo display, prompt rendering
-- **Mode switching**: Input mode, Timeline mode, Command Palette
-- **Navigation**: Keyboard shortcuts, scrolling, filtering
-
-Uses **fake TTY** for hermetic, fast testing.
-
 ### Status Bar Tests
 
 #### Interactive Flow (`statusbar_interactive_test.go`)

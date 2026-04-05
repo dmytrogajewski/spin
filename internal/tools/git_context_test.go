@@ -7,13 +7,15 @@ import (
 )
 
 func TestGitContextTool_NotARepository(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
+
 	tool := NewGitContextTool(tmpDir)
 
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,13 +30,15 @@ func TestGitContextTool_NotARepository(t *testing.T) {
 }
 
 func TestGitContextTool_ValidRepository(t *testing.T) {
-	// Use the current repository (spin project itself)
+	t.Parallel(
+	// Use the current repository (spin project itself).
+	)
+
 	tool := NewGitContextTool(".")
 
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,7 +47,7 @@ func TestGitContextTool_ValidRepository(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Should contain git context information
+	// Should contain git context information.
 	expectedStrings := []string{
 		"Git Repository Context:",
 		"Branch:",
@@ -58,6 +62,8 @@ func TestGitContextTool_ValidRepository(t *testing.T) {
 }
 
 func TestGitContextTool_Schema(t *testing.T) {
+	t.Parallel()
+
 	tool := NewGitContextTool("/tmp")
 	schema := tool.Schema()
 
@@ -65,31 +71,35 @@ func TestGitContextTool_Schema(t *testing.T) {
 		t.Errorf("expected name 'git_context', got: %s", schema.Function.Name)
 	}
 
-	// Tool should have no required parameters
+	// Tool should have no required parameters.
 	if len(schema.Function.Parameters.Required) != 0 {
 		t.Errorf("expected no required parameters, got: %d", len(schema.Function.Parameters.Required))
 	}
 
-	// Should have optional parameters
+	// Should have optional parameters.
 	props := schema.Function.Parameters.Properties
 	if _, exists := props["workspace_root"]; !exists {
 		t.Errorf("expected 'workspace_root' parameter to be defined")
 	}
+
 	if _, exists := props["include_diff"]; !exists {
 		t.Errorf("expected 'include_diff' parameter to be defined")
 	}
 }
 
 func TestGitContextTool_ErrorCases(t *testing.T) {
+	t.Parallel()
+
 	tool := NewGitContextTool("/tmp/test")
 
 	// GitContextTool has only optional parameters, so it doesn't fail on invalid params
-	// Testing that it handles defaults properly
-	params, _ := FromMap(map[string]interface{}{})
+	// Testing that it handles defaults properly.
+	params, _ := FromMap(map[string]any{})
+
 	_, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// Git context tool might succeed or fail depending on git availability,
-	// so we just check it doesn't panic
+	// so we just check it doesn't panic.
 }

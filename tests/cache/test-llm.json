@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "models": {
+    "dummy": {
+      "capabilities": {
+        "model_id": "dummy",
+        "provider": "test-llm",
+        "context_length": 0,
+        "vision": false,
+        "thinking": false,
+        "streaming": false,
+        "function_calling": true
+      },
+      "fetched_at": "2026-04-03T22:09:46.026776095+03:00"
+    },
+    "fixture": {
+      "capabilities": {
+        "model_id": "fixture",
+        "provider": "test-llm",
+        "context_length": 0,
+        "vision": false,
+        "thinking": false,
+        "streaming": true,
+        "function_calling": true
+      },
+      "fetched_at": "2026-04-03T22:09:51.939746087+03:00"
+    }
+  }
+}

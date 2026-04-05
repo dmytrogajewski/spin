@@ -1,20 +1,23 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/dmytrogajewski/spin/internal/patchapply"
 	"github.com/spf13/cobra"
+
+	"github.com/dmytrogajewski/spin/internal/patchapply"
 )
 
-// applyPatchCmd represents the apply-patch subcommand
-var applyPatchCmd = &cobra.Command{
-	Use:   "apply-patch",
-	Short: "Apply a Spin patch to the workspace",
-	Long: `Apply a Spin patch from stdin or file.
+// newApplyPatchCmd returns the apply-patch command for inclusion in root.
+func newApplyPatchCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "apply-patch",
+		Short: "Apply a Spin patch to the workspace",
+		Long: `Apply a Spin patch from stdin or file.
 
 Examples:
   # Apply from stdin
@@ -31,87 +34,85 @@ Examples:
 
   # Force overwrite existing files
   spin apply-patch --force -f changes.patch`,
-	RunE: runApplyPatch,
+		RunE: runApplyPatch,
+	}
+
+	cmd.Flags().StringP("file", "f", "", "Patch file (default: stdin)")
+	cmd.Flags().StringP("workspace", "w", ".", "Workspace directory")
+	cmd.Flags().Bool("dry-run", false, "Validate without applying")
+	cmd.Flags().Bool("force", false, "Force overwrite existing files")
+	cmd.Flags().BoolP("verbose", "v", false, "Verbose output")
+
+	return cmd
 }
 
-// Flags
-var (
-	applyPatchFile      string
-	applyPatchWorkspace string
-	applyPatchDryRun    bool
-	applyPatchForce     bool
-	applyPatchVerbose   bool
-)
+// runApplyPatch executes the apply-patch command.
+func runApplyPatch(cmd *cobra.Command, _ []string) error {
+	patchFile, _ := cmd.Flags().GetString("file")
+	workspace, _ := cmd.Flags().GetString("workspace")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	force, _ := cmd.Flags().GetBool("force")
+	verbose, _ := cmd.Flags().GetBool("verbose")
 
-func init() {
-	applyPatchCmd.Flags().StringVarP(&applyPatchFile, "file", "f", "", "Patch file (default: stdin)")
-	applyPatchCmd.Flags().StringVarP(&applyPatchWorkspace, "workspace", "w", ".", "Workspace directory")
-	applyPatchCmd.Flags().BoolVar(&applyPatchDryRun, "dry-run", false, "Validate without applying")
-	applyPatchCmd.Flags().BoolVar(&applyPatchForce, "force", false, "Force overwrite existing files")
-	applyPatchCmd.Flags().BoolVarP(&applyPatchVerbose, "verbose", "v", false, "Verbose output")
-}
-
-// newApplyPatchCmd returns the apply-patch command for inclusion in root
-func newApplyPatchCmd() *cobra.Command {
-	return applyPatchCmd
-}
-
-// runApplyPatch executes the apply-patch command
-func runApplyPatch(cmd *cobra.Command, args []string) error {
-	// Read patch text
-	patchText, err := readPatchInput()
+	// Read patch text.
+	patchText, err := readPatchInput(patchFile)
 	if err != nil {
 		return fmt.Errorf("read patch: %w", err)
 	}
 
-	// Parse patch
+	// Parse patch.
 	parser := patchapply.NewParser(patchText)
+
 	patch, err := parser.Parse()
 	if err != nil {
 		return formatParseError(err)
 	}
 
-	// Resolve workspace
-	workspace, err := filepath.Abs(applyPatchWorkspace)
+	// Resolve workspace.
+	absWorkspace, err := filepath.Abs(workspace)
 	if err != nil {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
 
-	// Create applier
-	applier, err := patchapply.NewApplier(workspace)
+	// Create applier.
+	applier, err := patchapply.NewApplier(absWorkspace)
 	if err != nil {
 		return fmt.Errorf("create applier: %w", err)
 	}
 
-	// Configure applier
-	applier.SetDryRun(applyPatchDryRun)
-	applier.SetForceOverwrite(applyPatchForce)
+	// Configure applier.
+	applier.SetDryRun(dryRun)
+	applier.SetForceOverwrite(force)
 
-	// Apply or validate
-	if applyPatchDryRun {
-		return runDryRun(applier, patch)
+	out := cmd.OutOrStdout()
+
+	// Apply or validate.
+	if dryRun {
+		return runDryRun(out, applier, patch)
 	}
 
-	result, err := applier.Apply(patch)
+	result, err := applier.Apply(cmd.Context(), patch)
 	if err != nil {
 		return formatApplyError(err)
 	}
 
-	// Output results
-	printResults(result)
+	// Output results.
+	printResults(out, result, verbose)
+
 	return nil
 }
 
-// readPatchInput reads patch from file or stdin
-func readPatchInput() (string, error) {
+// readPatchInput reads patch from file or stdin.
+func readPatchInput(patchFile string) (string, error) {
 	var reader io.Reader
 
-	if applyPatchFile != "" {
-		f, err := os.Open(applyPatchFile)
+	if patchFile != "" {
+		f, err := os.Open(patchFile)
 		if err != nil {
 			return "", fmt.Errorf("open file: %w", err)
 		}
 		defer f.Close()
+
 		reader = f
 	} else {
 		reader = os.Stdin
@@ -125,25 +126,26 @@ func readPatchInput() (string, error) {
 	return string(data), nil
 }
 
-// runDryRun performs dry-run validation
-func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
-	if err := applier.ValidatePatch(patch); err != nil {
+// runDryRun performs dry-run validation.
+func runDryRun(out io.Writer, applier *patchapply.Applier, patch *patchapply.Patch) error {
+	err := applier.ValidatePatch(patch)
+	if err != nil {
 		return formatApplyError(err)
 	}
 
-	fmt.Println("[DRY RUN] Would apply the following changes:")
+	fmt.Fprintln(out, "[DRY RUN] Would apply the following changes:")
 
 	for _, op := range patch.Operations {
-		switch v := op.(type) {
+		switch patchOp := op.(type) {
 		case *patchapply.AddFile:
-			fmt.Printf("  Would create: %s (%d lines)\n", v.FilePath, len(v.Lines))
+			fmt.Fprintf(out, "  Would create: %s (%d lines)\n", patchOp.FilePath, len(patchOp.Lines))
 		case *patchapply.DeleteFile:
-			fmt.Printf("  Would delete: %s\n", v.FilePath)
+			fmt.Fprintf(out, "  Would delete: %s\n", patchOp.FilePath)
 		case *patchapply.UpdateFile:
-			if v.NewPath != "" {
-				fmt.Printf("  Would move: %s → %s (%d hunks)\n", v.FilePath, v.NewPath, len(v.Hunks))
+			if patchOp.NewPath != "" {
+				fmt.Fprintf(out, "  Would move: %s → %s (%d hunks)\n", patchOp.FilePath, patchOp.NewPath, len(patchOp.Hunks))
 			} else {
-				fmt.Printf("  Would update: %s (%d hunks)\n", v.FilePath, len(v.Hunks))
+				fmt.Fprintf(out, "  Would update: %s (%d hunks)\n", patchOp.FilePath, len(patchOp.Hunks))
 			}
 		}
 	}
@@ -151,51 +153,54 @@ func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
 	return nil
 }
 
-// printResults prints successful application results
-func printResults(result *patchapply.ApplyResult) {
-	fmt.Println("✓ Applied patch successfully")
+// printResults prints successful application results.
+func printResults(out io.Writer, result *patchapply.ApplyResult, verbose bool) {
+	fmt.Fprintln(out, "✓ Applied patch successfully")
 
-	if len(result.FilesCreated) > 0 {
-		fmt.Printf("  Created: %d files\n", len(result.FilesCreated))
-		if applyPatchVerbose {
-			for _, f := range result.FilesCreated {
-				fmt.Printf("    - %s\n", f)
-			}
-		}
+	printFileList(out, "Created", result.FilesCreated, verbose)
+	printFileList(out, "Updated", result.FilesUpdated, verbose)
+	printFileList(out, "Deleted", result.FilesDeleted, verbose)
+	printFileMovedList(out, result.FilesMoved, verbose)
+}
+
+// printFileList prints a summary and optional detail list of files.
+func printFileList(out io.Writer, label string, files []string, verbose bool) {
+	if len(files) == 0 {
+		return
 	}
 
-	if len(result.FilesUpdated) > 0 {
-		fmt.Printf("  Updated: %d files\n", len(result.FilesUpdated))
-		if applyPatchVerbose {
-			for _, f := range result.FilesUpdated {
-				fmt.Printf("    - %s\n", f)
-			}
-		}
+	fmt.Fprintf(out, "  %s: %d files\n", label, len(files))
+
+	if !verbose {
+		return
 	}
 
-	if len(result.FilesDeleted) > 0 {
-		fmt.Printf("  Deleted: %d files\n", len(result.FilesDeleted))
-		if applyPatchVerbose {
-			for _, f := range result.FilesDeleted {
-				fmt.Printf("    - %s\n", f)
-			}
-		}
-	}
-
-	if len(result.FilesMoved) > 0 {
-		fmt.Printf("  Moved: %d files\n", len(result.FilesMoved))
-		if applyPatchVerbose {
-			for old, new := range result.FilesMoved {
-				fmt.Printf("    - %s → %s\n", old, new)
-			}
-		}
+	for _, f := range files {
+		fmt.Fprintf(out, "    - %s\n", f)
 	}
 }
 
-// formatParseError formats parse errors with helpful hints
+// printFileMovedList prints moved files summary and details.
+func printFileMovedList(out io.Writer, files map[string]string, verbose bool) {
+	if len(files) == 0 {
+		return
+	}
+
+	fmt.Fprintf(out, "  Moved: %d files\n", len(files))
+
+	if !verbose {
+		return
+	}
+
+	for old, newPath := range files {
+		fmt.Fprintf(out, "    - %s → %s\n", old, newPath)
+	}
+}
+
+// formatParseError formats parse errors with helpful hints.
 func formatParseError(err error) error {
-	return fmt.Errorf(`Error: Invalid patch syntax
-%v
+	return fmt.Errorf(`error: invalid patch syntax
+%w
 
 Hint: Check the patch format specification.
 Expected format:
@@ -205,13 +210,14 @@ Expected format:
   *** End Patch`, err)
 }
 
-// formatApplyError formats application errors with context
+// formatApplyError formats application errors with context.
 func formatApplyError(err error) error {
-	// Extract structured error if available
-	if applyErr, ok := err.(*patchapply.Error); ok {
-		return fmt.Errorf(`Error: Failed to apply patch
+	// Extract structured error if available.
+	var applyErr *patchapply.Error
+	if errors.As(err, &applyErr) {
+		return fmt.Errorf(`error: failed to apply patch
   %s operation on %s (line %d)
-  %v
+  %w
 
 Hint: %s`,
 			applyErr.Op,
@@ -221,32 +227,31 @@ Hint: %s`,
 			getHintForError(applyErr))
 	}
 
-	return fmt.Errorf("Error: %v", err)
+	return fmt.Errorf("error: %w", err)
 }
 
-// getHintForError provides helpful hints for common errors
+// getHintForError provides helpful hints for common errors.
 func getHintForError(err *patchapply.Error) string {
-	switch err.Err {
-	case patchapply.ErrContextNotFound:
+	switch {
+	case errors.Is(err.Err, patchapply.ErrContextNotFound):
 		return "The context may have changed. Update the patch with current file content."
-	case patchapply.ErrPathOutsideWorkspace:
+	case errors.Is(err.Err, patchapply.ErrPathOutsideWorkspace):
 		return "Use relative paths within the workspace only."
-	case patchapply.ErrFileExists:
+	case errors.Is(err.Err, patchapply.ErrFileExists):
 		return "Use --force to overwrite existing files."
-	case patchapply.ErrFileNotFound:
+	case errors.Is(err.Err, patchapply.ErrFileNotFound):
 		return "Ensure the file exists before updating."
 	default:
 		return "Check the error message above for details."
 	}
 }
 
-// runApplyPatchMode is called from main.go for special execution modes
+// runApplyPatchMode is called from main.go for special execution modes.
 func runApplyPatchMode() int {
-	// Create a minimal cobra command for special mode
-	cmd := &cobra.Command{
-		Use:   "spin-apply-patch",
-		Short: "Apply a Spin patch (standalone mode)",
-		Long: `Apply a Spin patch from stdin or file.
+	cmd := newApplyPatchCmd()
+	cmd.Use = binaryApplyPatch
+	cmd.Short = "Apply a Spin patch (standalone mode)"
+	cmd.Long = `Apply a Spin patch from stdin or file.
 
 This is the standalone version of the apply-patch command.
 Can be invoked as:
@@ -262,20 +267,14 @@ Examples:
   spin-apply-patch -f changes.patch
 
   # Dry-run mode
-  spin-apply-patch --dry-run -f changes.patch`,
-		RunE: runApplyPatch,
-	}
+  spin-apply-patch --dry-run -f changes.patch`
 
-	// Add flags
-	cmd.Flags().StringVarP(&applyPatchFile, "file", "f", "", "Patch file (default: stdin)")
-	cmd.Flags().StringVarP(&applyPatchWorkspace, "workspace", "w", ".", "Workspace directory")
-	cmd.Flags().BoolVar(&applyPatchDryRun, "dry-run", false, "Validate without applying")
-	cmd.Flags().BoolVar(&applyPatchForce, "force", false, "Force overwrite existing files")
-	cmd.Flags().BoolVarP(&applyPatchVerbose, "verbose", "v", false, "Verbose output")
-
-	if err := cmd.Execute(); err != nil {
+	err := cmd.Execute()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
+
 		return 1
 	}
+
 	return 0
 }

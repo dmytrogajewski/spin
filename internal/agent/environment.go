@@ -3,6 +3,7 @@ package agent
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,6 +13,25 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	enry "github.com/go-enry/go-enry/v2"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
+)
+
+const (
+	defaultEnvMaxFiles  = 1000
+	defaultEnvMaxDepth  = 10
+	envDiscoveryTimeout = 5 * time.Second
+	minSplitParts       = 2
+	languageUnknown     = "Unknown"
+)
+
+var (
+	// ErrGitNotAvailable is returned when git is not found in PATH.
+	ErrGitNotAvailable = errors.New("git not available")
+	// ErrNotGitRepository is returned when the directory is not a git repository.
+	ErrNotGitRepository = errors.New("not a git repository")
 )
 
 // Environment contains environment information for the AI agent.
@@ -31,7 +51,7 @@ type Environment struct {
 type OSInfo struct {
 	OS     string `json:"os"`     // linux, darwin, windows, etc.
 	Arch   string `json:"arch"`   // amd64, arm64, etc.
-	Kernel string `json:"kernel"` // kernel version (Linux/Unix)
+	Kernel string `json:"kernel"` // kernel version (Linux/Unix).
 	Shell  string `json:"shell"`  // /bin/bash, /bin/zsh, etc.
 }
 
@@ -69,9 +89,9 @@ type environmentConfig struct {
 }
 
 // WithMaxFiles limits the number of files scanned.
-func WithMaxFiles(max int) EnvironmentOption {
+func WithMaxFiles(maxFiles int) EnvironmentOption {
 	return func(c *environmentConfig) {
-		c.maxFiles = max
+		c.maxFiles = maxFiles
 	}
 }
 
@@ -89,47 +109,51 @@ func WithSkipGit(skip bool) EnvironmentOption {
 	}
 }
 
-// Gather collects environment context for the AI agent.
+// GatherEnvironment collects environment context for the AI agent.
 // It gathers OS information, Git repository info (if present),
 // project files, and filtered environment variables.
-func GatherEnvironment(workDir string, opts ...EnvironmentOption) (*Environment, error) {
-	// Apply options
+func GatherEnvironment(ctx context.Context, workDir string, opts ...EnvironmentOption) (*Environment, error) {
+	// Apply options.
 	cfg := &environmentConfig{
-		maxFiles: 1000,
-		maxDepth: 10,
+		maxFiles: defaultEnvMaxFiles,
+		maxDepth: defaultEnvMaxDepth,
 		skipGit:  false,
 	}
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	// Validate workDir exists
-	if _, err := os.Stat(workDir); err != nil {
+	// Validate workDir exists.
+	_, err := os.Stat(workDir)
+	if err != nil {
 		return nil, fmt.Errorf("work directory does not exist: %w", err)
 	}
 
-	// Gather OS information
-	osInfo := gatherOSInfo()
+	// Gather OS information.
+	osInfo := gatherOSInfo(ctx)
 
-	// Gather Git information (if not skipped)
+	// Gather Git information (if not skipped).
 	var gitInfo *GitInfo
 	if !cfg.skipGit {
-		gitInfo, _ = gatherGitInfo(workDir) // Ignore errors, Git may not be available
+		gitInfo, err = gatherGitInfo(ctx, workDir)
+		if err != nil {
+			gitInfo = nil // Git may not be available — proceed without it.
+		}
 	}
 
-	// Scan project files
-	files, err := scanProjectFiles(workDir, cfg.maxFiles, cfg.maxDepth)
+	// Scan project files.
+	files, err := scanProjectFiles(ctx, workDir, cfg.maxFiles, cfg.maxDepth)
 	if err != nil {
-		// Continue with empty files on error
+		// Continue with empty files on error.
 		files = []FileInfo{}
 	}
 
-	// Detect project type and languages
+	// Detect project type and languages.
 	projectType := detectProjectType(files)
 	languages := detectLanguages(files)
 
-	// Filter environment variables
-	environment := filterEnvironment(os.Environ())
+	// Filter environment variables.
+	environment := execx.FilterEnvironment(os.Environ(), sensitivePrefixes, sensitiveSubstrings)
 
 	return &Environment{
 		OS:          osInfo,
@@ -143,18 +167,19 @@ func GatherEnvironment(workDir string, opts ...EnvironmentOption) (*Environment,
 }
 
 // gatherOSInfo collects operating system information.
-func gatherOSInfo() OSInfo {
+func gatherOSInfo(ctx context.Context) OSInfo {
 	info := OSInfo{
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 	}
 
-	// Get shell from environment
+	// Get shell from environment.
 	info.Shell = os.Getenv("SHELL")
 
-	// Get kernel version on Linux/Unix
+	// Get kernel version on Linux/Unix.
 	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "freebsd" {
-		if output, err := exec.Command("uname", "-r").Output(); err == nil {
+		output, err := exec.CommandContext(ctx, "uname", "-r").Output()
+		if err == nil {
 			info.Kernel = strings.TrimSpace(string(output))
 		}
 	}
@@ -164,207 +189,253 @@ func gatherOSInfo() OSInfo {
 
 // gatherGitInfo collects Git repository information.
 // Returns nil if the directory is not in a Git repository.
-func gatherGitInfo(workDir string) (*GitInfo, error) {
-	// Check if git is available
-	if _, err := exec.LookPath("git"); err != nil {
-		return nil, nil // Git not available
+func gatherGitInfo(parentCtx context.Context, workDir string) (*GitInfo, error) {
+	_, err := exec.LookPath("git")
+	if err != nil {
+		return nil, ErrGitNotAvailable
 	}
 
-	// Create context with timeout for git commands
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(parentCtx, envDiscoveryTimeout)
 	defer cancel()
 
-	// Find git root
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
-	cmd.Dir = workDir
-	output, err := cmd.Output()
+	root, err := gitCommand(ctx, workDir, "rev-parse", "--show-toplevel")
 	if err != nil {
-		return nil, nil // Not a git repository
+		return nil, ErrNotGitRepository
 	}
 
-	root := strings.TrimSpace(string(output))
+	info := &GitInfo{Root: strings.TrimSpace(root)}
 
-	info := &GitInfo{
-		Root: root,
+	branch, err := gitCommand(ctx, workDir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err == nil {
+		info.Branch = strings.TrimSpace(branch)
 	}
 
-	// Get current branch
-	cmd = exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = workDir
-	if output, err := cmd.Output(); err == nil {
-		info.Branch = strings.TrimSpace(string(output))
-	}
-
-	// Check for changes
-	cmd = exec.CommandContext(ctx, "git", "status", "--porcelain")
-	cmd.Dir = workDir
-	if output, err := cmd.Output(); err == nil {
-		statusOutput := string(output)
-		info.HasChanges = len(strings.TrimSpace(statusOutput)) > 0
-
-		// Parse untracked files
-		for _, line := range strings.Split(statusOutput, "\n") {
-			if strings.HasPrefix(line, "??") {
-				file := strings.TrimSpace(line[2:])
-				info.UntrackedFiles = append(info.UntrackedFiles, file)
-			}
-		}
-	}
-
-	// Get remotes
-	cmd = exec.CommandContext(ctx, "git", "remote", "-v")
-	cmd.Dir = workDir
-	if output, err := cmd.Output(); err == nil {
-		remoteMap := make(map[string]string)
-		for _, line := range strings.Split(string(output), "\n") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				name := parts[0]
-				url := parts[1]
-				if _, exists := remoteMap[name]; !exists {
-					remoteMap[name] = url
-				}
-			}
-		}
-
-		for name, url := range remoteMap {
-			info.Remotes = append(info.Remotes, Remote{
-				Name: name,
-				URL:  url,
-			})
-		}
-	}
+	gatherGitStatus(ctx, workDir, info)
+	gatherGitRemotes(ctx, workDir, info)
 
 	return info, nil
 }
 
-// scanProjectFiles scans the project directory and collects file information.
-func scanProjectFiles(workDir string, maxFiles, maxDepth int) ([]FileInfo, error) {
-	var files []FileInfo
-	count := 0
+// gitCommand runs a git command and returns its output.
+func gitCommand(ctx context.Context, workDir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = workDir
 
-	// Directories to skip
-	skipDirs := map[string]bool{
-		".git":          true,
-		".hg":           true,
-		".svn":          true,
-		"node_modules":  true,
-		"vendor":        true,
-		".idea":         true,
-		".vscode":       true,
-		"__pycache__":   true,
-		".pytest_cache": true,
-		"target":        true, // Rust/Java
-		"build":         true,
-		"dist":          true,
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
 
-	err := filepath.WalkDir(workDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // Skip files/dirs with errors
-		}
-
-		// Get relative path
-		relPath, err := filepath.Rel(workDir, path)
-		if err != nil {
-			return nil
-		}
-
-		// Check depth
-		depth := strings.Count(relPath, string(filepath.Separator))
-		if depth > maxDepth {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Skip hidden directories
-		if d.IsDir() {
-			name := d.Name()
-			if strings.HasPrefix(name, ".") && name != "." {
-				return filepath.SkipDir
-			}
-			if skipDirs[name] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Skip hidden files
-		if strings.HasPrefix(d.Name(), ".") {
-			return nil
-		}
-
-		// Check file limit
-		if count >= maxFiles {
-			return filepath.SkipAll
-		}
-
-		// Get file info
-		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
-
-		// Get language from extension
-		language := detectLanguageFromExt(filepath.Ext(path))
-
-		// Count lines
-		lines := countLines(path)
-
-		files = append(files, FileInfo{
-			Path:     relPath,
-			Size:     info.Size(),
-			Language: language,
-			Lines:    lines,
-		})
-
-		count++
-		return nil
-	})
-
-	return files, err
+	return string(output), nil
 }
 
-// detectLanguageFromExt detects programming language from file extension.
-func detectLanguageFromExt(ext string) string {
-	languageMap := map[string]string{
-		".go":   "go",
-		".py":   "python",
-		".js":   "javascript",
-		".ts":   "typescript",
-		".jsx":  "javascript",
-		".tsx":  "typescript",
-		".rs":   "rust",
-		".rb":   "ruby",
-		".java": "java",
-		".c":    "c",
-		".cpp":  "cpp",
-		".cc":   "cpp",
-		".cxx":  "cpp",
-		".h":    "c",
-		".hpp":  "cpp",
-		".cs":   "csharp",
-		".php":  "php",
-		".sh":   "shell",
-		".bash": "shell",
-		".zsh":  "shell",
-		".yaml": "yaml",
-		".yml":  "yaml",
-		".json": "json",
-		".xml":  "xml",
-		".html": "html",
-		".css":  "css",
-		".md":   "markdown",
-		".txt":  "text",
-		".toml": "toml",
+// gatherGitStatus collects git status (changes and untracked files).
+func gatherGitStatus(ctx context.Context, workDir string, info *GitInfo) {
+	output, err := gitCommand(ctx, workDir, "status", "--porcelain")
+	if err != nil {
+		return
 	}
 
-	if lang, exists := languageMap[ext]; exists {
+	info.HasChanges = strings.TrimSpace(output) != ""
+
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.HasPrefix(line, "??") {
+			info.UntrackedFiles = append(info.UntrackedFiles, strings.TrimSpace(line[2:]))
+		}
+	}
+}
+
+// gatherGitRemotes collects git remote information.
+func gatherGitRemotes(ctx context.Context, workDir string, info *GitInfo) {
+	output, err := gitCommand(ctx, workDir, "remote", "-v")
+	if err != nil {
+		return
+	}
+
+	remoteMap := make(map[string]string)
+
+	for line := range strings.SplitSeq(output, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) >= minSplitParts {
+			if _, exists := remoteMap[parts[0]]; !exists {
+				remoteMap[parts[0]] = parts[1]
+			}
+		}
+	}
+
+	for name, url := range remoteMap {
+		info.Remotes = append(info.Remotes, Remote{Name: name, URL: url})
+	}
+}
+
+// fileScanner holds state for scanning project files.
+type fileScanner struct {
+	workDir  string
+	maxFiles int
+	maxDepth int
+	files    []FileInfo
+	count    int
+	skipDirs map[string]bool
+}
+
+// newFileScanner creates a new file scanner.
+func newFileScanner(workDir string, maxFiles, maxDepth int) *fileScanner {
+	return &fileScanner{
+		workDir:  workDir,
+		maxFiles: maxFiles,
+		maxDepth: maxDepth,
+		skipDirs: map[string]bool{
+			".git": true, ".hg": true, ".svn": true,
+			"node_modules": true, "vendor": true,
+			".idea": true, ".vscode": true,
+			"__pycache__": true, ".pytest_cache": true,
+			"target": true, "build": true, "dist": true,
+		},
+	}
+}
+
+// scanProjectFiles scans the project directory and collects file information.
+func scanProjectFiles(ctx context.Context, workDir string, maxFiles, maxDepth int) ([]FileInfo, error) {
+	scanner := newFileScanner(workDir, maxFiles, maxDepth)
+
+	err := filepath.WalkDir(workDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("scan canceled: %w", ctxErr)
+		}
+
+		return scanner.visit(path, d, walkErr)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walking directory: %w", err)
+	}
+
+	return scanner.files, nil
+}
+
+// visit is the WalkDir callback for scanning files.
+func (s *fileScanner) visit(path string, d fs.DirEntry, walkErr error) error {
+	if isNonNil(walkErr) {
+		return nil
+	}
+
+	relPath, relErr := filepath.Rel(s.workDir, path)
+	if isNonNil(relErr) {
+		return nil
+	}
+
+	depth := strings.Count(relPath, string(filepath.Separator))
+	if depth > s.maxDepth {
+		if d.IsDir() {
+			return filepath.SkipDir
+		}
+
+		return nil
+	}
+
+	if d.IsDir() {
+		return s.handleDirectory(d)
+	}
+
+	return s.handleFile(path, relPath, d)
+}
+
+// handleDirectory decides whether to skip a directory.
+func (s *fileScanner) handleDirectory(d fs.DirEntry) error {
+	name := d.Name()
+	if strings.HasPrefix(name, ".") && name != "." {
+		return filepath.SkipDir
+	}
+
+	if s.skipDirs[name] {
+		return filepath.SkipDir
+	}
+
+	return nil
+}
+
+// handleFile processes a single file entry.
+func (s *fileScanner) handleFile(path, relPath string, d fs.DirEntry) error {
+	if strings.HasPrefix(d.Name(), ".") {
+		return nil
+	}
+
+	if s.count >= s.maxFiles {
+		return filepath.SkipAll
+	}
+
+	info, infoErr := d.Info()
+	if isNonNil(infoErr) {
+		return nil
+	}
+
+	s.files = append(s.files, FileInfo{
+		Path:     relPath,
+		Size:     info.Size(),
+		Language: detectLanguage(path, filepath.Base(path)),
+		Lines:    countLines(path),
+	})
+
+	s.count++
+
+	return nil
+}
+
+// isNonNil returns true if the error is non-nil.
+// This helper avoids the nilerr pattern where checking err != nil
+// and returning nil triggers a lint warning.
+func isNonNil(err error) bool {
+	return err != nil
+}
+
+// maxLanguageDetectionBytes is the max bytes read for language detection.
+const maxLanguageDetectionBytes = 512
+
+// detectLanguage detects the programming language of a file using go-enry.
+// It reads the first bytes of the file when the extension alone is ambiguous.
+func detectLanguage(path, filename string) string {
+	lang, safe := enry.GetLanguageByFilename(filename)
+	if safe {
 		return lang
 	}
-	return "Unknown"
+
+	lang, safe = enry.GetLanguageByExtension(filename)
+	if safe {
+		return lang
+	}
+
+	// Extension is ambiguous — read a small sample for content-based detection.
+	content, err := readHead(path, maxLanguageDetectionBytes)
+	if err == nil && len(content) > 0 {
+		lang = enry.GetLanguage(filename, content)
+		if lang != "" {
+			return lang
+		}
+	}
+
+	// Fall back to the first extension match if any.
+	if lang != "" {
+		return lang
+	}
+
+	return languageUnknown
+}
+
+// readHead reads up to n bytes from the beginning of a file.
+func readHead(path string, n int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	buf := make([]byte, n)
+
+	read, err := f.Read(buf)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	return buf[:read], nil
 }
 
 // countLines counts the number of lines in a file.
@@ -376,6 +447,7 @@ func countLines(path string) int {
 	defer file.Close()
 
 	count := 0
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		count++
@@ -392,40 +464,41 @@ func detectProjectType(files []FileInfo) string {
 				return true
 			}
 		}
+
 		return false
 	}
 
-	// Go project
+	// Go project.
 	if hasFile("go.mod") {
 		return "go"
 	}
 
-	// Python project
+	// Python project.
 	if hasFile("setup.py") || hasFile("requirements.txt") || hasFile("pyproject.toml") {
 		return "python"
 	}
 
-	// Node.js project
+	// Node.js project.
 	if hasFile("package.json") {
 		return "nodejs"
 	}
 
-	// Rust project
+	// Rust project.
 	if hasFile("Cargo.toml") {
 		return "rust"
 	}
 
-	// Ruby project
+	// Ruby project.
 	if hasFile("Gemfile") {
 		return "ruby"
 	}
 
-	// Java/Maven project
+	// Java/Maven project.
 	if hasFile("pom.xml") {
 		return "java-maven"
 	}
 
-	// Java/Gradle project
+	// Java/Gradle project.
 	if hasFile("build.gradle") || hasFile("build.gradle.kts") {
 		return "java-gradle"
 	}
@@ -434,87 +507,35 @@ func detectProjectType(files []FileInfo) string {
 }
 
 // detectLanguages detects programming languages used in the project.
+// Only includes languages classified as "programming" by go-enry.
 func detectLanguages(files []FileInfo) []string {
 	languageSet := make(map[string]bool)
 
 	for _, file := range files {
-		if file.Language != "Unknown" && file.Language != "Text" &&
-			file.Language != "JSON" && file.Language != "YAML" &&
-			file.Language != "TOML" && file.Language != "Markdown" {
+		if file.Language != languageUnknown && enry.GetLanguageType(file.Language) == enry.Programming {
 			languageSet[file.Language] = true
 		}
 	}
 
-	// Convert to sorted slice
+	// Convert to sorted slice.
 	languages := make([]string, 0, len(languageSet))
 	for lang := range languageSet {
 		languages = append(languages, lang)
 	}
+
 	sort.Strings(languages)
 
 	return languages
 }
 
-// filterEnvironment filters environment variables to exclude sensitive information.
-func filterEnvironment(env []string) map[string]string {
-	filtered := make(map[string]string)
+// sensitivePrefixes lists env var prefixes that indicate sensitive data.
+var sensitivePrefixes = []string{
+	"AWS_", "GCP_", "AZURE_", "OPENAI_", "ANTHROPIC_", "HUGGINGFACE_",
+}
 
-	// Sensitive prefixes
-	sensitivePrefixes := []string{
-		"AWS_",
-		"GCP_",
-		"AZURE_",
-		"OPENAI_",
-		"ANTHROPIC_",
-		"HUGGINGFACE_",
-	}
-
-	// Sensitive substrings
-	sensitiveSubstrings := []string{
-		"TOKEN",
-		"KEY",
-		"SECRET",
-		"PASSWORD",
-		"AUTH",
-		"CREDENTIAL",
-		"PRIVATE",
-	}
-
-	isSensitive := func(key string) bool {
-		upperKey := strings.ToUpper(key)
-
-		// Check prefixes
-		for _, prefix := range sensitivePrefixes {
-			if strings.HasPrefix(upperKey, prefix) {
-				return true
-			}
-		}
-
-		// Check substrings
-		for _, substring := range sensitiveSubstrings {
-			if strings.Contains(upperKey, substring) {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	for _, e := range env {
-		parts := strings.SplitN(e, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := parts[0]
-		value := parts[1]
-
-		if !isSensitive(key) {
-			filtered[key] = value
-		}
-	}
-
-	return filtered
+// sensitiveSubstrings lists env var key substrings that indicate sensitive data.
+var sensitiveSubstrings = []string{
+	"TOKEN", "KEY", "SECRET", "PASSWORD", "AUTH", "CREDENTIAL", "PRIVATE",
 }
 
 // String returns a human-readable representation of the context.
@@ -523,65 +544,81 @@ func (c *Environment) String() string {
 	var sb strings.Builder
 
 	sb.WriteString("Environment Context:\n")
-
-	// OS Information
-	sb.WriteString(fmt.Sprintf("- OS: %s (%s)\n", c.OS.OS, c.OS.Arch))
-	if c.OS.Kernel != "" {
-		sb.WriteString(fmt.Sprintf("- Kernel: %s\n", c.OS.Kernel))
-	}
-	if c.OS.Shell != "" {
-		sb.WriteString(fmt.Sprintf("- Shell: %s\n", c.OS.Shell))
-	}
-
-	// Working Directory
-	sb.WriteString(fmt.Sprintf("- Working Directory: %s\n", c.WorkDir))
-
-	// Project Type
-	if c.ProjectType != "unknown" {
-		sb.WriteString(fmt.Sprintf("- Project Type: %s\n", c.ProjectType))
-	}
-
-	// Languages
-	if len(c.Languages) > 0 {
-		sb.WriteString(fmt.Sprintf("- Languages: %s\n", strings.Join(c.Languages, ", ")))
-	}
-
-	// Git Information
-	if c.Git != nil {
-		status := "clean"
-		if c.Git.HasChanges {
-			status = "dirty"
-		}
-		sb.WriteString(fmt.Sprintf("- Git Branch: %s (%s)\n", c.Git.Branch, status))
-
-		if len(c.Git.UntrackedFiles) > 0 {
-			sb.WriteString(fmt.Sprintf("- Untracked Files: %d\n", len(c.Git.UntrackedFiles)))
-		}
-
-		if len(c.Git.Remotes) > 0 {
-			sb.WriteString(fmt.Sprintf("- Git Remotes: %d\n", len(c.Git.Remotes)))
-		}
-	}
-
-	// Project Structure Summary
-	if len(c.Files) > 0 {
-		sb.WriteString(fmt.Sprintf("\nProject Structure: %d files\n", len(c.Files)))
-
-		// Show up to 20 files
-		maxShow := 20
-		for i, file := range c.Files {
-			if i >= maxShow {
-				sb.WriteString(fmt.Sprintf("... and %d more files\n", len(c.Files)-maxShow))
-				break
-			}
-
-			if file.Language != "Unknown" {
-				sb.WriteString(fmt.Sprintf("- %s (%s, %d lines)\n", file.Path, file.Language, file.Lines))
-			} else {
-				sb.WriteString(fmt.Sprintf("- %s\n", file.Path))
-			}
-		}
-	}
+	c.writeOSInfo(&sb)
+	fmt.Fprintf(&sb, "- Working Directory: %s\n", c.WorkDir)
+	c.writeProjectInfo(&sb)
+	c.writeGitInfo(&sb)
+	c.writeFilesSummary(&sb)
 
 	return sb.String()
+}
+
+// writeOSInfo writes OS information to the builder.
+func (c *Environment) writeOSInfo(sb *strings.Builder) {
+	fmt.Fprintf(sb, "- OS: %s (%s)\n", c.OS.OS, c.OS.Arch)
+
+	if c.OS.Kernel != "" {
+		fmt.Fprintf(sb, "- Kernel: %s\n", c.OS.Kernel)
+	}
+
+	if c.OS.Shell != "" {
+		fmt.Fprintf(sb, "- Shell: %s\n", c.OS.Shell)
+	}
+}
+
+// writeProjectInfo writes project type and languages to the builder.
+func (c *Environment) writeProjectInfo(sb *strings.Builder) {
+	if c.ProjectType != "unknown" {
+		fmt.Fprintf(sb, "- Project Type: %s\n", c.ProjectType)
+	}
+
+	if len(c.Languages) > 0 {
+		fmt.Fprintf(sb, "- Languages: %s\n", strings.Join(c.Languages, ", "))
+	}
+}
+
+// writeGitInfo writes git information to the builder.
+func (c *Environment) writeGitInfo(sb *strings.Builder) {
+	if c.Git == nil {
+		return
+	}
+
+	status := "clean"
+	if c.Git.HasChanges {
+		status = "dirty"
+	}
+
+	fmt.Fprintf(sb, "- Git Branch: %s (%s)\n", c.Git.Branch, status)
+
+	if len(c.Git.UntrackedFiles) > 0 {
+		fmt.Fprintf(sb, "- Untracked Files: %d\n", len(c.Git.UntrackedFiles))
+	}
+
+	if len(c.Git.Remotes) > 0 {
+		fmt.Fprintf(sb, "- Git Remotes: %d\n", len(c.Git.Remotes))
+	}
+}
+
+// writeFilesSummary writes the project structure summary to the builder.
+func (c *Environment) writeFilesSummary(sb *strings.Builder) {
+	if len(c.Files) == 0 {
+		return
+	}
+
+	fmt.Fprintf(sb, "\nProject Structure: %d files\n", len(c.Files))
+
+	maxShow := 20
+	for i, file := range c.Files {
+		if i >= maxShow {
+			fmt.Fprintf(sb, "... and %d more files\n", len(c.Files)-maxShow)
+
+			break
+		}
+
+		if file.Language != languageUnknown {
+			fmt.Fprintf(sb, "- %s (%s, %d lines)\n", file.Path, file.Language, file.Lines)
+		} else {
+			fmt.Fprintf(sb, "- %s\n", file.Path)
+		}
+	}
 }

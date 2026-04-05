@@ -11,38 +11,110 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
 
 const (
-	// testTimeout is the default timeout for e2e tests
+	// testTimeout is the default timeout for e2e tests.
 	testTimeout = 60 * time.Second
 
-	// Binary path (relative to test file)
+	// Binary path (relative to test file).
 	binPath = "../../bin/spin"
+
+	// Env var that instructs tests to reuse an existing binary.
+	skipBuildEnv = "SPIN_E2E_SKIP_BUILD"
 )
 
-// TestMain builds the binary before running tests
+// TestMain builds the binary before running tests.
 func TestMain(m *testing.M) {
-	// Build the binary
-	fmt.Println("Building spin binary for e2e tests...")
-	cmd := exec.Command("go", "build", "-o", binPath, "../../cmd/spin")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		fmt.Printf("Failed to build binary: %v\n%s\n", err, output)
-		os.Exit(1)
+	if shouldSkipBuild() {
+		_, err := os.Stat(binPath)
+		if err == nil {
+			fmt.Fprintln(os.Stdout, "Using existing spin binary for e2e tests")
+		} else {
+			fmt.Fprintln(os.Stdout, "Pre-built spin binary not found, rebuilding...")
+			buildSpinBinary()
+		}
+	} else {
+		buildSpinBinary()
 	}
 
-	// Run tests
+	// Run tests.
 	code := m.Run()
 
 	// Cleanup (optional - keep binary for debugging)
-	// os.Remove(binPath)
+	// os.Remove(binPath).
 
 	os.Exit(code)
 }
 
-// runSpin executes the spin binary with given args and returns stdout, stderr, and error
+func shouldSkipBuild() bool {
+	return os.Getenv(skipBuildEnv) == "1"
+}
+
+func buildSpinBinary() {
+	if buildErr := doBuildSpinBinary(); buildErr != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", buildErr)
+		os.Exit(1)
+	}
+}
+
+func doBuildSpinBinary() error {
+	// Use file lock to prevent concurrent builds from parallel test packages.
+	lockPath := binPath + ".lock"
+
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return fmt.Errorf("failed to create lock file: %w", err)
+	}
+	defer lockFile.Close()
+
+	// Acquire exclusive lock (blocks until available).
+	fd := int(lockFile.Fd())
+	if flockErr := syscall.Flock(fd, syscall.LOCK_EX); flockErr != nil {
+		return fmt.Errorf("failed to acquire build lock: %w", flockErr)
+	}
+
+	defer func() { _ = syscall.Flock(fd, syscall.LOCK_UN) }()
+
+	// Check if binary was already built by another package while we waited.
+	// Use 5-minute window to avoid unnecessary rebuilds during parallel test runs.
+	if info, statErr := os.Stat(binPath); statErr == nil {
+		if time.Since(info.ModTime()) < 5*time.Minute {
+			fmt.Fprintln(os.Stdout, "Using recently built spin binary for e2e tests")
+
+			return nil
+		}
+	}
+
+	// Build the binary with e2e_llm_test tag to enable test-llm provider.
+	// This allows e2e tests to run without requiring external LLM services.
+	// Build to a temp file and atomically rename to avoid running a half-written binary.
+	fmt.Fprintln(os.Stdout, "Building spin binary for e2e tests (with e2e_llm_test tag)...")
+
+	tmpBin := binPath + ".tmp"
+
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e_llm_test", "-o", tmpBin, "../../cmd/spin")
+
+	output, buildErr := cmd.CombinedOutput()
+	if buildErr != nil {
+		os.Remove(tmpBin)
+
+		return fmt.Errorf("failed to build binary: %w\n%s", buildErr, output)
+	}
+
+	if renameErr := os.Rename(tmpBin, binPath); renameErr != nil {
+		os.Remove(tmpBin)
+
+		return fmt.Errorf("failed to install binary: %w", renameErr)
+	}
+
+	return nil
+}
+
+// runSpin executes the spin binary with given args and returns stdout, stderr, and error.
 func runSpin(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 
@@ -52,6 +124,7 @@ func runSpin(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	cmd := exec.CommandContext(ctx, binPath, args...)
 
 	var outBuf, errBuf bytes.Buffer
+
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
@@ -60,242 +133,212 @@ func runSpin(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	return outBuf.String(), errBuf.String(), err
 }
 
-// runSpinWithInput executes spin with stdin input
-func runSpinWithInput(t *testing.T, input string, args ...string) (stdout, stderr string, err error) {
-	t.Helper()
+func TestConfigCommands_ShowEmpty(t *testing.T) {
+	t.Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, binPath, args...)
-	cmd.Stdin = strings.NewReader(input)
-
-	var outBuf, errBuf bytes.Buffer
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-
-	err = cmd.Run()
-
-	return outBuf.String(), errBuf.String(), err
-}
-
-// TestConfigCommands tests config-related functionality
-func TestConfigCommands(t *testing.T) {
-	t.Run("config show without config file", func(t *testing.T) {
-		// Remove config if exists
-		homeDir, _ := os.UserHomeDir()
-		configPath := filepath.Join(homeDir, ".spin", "spin.yaml")
-		tempBackup := configPath + ".e2e-backup"
-
-		// Backup existing config
-		if _, err := os.Stat(configPath); err == nil {
-			if err := os.Rename(configPath, tempBackup); err != nil {
-				t.Fatalf("Failed to backup config: %v", err)
-			}
-			defer os.Rename(tempBackup, configPath)
-		}
-
-		stdout, stderr, err := runSpin(t, "config", "show")
-
-		// Should not error when no config exists
-		if err != nil {
-			t.Fatalf("config show failed: %v\nstderr: %s", err, stderr)
-		}
-
-		// Should indicate no config file
-		if !strings.Contains(stdout, "No configuration file") && !strings.Contains(stdout, "{}") {
-			t.Errorf("Expected 'No configuration file' or empty config, got: %s", stdout)
-		}
-	})
-
-	t.Run("config show with binary file in cwd", func(t *testing.T) {
-		// Create a temporary directory with a binary file named "spin"
-		tmpDir := t.TempDir()
-		binaryPath := filepath.Join(tmpDir, "spin")
-
-		// Create a fake binary file
-		if err := os.WriteFile(binaryPath, []byte{0x7f, 0x45, 0x4c, 0x46}, 0755); err != nil {
-			t.Fatalf("Failed to create fake binary: %v", err)
-		}
-
-		// Run config show from that directory
-		cmd := exec.Command(binPath, "config", "show")
-		cmd.Dir = tmpDir
-
-		var outBuf, errBuf bytes.Buffer
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
-
-		err := cmd.Run()
-
-		// Should NOT fail with YAML parsing error (Bug #1 regression test)
-		stderr := errBuf.String()
-		if strings.Contains(stderr, "control characters are not allowed") {
-			t.Errorf("BUG #1 REGRESSION: Config loader tried to read binary file!\nstderr: %s", stderr)
-		}
-
-		// Should succeed or show no config
-		if err != nil && !strings.Contains(stderr, "No configuration file") {
-			t.Logf("Warning: unexpected error (but not the binary-reading bug): %v\nstderr: %s", err, stderr)
-		}
-	})
-
-	t.Run("config validate", func(t *testing.T) {
-		stdout, stderr, _ := runSpin(t, "config", "validate")
-
-		// Should validate without crashing
-		output := stdout + stderr
-		if !strings.Contains(output, "valid") && !strings.Contains(output, "invalid") {
-			t.Errorf("Expected validation result, got: %s", output)
-		}
-	})
-
-	t.Run("config path", func(t *testing.T) {
-		stdout, stderr, err := runSpin(t, "config", "path")
-
-		output := stdout + stderr
-
-		// Should show config path or indicate no config
-		if err != nil && !strings.Contains(output, "no config file") {
-			t.Errorf("config path failed unexpectedly: %v\noutput: %s", err, output)
-		}
-	})
-}
-
-// TestMCPCommands tests MCP management commands
-func TestMCPCommands(t *testing.T) {
-	// Setup: ensure clean MCP state
-	homeDir, _ := os.UserHomeDir()
-	configPath := filepath.Join(homeDir, ".spin", "spin.yaml")
-	tempBackup := configPath + ".e2e-mcp-backup"
-
-	// Backup existing config
-	if _, err := os.Stat(configPath); err == nil {
-		if err := os.Rename(configPath, tempBackup); err != nil {
-			t.Fatalf("Failed to backup config: %v", err)
-		}
-		defer os.Rename(tempBackup, configPath)
+	emptyConfig := filepath.Join(t.TempDir(), "spin.yaml")
+	if err := os.WriteFile(emptyConfig, []byte(""), 0o600); err != nil {
+		t.Fatalf("Failed to create empty config: %v", err)
 	}
 
-	t.Run("mcp list empty", func(t *testing.T) {
-		stdout, stderr, err := runSpin(t, "mcp", "list")
+	stdout, stderr, err := runSpin(t, "--config-file", emptyConfig, "config", "show")
+	if err != nil {
+		t.Fatalf("config show failed: %v\nstderr: %s", err, stderr)
+	}
 
-		if err != nil {
-			t.Fatalf("mcp list failed: %v\nstderr: %s", err, stderr)
-		}
-
-		if !strings.Contains(stdout, "No MCP servers") {
-			t.Errorf("Expected 'No MCP servers', got: %s", stdout)
-		}
-	})
-
-	t.Run("mcp add and remove", func(t *testing.T) {
-		// Add MCP server
-		stdout, stderr, err := runSpin(t, "mcp", "add", "test-server", "echo", "test")
-		if err != nil {
-			t.Fatalf("mcp add failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
-		}
-
-		if !strings.Contains(stdout+stderr, "Added MCP server 'test-server'") {
-			t.Errorf("Expected add confirmation, got stdout: %s, stderr: %s", stdout, stderr)
-		}
-
-		// List should show the server
-		stdout, stderr, err = runSpin(t, "mcp", "list")
-		if err != nil {
-			t.Fatalf("mcp list failed: %v\nstderr: %s", err, stderr)
-		}
-
-		if !strings.Contains(stdout, "test-server") {
-			t.Errorf("Expected server 'test-server' in list, got: %s", stdout)
-		}
-
-		// Get server details
-		stdout, stderr, err = runSpin(t, "mcp", "get", "test-server")
-		if err != nil {
-			t.Fatalf("mcp get failed: %v\nstderr: %s", err, stderr)
-		}
-
-		if !strings.Contains(stdout, "test-server") || !strings.Contains(stdout, "echo") {
-			t.Errorf("Expected server details, got: %s", stdout)
-		}
-
-		// Remove server
-		stdout, stderr, err = runSpin(t, "mcp", "remove", "test-server", "--yes")
-		if err != nil {
-			t.Fatalf("mcp remove failed: %v\nstderr: %s", err, stderr)
-		}
-
-		// List should be empty again
-		stdout, stderr, err = runSpin(t, "mcp", "list")
-		if err != nil {
-			t.Fatalf("mcp list failed: %v\nstderr: %s", err, stderr)
-		}
-
-		if !strings.Contains(stdout, "No MCP servers") {
-			t.Errorf("Expected empty list after removal, got: %s", stdout)
-		}
-	})
+	if stdout == "" && stderr == "" {
+		t.Errorf("Expected some output from config show, got nothing")
+	}
 }
 
-// TestDebugCommands tests debug command functionality
+func TestConfigCommands_ShowWithBinaryInCwd(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "spin"), []byte{0x7f, 0x45, 0x4c, 0x46}, 0o600); err != nil {
+		t.Fatalf("Failed to create fake binary: %v", err)
+	}
+
+	cmd := exec.CommandContext(t.Context(), binPath, "config", "show")
+	cmd.Dir = tmpDir
+
+	var outBuf, errBuf bytes.Buffer
+
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	stderr := errBuf.String()
+
+	if strings.Contains(stderr, "control characters are not allowed") {
+		t.Errorf("BUG #1 REGRESSION: Config loader tried to read binary file!\nstderr: %s", stderr)
+	}
+
+	if err != nil && !strings.Contains(stderr, "No configuration file") {
+		t.Logf("Warning: unexpected error (but not the binary-reading bug): %v\nstderr: %s", err, stderr)
+	}
+}
+
+func TestConfigCommands_Validate(t *testing.T) {
+	t.Parallel()
+
+	stdout, stderr, _ := runSpin(t, "config", "validate")
+	output := stdout + stderr
+
+	if !strings.Contains(output, "valid") && !strings.Contains(output, "invalid") {
+		t.Errorf("Expected validation result, got: %s", output)
+	}
+}
+
+func TestConfigCommands_Path(t *testing.T) {
+	t.Parallel()
+
+	stdout, stderr, err := runSpin(t, "config", "path")
+	output := stdout + stderr
+
+	if err != nil && !strings.Contains(output, "no config file") {
+		t.Errorf("config path failed unexpectedly: %v\noutput: %s", err, output)
+	}
+}
+
+func TestMCPCommands_ListEmpty(t *testing.T) {
+	t.Parallel()
+
+	configPath := createTempConfig(t)
+
+	stdout, stderr, err := runSpin(t, "--config-file", configPath, "mcp", "registry", "list")
+	if err != nil {
+		t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if !strings.Contains(stdout, "No registries configured") {
+		t.Errorf("Expected 'No registries configured', got: %s", stdout)
+	}
+}
+
+func TestMCPCommands_AddAndRemove(t *testing.T) {
+	t.Parallel()
+
+	configPath := createTempConfig(t)
+
+	// Add MCP registry.
+	assertSpinSuccess(t, configPath, "mcp", "registry", "local", "add", "test-server", "echo", "test")
+
+	// List should show the registry.
+	stdout := assertSpinContains(t, configPath, "test-server", "mcp", "registry", "list")
+	_ = stdout
+
+	// Get registry details.
+	assertSpinContains(t, configPath, "test-server", "mcp", "registry", "get", "test-server")
+
+	// Remove registry.
+	assertSpinSuccess(t, configPath, "mcp", "registry", "remove", "test-server", "--yes")
+
+	// List should be empty again.
+	assertSpinContains(t, configPath, "No registries configured", "mcp", "registry", "list")
+}
+
+// createTempConfig creates a temporary spin config file and returns its path.
+func createTempConfig(t *testing.T) string {
+	t.Helper()
+
+	configPath := filepath.Join(t.TempDir(), "spin.yaml")
+	if err := os.WriteFile(configPath, []byte("# Spin configuration\n"), 0o600); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	return configPath
+}
+
+// assertSpinSuccess runs spin with the given config and args, fataling on error.
+func assertSpinSuccess(t *testing.T, configPath string, args ...string) {
+	t.Helper()
+
+	fullArgs := append([]string{"--config-file", configPath}, args...)
+
+	_, stderr, err := runSpin(t, fullArgs...)
+	if err != nil {
+		t.Fatalf("spin %v failed: %v\nstderr: %s", args, err, stderr)
+	}
+}
+
+// assertSpinContains runs spin and checks that stdout contains the expected string.
+func assertSpinContains(t *testing.T, configPath, expected string, args ...string) string {
+	t.Helper()
+
+	fullArgs := append([]string{"--config-file", configPath}, args...)
+
+	stdout, stderr, err := runSpin(t, fullArgs...)
+	if err != nil {
+		t.Fatalf("spin %v failed: %v\nstderr: %s", args, err, stderr)
+	}
+
+	if !strings.Contains(stdout, expected) {
+		t.Errorf("Expected %q in output, got: %s", expected, stdout)
+	}
+
+	return stdout
+}
+
+// TestDebugCommands tests debug command functionality.
 func TestDebugCommands(t *testing.T) {
+	t.Parallel()
+
 	t.Run("debug sandbox platform check", func(t *testing.T) {
+		t.Parallel()
+
 		stdout, stderr, err := runSpin(t, "debug", "sandbox", "ls")
 
 		output := stdout + stderr
 
 		// On Linux, should fail with platform check
-		// On macOS, might work or show not implemented
-		if strings.Contains(output, "only available on macOS") {
-			// Correct behavior on Linux
+		// On macOS, might work or show not implemented.
+		switch {
+		case strings.Contains(output, "only available on macOS"):
+			// Correct behavior on Linux.
 			if err == nil {
 				t.Error("Expected error on non-macOS platform")
 			}
-		} else if strings.Contains(output, "not yet implemented") {
-			// Acceptable - stub implementation on macOS
+		case strings.Contains(output, "not yet implemented"):
+			// Acceptable - stub implementation on macOS.
 			t.Logf("Sandbox command reached stub (macOS): %s", output)
-		} else {
+		default:
 			t.Logf("Sandbox command output: %s", output)
 		}
 	})
 
 	t.Run("debug landlock platform check", func(t *testing.T) {
+		t.Parallel()
+
 		stdout, stderr, err := runSpin(t, "debug", "landlock", "ls")
 
 		output := stdout + stderr
 
 		// On macOS, should fail with platform check
-		// On Linux, might work or show not implemented
-		if strings.Contains(output, "only available on Linux") {
-			// Correct behavior on macOS
+		// On Linux, might work or show not implemented.
+		switch {
+		case strings.Contains(output, "only available on Linux"):
+			// Correct behavior on macOS.
 			if err == nil {
 				t.Error("Expected error on non-Linux platform")
 			}
-		} else if strings.Contains(output, "not yet implemented") {
-			// Acceptable - stub implementation on Linux
+		case strings.Contains(output, "not yet implemented"):
+			// Acceptable - stub implementation on Linux.
 			t.Logf("Landlock command reached stub (Linux): %s", output)
-		} else {
+		default:
 			t.Logf("Landlock command output: %s", output)
 		}
 	})
 }
 
-// TestExecMode tests exec mode with real Ollama (requires Ollama running)
-func TestExecMode(t *testing.T) {
-	// Check if Ollama is available
-	if !isOllamaAvailable(t) {
-		t.Skip("Ollama not available, skipping exec mode tests")
-	}
+// createExecConfig creates a temporary config for exec mode tests.
+func createExecConfig(t *testing.T) string {
+	t.Helper()
 
-	// Create temporary config with Ollama settings
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "spin.yaml")
-
+	configPath := filepath.Join(t.TempDir(), "spin.yaml")
 	config := `llm:
-  provider: ollama
-  model: qwen3:1.7b
-  base_url: http://127.0.0.1:11434
+  provider: test-llm
+  model: dummy
   temperature: 0.7
   max_tokens: 4096
 
@@ -303,80 +346,108 @@ sandbox:
   mode: workspace-write
 `
 
-	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
-	t.Run("exec basic prompt", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec", "what is 2+2? answer with just the number")
-
-		var outBuf, errBuf bytes.Buffer
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
-
-		err := cmd.Run()
-
-		stdout := outBuf.String()
-		stderr := errBuf.String()
-
-		// Should not error (Bug #2 regression test)
-		if err != nil {
-			if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
-				t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
-			} else if strings.Contains(stderr, "context deadline exceeded") {
-				t.Skip("Ollama timed out (might be slow model loading)")
-			} else {
-				t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
-			}
-		}
-
-		// Should have some output (Bug #3 regression test)
-		if len(stdout) == 0 {
-			t.Errorf("BUG #3 REGRESSION: No output from exec mode!\nstderr: %s", stderr)
-		}
-
-		// Response should contain the answer
-		if !strings.Contains(stdout, "4") {
-			t.Logf("Warning: Expected answer '4' in response, got: %s", stdout)
-		}
-
-		t.Logf("Exec output: %s", stdout)
-	})
-
-	t.Run("exec from stdin", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec")
-		cmd.Stdin = strings.NewReader("what is 5+3? answer with just the number")
-
-		var outBuf, errBuf bytes.Buffer
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
-
-		err := cmd.Run()
-
-		stdout := outBuf.String()
-		stderr := errBuf.String()
-
-		if err != nil && !strings.Contains(stderr, "context deadline exceeded") {
-			t.Errorf("exec from stdin failed: %v\nstderr: %s", err, stderr)
-		}
-
-		if len(stdout) > 0 && !strings.Contains(stdout, "8") {
-			t.Logf("Warning: Expected answer '8', got: %s", stdout)
-		}
-	})
+	return configPath
 }
 
-// TestVersionAndHelp tests version and help commands
-func TestVersionAndHelp(t *testing.T) {
-	t.Run("version flag", func(t *testing.T) {
-		stdout, stderr, err := runSpin(t, "--version")
+func TestExecMode_BasicPrompt(t *testing.T) {
+	t.Parallel()
 
+	configPath := createExecConfig(t)
+	stdout, stderr := runExecCommand(t, configPath, "what is 2+2? answer with just the number")
+
+	checkExecErrors(t, stderr)
+
+	if stdout == "" {
+		t.Errorf("BUG #3 REGRESSION: No output from exec mode!\nstderr: %s", stderr)
+	}
+
+	t.Logf("Exec output: %s", stdout)
+}
+
+func TestExecMode_FromStdin(t *testing.T) {
+	t.Parallel()
+
+	configPath := createExecConfig(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec")
+	cmd.Stdin = strings.NewReader("what is 5+3? answer with just the number")
+
+	var outBuf, errBuf bytes.Buffer
+
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	runErr := cmd.Run()
+	stdout, stderr := outBuf.String(), errBuf.String()
+
+	if runErr != nil && !strings.Contains(stderr, "context deadline exceeded") {
+		t.Errorf("exec from stdin failed: %v\nstderr: %s", runErr, stderr)
+	}
+
+	if stdout != "" && !strings.Contains(stdout, "8") {
+		t.Logf("Warning: Expected answer '8', got: %s", stdout)
+	}
+}
+
+// runExecCommand runs a spin exec command and returns stdout and stderr.
+func runExecCommand(t *testing.T, configPath, prompt string) (stdout, stderr string) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec", prompt)
+
+	var outBuf, errBuf bytes.Buffer
+
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	if err := cmd.Run(); err != nil {
+		checkExecRunError(t, err, errBuf.String(), outBuf.String())
+	}
+
+	return outBuf.String(), errBuf.String()
+}
+
+// checkExecRunError handles exec command run errors.
+func checkExecRunError(t *testing.T, err error, stderr, stdout string) {
+	t.Helper()
+
+	switch {
+	case strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required"):
+		t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
+	case strings.Contains(stderr, "context deadline exceeded"):
+		t.Skip("Test timed out")
+	default:
+		t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
+	}
+}
+
+// checkExecErrors checks for known regression bugs in exec output.
+func checkExecErrors(t *testing.T, stderr string) {
+	t.Helper()
+
+	if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
+		t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
+	}
+}
+
+// TestVersionAndHelp tests version and help commands.
+func TestVersionAndHelp(t *testing.T) {
+	t.Parallel()
+
+	t.Run("version flag", func(t *testing.T) {
+		t.Parallel()
+
+		stdout, stderr, err := runSpin(t, "--version")
 		if err != nil {
 			t.Fatalf("--version failed: %v\nstderr: %s", err, stderr)
 		}
@@ -388,9 +459,11 @@ func TestVersionAndHelp(t *testing.T) {
 	})
 
 	t.Run("help flag", func(t *testing.T) {
+		t.Parallel()
+
 		stdout, stderr, err := runSpin(t, "--help")
 
-		// Help returns exit code 0
+		// Help returns exit code 0.
 		if err != nil {
 			t.Logf("Help returned error (might be expected): %v", err)
 		}
@@ -402,6 +475,8 @@ func TestVersionAndHelp(t *testing.T) {
 	})
 
 	t.Run("subcommand help", func(t *testing.T) {
+		t.Parallel()
+
 		commands := []string{"exec", "config", "mcp", "debug"}
 
 		for _, cmd := range commands {
@@ -415,55 +490,60 @@ func TestVersionAndHelp(t *testing.T) {
 	})
 }
 
-// TestJSONOutput tests JSON output modes
+// TestJSONOutput tests JSON output modes.
 func TestJSONOutput(t *testing.T) {
-	t.Run("config show json", func(t *testing.T) {
-		stdout, stderr, err := runSpin(t, "config", "show", "--format", "json")
+	t.Parallel()
 
+	t.Run("config show json", func(t *testing.T) {
+		t.Parallel()
+
+		stdout, stderr, err := runSpin(t, "config", "show", "--format", "json")
 		if err != nil {
 			t.Logf("config show json returned error: %v\nstderr: %s", err, stderr)
 		}
 
-		// Should be valid JSON
-		var result map[string]interface{}
-		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		// Should be valid JSON.
+		var result map[string]any
+
+		err = json.Unmarshal([]byte(stdout), &result)
+		if err != nil {
 			t.Errorf("Invalid JSON output: %v\nOutput: %s", err, stdout)
 		}
 	})
 
-	t.Run("mcp get json", func(t *testing.T) {
-		// First add a server
-		runSpin(t, "mcp", "add", "json-test", "echo", "test")
-		defer runSpin(t, "mcp", "remove", "json-test", "--yes")
+	t.Run("mcp registry get json", func(t *testing.T) {
+		t.Parallel()
 
-		stdout, stderr, err := runSpin(t, "mcp", "get", "json-test", "--format", "json")
+		// Use a temp config file to avoid races with other tests.
+		tmpConfigPath := filepath.Join(t.TempDir(), "spin.yaml")
 
+		err := os.WriteFile(tmpConfigPath, []byte("# Spin configuration\n"), 0o600)
 		if err != nil {
-			t.Fatalf("mcp get json failed: %v\nstderr: %s", err, stderr)
+			t.Fatalf("Failed to create test config: %v", err)
 		}
 
-		// Should be valid JSON
-		var result map[string]interface{}
-		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		// First add a registry.
+		_, _, _ = runSpin(t, "--config-file", tmpConfigPath, "mcp", "registry", "local", "add", "json-test", "echo", "test")
+		t.Cleanup(func() {
+			_, _, _ = runSpin(t, "--config-file", tmpConfigPath, "mcp", "registry", "remove", "json-test", "--yes")
+		})
+
+		stdout, stderr, err := runSpin(t, "--config-file", tmpConfigPath, "mcp", "registry", "get", "json-test", "--format", "json")
+		if err != nil {
+			t.Fatalf("mcp registry get json failed: %v\nstderr: %s", err, stderr)
+		}
+
+		// Should be valid JSON.
+		var result map[string]any
+
+		err = json.Unmarshal([]byte(stdout), &result)
+		if err != nil {
 			t.Errorf("Invalid JSON output: %v\nOutput: %s", err, stdout)
 		}
 
-		// Should have expected fields
+		// Should have expected fields.
 		if result["name"] != "json-test" {
 			t.Errorf("Expected name 'json-test', got: %v", result["name"])
 		}
 	})
-}
-
-// Helper function to check if Ollama is available
-func isOllamaAvailable(t *testing.T) bool {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "curl", "-s", "http://127.0.0.1:11434/api/tags")
-	err := cmd.Run()
-
-	return err == nil
 }

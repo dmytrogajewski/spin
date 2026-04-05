@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,101 +11,120 @@ import (
 	"github.com/dmytrogajewski/spin/internal/patchapply"
 )
 
-// TestReadPatchInput_Stdin tests reading patch from stdin
+var (
+	errInvalidOperation    = errors.New("invalid operation")
+	errContentMismatch     = errors.New("content mismatch")
+	errFileShouldBeDeleted = errors.New("file should be deleted")
+	errContentMismatch2    = errors.New("content mismatch")
+)
+
+// TestReadPatchInput_Stdin tests reading patch from stdin.
 func TestReadPatchInput_Stdin(t *testing.T) {
-	// Save original stdin
+	t.Parallel()
+
+	// Save original stdin.
 	oldStdin := os.Stdin
+
 	defer func() { os.Stdin = oldStdin }()
 
-	// Create a pipe to simulate stdin
-	r, w, err := os.Pipe()
+	// Create a pipe to simulate stdin.
+	pipeReader, pipeWriter, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Stdin = r
 
-	// Write test data
+	os.Stdin = pipeReader
+
+	// Write test data.
 	testPatch := "*** Begin Patch\n*** End Patch"
+
 	go func() {
-		w.Write([]byte(testPatch))
-		w.Close()
+		_, _ = pipeWriter.WriteString(testPatch)
+		pipeWriter.Close()
 	}()
 
-	// Test
-	result, err := readPatchInput()
+	// Test with empty patchFile (reads from stdin).
+	result, err := readPatchInput("")
 	if err != nil {
 		t.Errorf("readPatchInput() error = %v", err)
 	}
+
 	if result != testPatch {
 		t.Errorf("readPatchInput() = %q, want %q", result, testPatch)
 	}
 }
 
-// TestReadPatchInput_File tests reading patch from file
+// TestReadPatchInput_File tests reading patch from file.
 func TestReadPatchInput_File(t *testing.T) {
-	// Create temp file
+	t.Parallel()
+
+	// Create temp file.
 	tmpDir := t.TempDir()
 	patchFile := filepath.Join(tmpDir, "test.patch")
 	testContent := "*** Begin Patch\n*** End Patch"
 
-	if err := os.WriteFile(patchFile, []byte(testContent), 0644); err != nil {
+	err := os.WriteFile(patchFile, []byte(testContent), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Set flag
-	applyPatchFile = patchFile
-	defer func() { applyPatchFile = "" }()
-
-	// Test
-	result, err := readPatchInput()
+	// Test.
+	result, err := readPatchInput(patchFile)
 	if err != nil {
 		t.Errorf("readPatchInput() error = %v", err)
 	}
+
 	if result != testContent {
 		t.Errorf("readPatchInput() = %q, want %q", result, testContent)
 	}
 }
 
-// TestReadPatchInput_FileNotFound tests error on missing file
+// TestReadPatchInput_FileNotFound tests error on missing file.
 func TestReadPatchInput_FileNotFound(t *testing.T) {
-	applyPatchFile = "/nonexistent/file.patch"
-	defer func() { applyPatchFile = "" }()
+	t.Parallel()
 
-	_, err := readPatchInput()
+	_, err := readPatchInput("/nonexistent/file.patch")
 	if err == nil {
 		t.Error("readPatchInput() expected error, got nil")
 	}
+
 	if !strings.Contains(err.Error(), "open file") {
 		t.Errorf("readPatchInput() error = %v, want 'open file' error", err)
 	}
 }
 
-// TestFormatParseError tests parse error formatting
+// TestFormatParseError tests parse error formatting.
 func TestFormatParseError(t *testing.T) {
+	t.Parallel()
+
 	testErr := &patchapply.Error{
 		Op:   "Parse",
 		Path: "",
 		Line: 5,
-		Err:  errors.New("invalid operation"),
+		Err:  errInvalidOperation,
 	}
 
 	result := formatParseError(testErr)
 	resultStr := result.Error()
 
-	// Check key elements
-	if !strings.Contains(resultStr, "Invalid patch syntax") {
-		t.Errorf("formatParseError() missing 'Invalid patch syntax'")
+	// Check key elements.
+	if !strings.Contains(resultStr, "invalid patch syntax") {
+		t.Errorf("formatParseError() missing 'invalid patch syntax'")
 	}
+
 	if !strings.Contains(resultStr, "Hint") {
 		t.Errorf("formatParseError() missing 'Hint'")
 	}
+
 	if !strings.Contains(resultStr, "Begin Patch") {
 		t.Errorf("formatParseError() missing format example")
 	}
 }
 
-// TestFormatApplyError tests apply error formatting
+// TestFormatApplyError tests apply error formatting.
 func TestFormatApplyError(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		err      error
@@ -120,23 +140,26 @@ func TestFormatApplyError(t *testing.T) {
 				Err:  patchapply.ErrContextNotFound,
 			},
 			wantErr:  true,
-			contains: []string{"Failed to apply patch", "Update", "test.go", "Hint"},
+			contains: []string{"failed to apply patch", "Update", "test.go", "Hint"},
 		},
 		{
 			name:     "generic error",
 			err:      patchapply.ErrEmptyWorkspace,
 			wantErr:  true,
-			contains: []string{"Error"},
+			contains: []string{"error"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := formatApplyError(tt.err)
 			if result == nil {
 				if tt.wantErr {
 					t.Error("formatApplyError() expected error, got nil")
 				}
+
 				return
 			}
 
@@ -150,8 +173,10 @@ func TestFormatApplyError(t *testing.T) {
 	}
 }
 
-// TestGetHintForError tests error hint generation
+// TestGetHintForError tests error hint generation.
 func TestGetHintForError(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		err      *patchapply.Error
@@ -196,6 +221,8 @@ func TestGetHintForError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			hint := getHintForError(tt.err)
 			if !strings.Contains(hint, tt.contains) {
 				t.Errorf("getHintForError() = %q, want to contain %q", hint, tt.contains)
@@ -204,17 +231,21 @@ func TestGetHintForError(t *testing.T) {
 	}
 }
 
-// TestApplyPatch_Success tests successful patch application
+// TestApplyPatch_Success tests successful patch application.
 func TestApplyPatch_Success(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
-	// Create test file
+	// Create test file.
 	testFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0644); err != nil {
+
+	err := os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create patch
+	// Create patch.
 	patchText := `*** Begin Patch
 *** Update File: test.txt
 @@
@@ -225,31 +256,22 @@ func TestApplyPatch_Success(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
-	if err := os.WriteFile(patchFile, []byte(patchText), 0644); err != nil {
+
+	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Set flags
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
-	applyPatchDryRun = false
-	applyPatchForce = false
-	applyPatchVerbose = false
+	// Run command via cobra.
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
 
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-		applyPatchDryRun = false
-		applyPatchForce = false
-		applyPatchVerbose = false
-	}()
-
-	// Run command
-	if err := runApplyPatch(nil, nil); err != nil {
+	err = cmd.Execute()
+	if err != nil {
 		t.Errorf("runApplyPatch() error = %v", err)
 	}
 
-	// Verify file was modified
+	// Verify file was modified.
 	content, err := os.ReadFile(testFile)
 	if err != nil {
 		t.Fatal(err)
@@ -261,193 +283,201 @@ func TestApplyPatch_Success(t *testing.T) {
 	}
 }
 
-// TestApplyPatch_DryRun tests dry-run mode
+// TestApplyPatch_DryRun tests dry-run mode.
 func TestApplyPatch_DryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
-	// Create test file
+	// Create test file.
 	testFile := filepath.Join(tmpDir, "test.txt")
+
 	originalContent := "original content\n"
-	if err := os.WriteFile(testFile, []byte(originalContent), 0644); err != nil {
+
+	err := os.WriteFile(testFile, []byte(originalContent), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create patch
+	// Create patch.
 	patchText := `*** Begin Patch
 *** Add File: new.txt
 +new content
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
-	if err := os.WriteFile(patchFile, []byte(patchText), 0644); err != nil {
+
+	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Set flags
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
-	applyPatchDryRun = true
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-		applyPatchDryRun = false
-	}()
+	// Run command via cobra.
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir, "--dry-run"})
 
-	// Run command
-	if err := runApplyPatch(nil, nil); err != nil {
+	err = cmd.Execute()
+	if err != nil {
 		t.Errorf("runApplyPatch() error = %v", err)
 	}
 
-	// Verify new file was NOT created
+	// Verify new file was NOT created.
 	newFile := filepath.Join(tmpDir, "new.txt")
-	if _, err := os.Stat(newFile); !os.IsNotExist(err) {
+
+	_, err = os.Stat(newFile)
+	if !os.IsNotExist(err) {
 		t.Error("dry-run should not create files")
 	}
 
-	// Verify original file unchanged
+	// Verify original file unchanged.
 	content, err := os.ReadFile(testFile)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if string(content) != originalContent {
 		t.Error("dry-run should not modify files")
 	}
 }
 
-// TestApplyPatch_ParseError tests invalid patch syntax
+// runApplyPatchErrorCase is a test helper for error cases in apply patch.
+func runApplyPatchErrorCase(t *testing.T, patchText, patchFileName, wantErrSubstr string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	patchFile := filepath.Join(tmpDir, patchFileName)
+
+	err := os.WriteFile(patchFile, []byte(patchText), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	err = cmd.Execute()
+	if err == nil {
+		t.Errorf("runApplyPatch() expected error containing %q", wantErrSubstr)
+	}
+
+	if err != nil && !strings.Contains(err.Error(), wantErrSubstr) {
+		t.Errorf("runApplyPatch() error = %v, want %q", err, wantErrSubstr)
+	}
+}
+
+// TestApplyPatch_ParseError tests invalid patch syntax.
 func TestApplyPatch_ParseError(t *testing.T) {
-	tmpDir := t.TempDir()
+	t.Parallel()
 
-	// Create invalid patch
-	patchText := `*** Begin Patch
-*** Invalid Operation: test.txt
-*** End Patch`
-
-	patchFile := filepath.Join(tmpDir, "invalid.patch")
-	if err := os.WriteFile(patchFile, []byte(patchText), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Set flags
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-	}()
-
-	// Run command (should fail)
-	err := runApplyPatch(nil, nil)
-	if err == nil {
-		t.Error("runApplyPatch() expected error for invalid patch")
-	}
-	if !strings.Contains(err.Error(), "Invalid patch syntax") {
-		t.Errorf("runApplyPatch() error = %v, want 'Invalid patch syntax'", err)
-	}
+	runApplyPatchErrorCase(t,
+		"*** Begin Patch\n*** Invalid Operation: test.txt\n*** End Patch",
+		"invalid.patch",
+		"invalid patch syntax",
+	)
 }
 
-// TestApplyPatch_PathTraversal tests path traversal rejection
+// TestApplyPatch_PathTraversal tests path traversal rejection.
 func TestApplyPatch_PathTraversal(t *testing.T) {
-	tmpDir := t.TempDir()
+	t.Parallel()
 
-	// Create patch with path traversal
-	patchText := `*** Begin Patch
-*** Add File: ../../etc/passwd
-+malicious content
-*** End Patch`
-
-	patchFile := filepath.Join(tmpDir, "malicious.patch")
-	if err := os.WriteFile(patchFile, []byte(patchText), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Set flags
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-	}()
-
-	// Run command (should fail)
-	err := runApplyPatch(nil, nil)
-	if err == nil {
-		t.Error("runApplyPatch() should reject path traversal")
-	}
-	if !strings.Contains(err.Error(), "path") {
-		t.Errorf("runApplyPatch() error = %v, want path-related error", err)
-	}
+	runApplyPatchErrorCase(t,
+		"*** Begin Patch\n*** Add File: ../../etc/passwd\n+malicious content\n*** End Patch",
+		"malicious.patch",
+		"path",
+	)
 }
 
-// TestApplyPatch_ForceOverwrite tests force mode
+// TestApplyPatch_ForceOverwrite tests force mode.
 func TestApplyPatch_ForceOverwrite(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
-	// Create existing file
+	// Create existing file.
 	testFile := filepath.Join(tmpDir, "existing.txt")
-	if err := os.WriteFile(testFile, []byte("existing content"), 0644); err != nil {
+
+	err := os.WriteFile(testFile, []byte("existing content"), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create patch to overwrite
+	// Create patch to overwrite.
 	patchText := `*** Begin Patch
 *** Add File: existing.txt
 +new content
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
-	if err := os.WriteFile(patchFile, []byte(patchText), 0644); err != nil {
+
+	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("without force", func(t *testing.T) {
-		// Set flags (no force)
-		applyPatchFile = patchFile
-		applyPatchWorkspace = tmpDir
-		applyPatchForce = false
-		defer func() {
-			applyPatchFile = ""
-			applyPatchWorkspace = ""
-			applyPatchForce = false
-		}()
+		t.Parallel()
 
-		// Should fail
-		err := runApplyPatch(nil, nil)
+		cmd := newApplyPatchCmd()
+		cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
+
+		// Should fail.
+		err = cmd.Execute()
 		if err == nil {
 			t.Error("runApplyPatch() should fail without --force")
 		}
 	})
 
 	t.Run("with force", func(t *testing.T) {
-		// Set flags (with force)
-		applyPatchFile = patchFile
-		applyPatchWorkspace = tmpDir
-		applyPatchForce = true
-		defer func() {
-			applyPatchFile = ""
-			applyPatchWorkspace = ""
-			applyPatchForce = false
-		}()
+		t.Parallel()
 
-		// Should succeed
-		if err := runApplyPatch(nil, nil); err != nil {
-			t.Errorf("runApplyPatch() with --force error = %v", err)
+		// Use a separate tmpDir to avoid sharing filesystem state with "without force".
+		forceDir := t.TempDir()
+		forceFile := filepath.Join(forceDir, "existing.txt")
+
+		forceErr := os.WriteFile(forceFile, []byte("existing content"), 0o600)
+		if forceErr != nil {
+			t.Fatal(forceErr)
 		}
 
-		// Verify file was overwritten
-		content, err := os.ReadFile(testFile)
-		if err != nil {
-			t.Fatal(err)
+		forcePatchFile := filepath.Join(forceDir, "test.patch")
+
+		forceErr = os.WriteFile(forcePatchFile, []byte(patchText), 0o600)
+		if forceErr != nil {
+			t.Fatal(forceErr)
 		}
-		// Note: patch adds content as-is, no automatic trailing newline
+
+		cmd := newApplyPatchCmd()
+		cmd.SetArgs([]string{"-f", forcePatchFile, "-w", forceDir, "--force"})
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
+
+		// Should succeed.
+		forceErr = cmd.Execute()
+		if forceErr != nil {
+			t.Errorf("runApplyPatch() with --force error = %v", forceErr)
+		}
+
+		// Verify file was overwritten.
+		content, readErr := os.ReadFile(forceFile)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		// Note: patch adds content as-is, no automatic trailing newline.
 		if string(content) != "new content" {
 			t.Errorf("file content = %q, want %q", string(content), "new content")
 		}
 	})
 }
 
-// TestPrintResults tests result output formatting
+// TestPrintResults tests result output formatting.
 func TestPrintResults(t *testing.T) {
+	t.Parallel()
+
 	result := &patchapply.ApplyResult{
 		FilesCreated: []string{"new1.txt", "new2.txt"},
 		FilesUpdated: []string{"updated.txt"},
@@ -456,37 +486,39 @@ func TestPrintResults(t *testing.T) {
 		DryRun:       false,
 	}
 
-	// Test with verbose=false
-	applyPatchVerbose = false
-	// Just ensure it doesn't panic
-	printResults(result)
+	// Test with verbose=false. Just ensure it doesn't panic.
+	printResults(os.Stdout, result, false)
 
-	// Test with verbose=true
-	applyPatchVerbose = true
-	printResults(result)
-	applyPatchVerbose = false
+	// Test with verbose=true.
+	printResults(os.Stdout, result, true)
 }
 
-// TestRunDryRun tests dry-run output
+// TestRunDryRun tests dry-run output.
 func TestRunDryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
-	// Create test files that the patch will operate on
-	if err := os.WriteFile(filepath.Join(tmpDir, "old.txt"), []byte("old content\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "existing.txt"), []byte("existing content\n"), 0644); err != nil {
+	// Create test files that the patch will operate on.
+	err := os.WriteFile(filepath.Join(tmpDir, "old.txt"), []byte("old content\n"), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create applier
+	err = os.WriteFile(filepath.Join(tmpDir, "existing.txt"), []byte("existing content\n"), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create applier.
 	applier, err := patchapply.NewApplier(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	applier.SetDryRun(true)
 
-	// Create test patch
+	// Create test patch.
 	patch := &patchapply.Patch{
 		Operations: []patchapply.FileOperation{
 			&patchapply.AddFile{
@@ -511,57 +543,59 @@ func TestRunDryRun(t *testing.T) {
 		},
 	}
 
-	// Run dry-run (should not error)
-	if err := runDryRun(applier, patch); err != nil {
+	// Run dry-run (should not error).
+	err = runDryRun(os.Stdout, applier, patch)
+	if err != nil {
 		t.Errorf("runDryRun() error = %v", err)
 	}
 }
 
-// TestApplyPatch_Integration tests full end-to-end scenarios
-func TestApplyPatch_Integration(t *testing.T) {
-	tests := []struct {
-		name       string
-		setup      func(dir string) error
-		patchText  string
-		wantErr    bool
-		errContain string
-		verify     func(dir string) error
-	}{
+// integrationTestCase defines a single integration test case for apply-patch.
+type integrationTestCase struct {
+	name       string
+	setup      func(dir string) error
+	patchText  string
+	wantErr    bool
+	errContain string
+	verify     func(dir string) error
+}
+
+// getIntegrationTestCases returns all integration test cases.
+func getIntegrationTestCases() []integrationTestCase {
+	return []integrationTestCase{
 		{
 			name: "add new file",
-			setup: func(dir string) error {
+			setup: func(_ string) error {
 				return nil
 			},
-			patchText: `*** Begin Patch
-*** Add File: hello.txt
-+Hello World
-*** End Patch`,
-			wantErr: false,
+			patchText: "*** Begin Patch\n*** Add File: hello.txt\n+Hello World\n*** End Patch",
+			wantErr:   false,
 			verify: func(dir string) error {
 				content, err := os.ReadFile(filepath.Join(dir, "hello.txt"))
 				if err != nil {
-					return err
+					return fmt.Errorf("reading hello.txt: %w", err)
 				}
-				// Note: patch adds content as-is, no automatic trailing newline
+
 				if string(content) != "Hello World" {
-					return errors.New("content mismatch")
+					return errContentMismatch
 				}
+
 				return nil
 			},
 		},
 		{
 			name: "delete file",
 			setup: func(dir string) error {
-				return os.WriteFile(filepath.Join(dir, "delete-me.txt"), []byte("content"), 0644)
+				return os.WriteFile(filepath.Join(dir, "delete-me.txt"), []byte("content"), 0o600)
 			},
-			patchText: `*** Begin Patch
-*** Delete File: delete-me.txt
-*** End Patch`,
-			wantErr: false,
+			patchText: "*** Begin Patch\n*** Delete File: delete-me.txt\n*** End Patch",
+			wantErr:   false,
 			verify: func(dir string) error {
-				if _, err := os.Stat(filepath.Join(dir, "delete-me.txt")); !os.IsNotExist(err) {
-					return errors.New("file should be deleted")
+				_, err := os.Stat(filepath.Join(dir, "delete-me.txt"))
+				if !os.IsNotExist(err) {
+					return errFileShouldBeDeleted
 				}
+
 				return nil
 			},
 		},
@@ -569,26 +603,20 @@ func TestApplyPatch_Integration(t *testing.T) {
 			name: "update file",
 			setup: func(dir string) error {
 				return os.WriteFile(filepath.Join(dir, "update.txt"),
-					[]byte("line 1\nline 2\nline 3\n"), 0644)
+					[]byte("line 1\nline 2\nline 3\n"), 0o600)
 			},
-			patchText: `*** Begin Patch
-*** Update File: update.txt
-@@
- line 1
--line 2
-+line 2 updated
- line 3
-*** End Patch`,
-			wantErr: false,
+			patchText: "*** Begin Patch\n*** Update File: update.txt\n@@\n line 1\n-line 2\n+line 2 updated\n line 3\n*** End Patch",
+			wantErr:   false,
 			verify: func(dir string) error {
 				content, err := os.ReadFile(filepath.Join(dir, "update.txt"))
 				if err != nil {
-					return err
+					return fmt.Errorf("reading update.txt: %w", err)
 				}
-				expected := "line 1\nline 2 updated\nline 3\n"
-				if string(content) != expected {
-					return errors.New("content mismatch")
+
+				if string(content) != "line 1\nline 2 updated\nline 3\n" {
+					return errContentMismatch2
 				}
+
 				return nil
 			},
 		},
@@ -596,62 +624,67 @@ func TestApplyPatch_Integration(t *testing.T) {
 			name: "context not found",
 			setup: func(dir string) error {
 				return os.WriteFile(filepath.Join(dir, "mismatch.txt"),
-					[]byte("different content\n"), 0644)
+					[]byte("different content\n"), 0o600)
 			},
-			patchText: `*** Begin Patch
-*** Update File: mismatch.txt
-@@
- expected line
--old line
-+new line
-*** End Patch`,
+			patchText:  "*** Begin Patch\n*** Update File: mismatch.txt\n@@\n expected line\n-old line\n+new line\n*** End Patch",
 			wantErr:    true,
 			errContain: "context",
 		},
 	}
+}
 
-	for _, tt := range tests {
+// runIntegrationTestCase executes a single integration test case.
+func runIntegrationTestCase(t *testing.T, tt integrationTestCase) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	if tt.setup != nil {
+		err := tt.setup(tmpDir)
+		if err != nil {
+			t.Fatalf("setup failed: %v", err)
+		}
+	}
+
+	patchFile := filepath.Join(tmpDir, "test.patch")
+
+	err := os.WriteFile(patchFile, []byte(tt.patchText), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	err = cmd.Execute()
+
+	if (err != nil) != tt.wantErr {
+		t.Errorf("runApplyPatch() error = %v, wantErr %v", err, tt.wantErr)
+	}
+
+	if tt.wantErr && tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+		t.Errorf("runApplyPatch() error = %v, want to contain %q", err, tt.errContain)
+	}
+
+	if !tt.wantErr && tt.verify != nil {
+		verifyErr := tt.verify(tmpDir)
+		if verifyErr != nil {
+			t.Errorf("verification failed: %v", verifyErr)
+		}
+	}
+}
+
+// TestApplyPatch_Integration tests full end-to-end scenarios.
+func TestApplyPatch_Integration(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range getIntegrationTestCases() {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
+			t.Parallel()
 
-			// Setup
-			if tt.setup != nil {
-				if err := tt.setup(tmpDir); err != nil {
-					t.Fatalf("setup failed: %v", err)
-				}
-			}
-
-			// Write patch
-			patchFile := filepath.Join(tmpDir, "test.patch")
-			if err := os.WriteFile(patchFile, []byte(tt.patchText), 0644); err != nil {
-				t.Fatal(err)
-			}
-
-			// Set flags
-			applyPatchFile = patchFile
-			applyPatchWorkspace = tmpDir
-			defer func() {
-				applyPatchFile = ""
-				applyPatchWorkspace = ""
-			}()
-
-			// Run
-			err := runApplyPatch(nil, nil)
-
-			// Check error
-			if (err != nil) != tt.wantErr {
-				t.Errorf("runApplyPatch() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr && tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
-				t.Errorf("runApplyPatch() error = %v, want to contain %q", err, tt.errContain)
-			}
-
-			// Verify
-			if !tt.wantErr && tt.verify != nil {
-				if err := tt.verify(tmpDir); err != nil {
-					t.Errorf("verification failed: %v", err)
-				}
-			}
+			runIntegrationTestCase(t, tt)
 		})
 	}
 }

@@ -4,15 +4,19 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 func TestNewExecutor(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
 	executor, err := NewExecutor(workDir)
@@ -22,33 +26,43 @@ func TestNewExecutor(t *testing.T) {
 }
 
 func TestNewExecutor_WithOptions(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
-	validator := security.NewValidator()
+	validator := safety.NewValidator()
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
+		Handler: nil, Emitter: nil, Validator: validator,
+	})
+	securityService := safety.NewService(validator, approvalService)
 
-	executor, err := NewExecutor(workDir, WithValidator(validator))
+	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
 	assert.NotNil(t, executor)
-	assert.NotNil(t, executor.validator)
+	assert.NotNil(t, executor.securityService)
 }
 
 func TestNewExecutor_EmptyWorkDir(t *testing.T) {
+	t.Parallel()
+
 	executor, err := NewExecutor("")
 	require.Error(t, err)
 	assert.Nil(t, executor)
 }
 
 func TestNewExecutor_NonExistentWorkDir(t *testing.T) {
+	t.Parallel()
+
 	executor, err := NewExecutor("/non/existent/directory")
-	require.NoError(t, err) // NewExecutor doesn't validate directory existence
+	require.NoError(t, err) // NewExecutor doesn't validate directory existence.
 	assert.NotNil(t, executor)
 }
 
 func TestExecutor_Execute(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "world"},
 		WorkDir: workDir,
@@ -62,11 +76,12 @@ func TestExecutor_Execute(t *testing.T) {
 }
 
 func TestExecutor_Execute_WithTimeout(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "sleep",
 		Args:    []string{"2"},
 		WorkDir: workDir,
@@ -83,16 +98,17 @@ func TestExecutor_Execute_WithTimeout(t *testing.T) {
 }
 
 func TestExecutor_Execute_WithWorkingDirectory(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	// Create a test file
+	// Create a test file.
 	testFile := filepath.Join(workDir, "test.txt")
-	err = os.WriteFile(testFile, []byte("test content"), 0644)
+	err = os.WriteFile(testFile, []byte("test content"), 0o600)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "ls",
 		Args:    []string{"test.txt"},
 		WorkDir: workDir,
@@ -106,11 +122,12 @@ func TestExecutor_Execute_WithWorkingDirectory(t *testing.T) {
 }
 
 func TestExecutor_Execute_WithEnvironment(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "sh",
 		Args:    []string{"-c", "echo $TEST_VAR"},
 		WorkDir: workDir,
@@ -130,11 +147,12 @@ func TestExecutor_Execute_WithEnvironment(t *testing.T) {
 }
 
 func TestExecutor_Execute_NonExistentCommand(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "nonexistentcommand12345",
 		Args:    []string{},
 		WorkDir: workDir,
@@ -147,13 +165,18 @@ func TestExecutor_Execute_NonExistentCommand(t *testing.T) {
 }
 
 func TestExecutor_Validate(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
-	validator := security.NewValidator()
-	executor, err := NewExecutor(workDir, WithValidator(validator))
+	validator := safety.NewValidator()
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
+		Handler: nil, Emitter: nil, Validator: validator,
+	})
+	securityService := safety.NewService(validator, approvalService)
+	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
 
-	// Test valid command
-	cmd := &security.Command{
+	// Test valid command.
+	cmd := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello"},
 		WorkDir: workDir,
@@ -162,8 +185,8 @@ func TestExecutor_Validate(t *testing.T) {
 	err = executor.Validate(cmd)
 	require.NoError(t, err)
 
-	// Test dangerous command
-	dangerousCmd := &security.Command{
+	// Test dangerous command.
+	dangerousCmd := &safety.Command{
 		Program: "rm",
 		Args:    []string{"-rf", "/"},
 		WorkDir: workDir,
@@ -174,6 +197,7 @@ func TestExecutor_Validate(t *testing.T) {
 }
 
 func TestExecutor_Validate_NilCommand(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -184,11 +208,12 @@ func TestExecutor_Validate_NilCommand(t *testing.T) {
 }
 
 func TestExecutor_Validate_EmptyProgram(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "",
 		Args:    []string{"hello"},
 		WorkDir: workDir,
@@ -200,6 +225,8 @@ func TestExecutor_Validate_EmptyProgram(t *testing.T) {
 }
 
 func TestResult_Success(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		result   *Result
@@ -233,12 +260,16 @@ func TestResult_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.expected, tt.result.Success())
 		})
 	}
 }
 
 func TestResult_Failed(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		result   *Result
@@ -264,12 +295,16 @@ func TestResult_Failed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.expected, tt.result.Failed())
 		})
 	}
 }
 
 func TestResult_Output(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		result   *Result
@@ -311,31 +346,54 @@ func TestResult_Output(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.expected, tt.result.Output())
 		})
 	}
 }
 
 func TestDefaultExecuteOptions(t *testing.T) {
+	t.Parallel()
+
 	opts := DefaultExecuteOptions()
 	assert.NotNil(t, opts)
-	assert.Equal(t, time.Duration(0), opts.Timeout) // 0 means use executor's default
-	assert.Equal(t, int64(0), opts.MaxOutputSize)   // 0 means use executor's default
+	assert.Equal(t, time.Duration(0), opts.Timeout) // 0 means use executor's default.
+	assert.Equal(t, int64(0), opts.MaxOutputSize)   // 0 means use executor's default.
 	assert.True(t, opts.InheritEnv)
 }
 
-func TestExecutorOption_WithValidator(t *testing.T) {
-	validator := security.NewValidator()
+func TestExecutorOption_WithSecurityService(t *testing.T) {
+	t.Parallel()
+
+	validator := safety.NewValidator()
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
+		Handler: nil, Emitter: nil, Validator: validator,
+	})
+	securityService := safety.NewService(validator, approvalService)
 	executor := &Executor{}
 
-	opt := WithValidator(validator)
+	opt := WithSecurityService(securityService)
 	err := opt(executor)
 	require.NoError(t, err)
-	assert.Equal(t, validator, executor.validator)
+	assert.Equal(t, securityService, executor.securityService)
+}
+
+func TestExecutorOption_WithSecurityService_Nil(t *testing.T) {
+	t.Parallel()
+
+	executor := &Executor{}
+
+	opt := WithSecurityService(nil)
+	err := opt(executor)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "security service cannot be nil")
 }
 
 func TestExecutorOption_WithApprovalService(t *testing.T) {
-	approvalService := &security.ApprovalService{}
+	t.Parallel()
+
+	approvalService := &safety.ApprovalService{}
 	executor := &Executor{}
 
 	opt := WithApprovalService(approvalService)
@@ -345,6 +403,8 @@ func TestExecutorOption_WithApprovalService(t *testing.T) {
 }
 
 func TestExecutorOption_WithTimeout(t *testing.T) {
+	t.Parallel()
+
 	timeout := 30 * time.Second
 	executor := &Executor{}
 
@@ -355,6 +415,8 @@ func TestExecutorOption_WithTimeout(t *testing.T) {
 }
 
 func TestExecutorOption_WithCache(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 	executor := &Executor{}
 
@@ -365,26 +427,29 @@ func TestExecutorOption_WithCache(t *testing.T) {
 }
 
 func TestExecutor_ConcurrentExecution(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	// Run multiple commands concurrently
+	// Run multiple commands concurrently.
 	results := make(chan *Result, 10)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		go func(i int) {
-			cmd := &security.Command{
+			cmd := &safety.Command{
 				Program: "echo",
-				Args:    []string{"test", string(rune(i + '0'))},
+				Args:    []string{"test", strconv.Itoa(i)},
 				WorkDir: workDir,
 			}
+
 			result, _ := executor.Execute(context.Background(), cmd, nil)
 			results <- result
 		}(i)
 	}
 
-	// Collect results
-	for i := 0; i < 10; i++ {
+	// Collect results.
+	for range 10 {
 		select {
 		case result := <-results:
 			assert.NotNil(t, result)
@@ -396,11 +461,12 @@ func TestExecutor_ConcurrentExecution(t *testing.T) {
 }
 
 func TestExecutor_ExecuteStreaming(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "world"},
 		WorkDir: workDir,
@@ -410,21 +476,28 @@ func TestExecutor_ExecuteStreaming(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, chunks)
 
-	// Collect chunks
-	var output string
+	// Collect chunks.
+	var (
+		output      string
+		outputSb433 strings.Builder
+	)
+
 	for chunk := range chunks {
-		output += string(chunk.Data)
+		outputSb433.Write(chunk.Data)
 	}
+
+	output += outputSb433.String()
 
 	assert.Contains(t, output, "hello world")
 }
 
 func TestExecutor_ExecuteStreaming_WithTimeout(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "sleep",
 		Args:    []string{"2"},
 		WorkDir: workDir,
@@ -434,31 +507,32 @@ func TestExecutor_ExecuteStreaming_WithTimeout(t *testing.T) {
 		Timeout: 100 * time.Millisecond,
 	}
 
-	// Create a context with timeout
+	// Create a context with timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
 	chunks, err := executor.ExecuteStreaming(ctx, cmd, opts)
-	require.NoError(t, err) // ExecuteStreaming may not return error immediately
+	require.NoError(t, err) // ExecuteStreaming may not return error immediately.
 	assert.NotNil(t, chunks)
 
 	// The timeout should be handled by the context, not the function
-	// We can't easily test this without mocking or more complex setup
+	// We can't easily test this without mocking or more complex setup.
 }
 
 func TestExecutor_ErrorHandling(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	// Test with nil command
+	// Test with nil command.
 	result, err := executor.Execute(context.Background(), nil, nil)
 	require.Error(t, err)
 	assert.NotNil(t, result)
 	assert.False(t, result.Success())
 
-	// Test with empty program
-	cmd := &security.Command{
+	// Test with empty program.
+	cmd := &safety.Command{
 		Program: "",
 		Args:    []string{"hello"},
 		WorkDir: workDir,

@@ -1,0 +1,22 @@
+version: "2.0"
+
+llm:
+  provider: "ollama"
+  model: "qwen2.5-coder:32b"
+  timeout: 60s
+
+agent:
+  max_turns: 10
+  timeout: 300s
+
+ace:
+  enabled: true
+  # Missing required playbook_path when enabled=true
+  # Missing required trajectory_path when enabled=true
+
+security:
+  sandbox_mode: "docker"
+
+protocol:
+  enable_shell: true
+  # Missing required shell_timeout when enable_shell=true

@@ -4,15 +4,15 @@ package tools
 type RiskLevel int
 
 const (
-	// RiskSafe indicates no approval needed
+	// RiskSafe indicates no approval needed.
 	RiskSafe RiskLevel = iota
-	// RiskLow indicates read operations
+	// RiskLow indicates read operations.
 	RiskLow
-	// RiskMedium indicates single file modifications
+	// RiskMedium indicates single file modifications.
 	RiskMedium
-	// RiskHigh indicates multiple file modifications or patches
+	// RiskHigh indicates multiple file modifications or patches.
 	RiskHigh
-	// RiskCritical indicates system file modifications or shell commands
+	// RiskCritical indicates system file modifications or shell commands.
 	RiskCritical
 )
 
@@ -30,23 +30,23 @@ func (r RiskLevel) String() string {
 	case RiskCritical:
 		return "critical"
 	default:
-		return "unknown"
+		return unknownStatus
 	}
 }
 
 // ApprovalNeeds describes approval requirements for an operation.
 type ApprovalNeeds struct {
-	// Required indicates whether approval is needed
+	// Required indicates whether approval is needed.
 	Required bool
-	// Risk indicates the risk level of the operation
+	// Risk indicates the risk level of the operation.
 	Risk RiskLevel
-	// Reason provides human-readable explanation
+	// Reason provides human-readable explanation.
 	Reason string
 }
 
 // ToolWithApproval is implemented by tools that can assess their approval needs.
 type ToolWithApproval interface {
 	Tool
-	// CheckApproval assesses whether the operation requires approval
+	// CheckApproval assesses whether the operation requires approval.
 	CheckApproval(params ToolParameters) ApprovalNeeds
 }

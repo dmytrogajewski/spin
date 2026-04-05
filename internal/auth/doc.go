@@ -11,17 +11,21 @@
 //	keystore := newMockKeystore() // or platform-specific keystore
 //	manager := auth.NewManager(keystore)
 //
-//	// Store a credential
+// Store a credential
+//
 //	cred := auth.Credential{
 //		Type:  auth.CredentialTypeAPIKey,
 //		Value: "sk-...",
 //	}
 //	err := manager.SetCredential(ctx, "openai", cred)
 //
-//	// Retrieve a credential
+// Retrieve a credential
+//
 //	cred, err := manager.GetCredential(ctx, "openai")
 //	if errors.Is(err, auth.ErrNotAuthenticated) {
-//		// No credential found
+//
+// No credential found
+//
 //	}
 //
 // # Credential Types

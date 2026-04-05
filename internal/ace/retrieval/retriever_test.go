@@ -4,15 +4,18 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSemanticRetriever_Creation(t *testing.T) {
-	// Test creating a semantic retriever
+	t.Parallel()
+
+	// Test creating a semantic retriever.
 	pb := playbook.New(nil, nil)
 	embedder := embedding.NewMockEmbedder(1536)
 
@@ -22,7 +25,9 @@ func TestSemanticRetriever_Creation(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveEmpty(t *testing.T) {
-	// Test retrieving from empty playbook
+	t.Parallel()
+
+	// Test retrieving from empty playbook.
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	embedder := embedding.NewMockEmbedder(1536)
@@ -35,14 +40,16 @@ func TestSemanticRetriever_RetrieveEmpty(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveTopK(t *testing.T) {
-	// Test retrieving top-K bullets
+	t.Parallel()
+
+	// Test retrieving top-K bullets.
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(1536)
 
-	// Create playbook with bullets
+	// Create playbook with bullets.
 	pb := playbook.New(nil, embedder)
 
-	// Generate embeddings for bullets
+	// Generate embeddings for bullets.
 	emb1, err := embedder.Embed(ctx, "Always validate input")
 	require.NoError(t, err)
 	emb2, err := embedder.Embed(ctx, "Use context.Context for cancellation")
@@ -61,7 +68,7 @@ func TestSemanticRetriever_RetrieveTopK(t *testing.T) {
 	require.NoError(t, pb.Add(ctx, b2))
 	require.NoError(t, pb.Add(ctx, b3))
 
-	// Retrieve top 2
+	// Retrieve top 2.
 	retriever := NewSemanticRetriever(pb, embedder)
 	bullets, err := retriever.Retrieve(ctx, "testing best practices", 2)
 
@@ -70,13 +77,15 @@ func TestSemanticRetriever_RetrieveTopK(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveWithScores(t *testing.T) {
-	// Test retrieving bullets with scores
+	t.Parallel()
+
+	// Test retrieving bullets with scores.
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(1536)
 
 	pb := playbook.New(nil, embedder)
 
-	// Generate embedding for bullet
+	// Generate embedding for bullet.
 	emb, err := embedder.Embed(ctx, "Test bullet")
 	require.NoError(t, err)
 
@@ -95,13 +104,15 @@ func TestSemanticRetriever_RetrieveWithScores(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveTopKExceedsAvailable(t *testing.T) {
-	// Test requesting more bullets than available
+	t.Parallel()
+
+	// Test requesting more bullets than available.
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(1536)
 
 	pb := playbook.New(nil, embedder)
 
-	// Add only 2 bullets
+	// Add only 2 bullets.
 	emb1, err := embedder.Embed(ctx, "Bullet 1")
 	require.NoError(t, err)
 	emb2, err := embedder.Embed(ctx, "Bullet 2")
@@ -115,11 +126,11 @@ func TestSemanticRetriever_RetrieveTopKExceedsAvailable(t *testing.T) {
 	require.NoError(t, pb.Add(ctx, b1))
 	require.NoError(t, pb.Add(ctx, b2))
 
-	// Request top 10 (more than available)
+	// Request top 10 (more than available).
 	retriever := NewSemanticRetriever(pb, embedder)
 	bullets, err := retriever.Retrieve(ctx, "test", 10)
 
 	require.NoError(t, err)
-	// Should return all available bullets (2), not 10
+	// Should return all available bullets (2), not 10.
 	assert.Len(t, bullets, 2)
 }

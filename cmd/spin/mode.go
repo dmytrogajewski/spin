@@ -1,10 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 )
+
+// ErrUnknownMode is a sentinel error.
+var ErrUnknownMode = errors.New("unknown mode")
 
 // modeInfo contains detailed information about a task mode.
 type modeInfo struct {
@@ -16,20 +20,38 @@ type modeInfo struct {
 }
 
 // allModes contains detailed information for all available modes.
+const (
+	regularModeMaxTokens  = 16384
+	reviewModeMaxTokens   = 12288
+	compactModeMaxTokens  = 4096
+	planningModeMaxTokens = 4096
+)
+
 var allModes = map[string]modeInfo{
 	"regular": {
 		name:        "regular",
 		description: "Full-featured interactive coding mode with access to all tools",
-		maxTokens:   16384,
+		maxTokens:   regularModeMaxTokens,
 		tools: []string{
 			"read_file",
 			"write_file",
-			"list_directory",
-			"execute_command",
-			"get_context",
-			"file_search",
+			"edit_file",
 			"apply_patch",
+			"list_directory",
+			"file_search",
+			"find_symbol",
+			"find_references",
+			"rename_symbol",
+			"get_context",
 			"git_context",
+			"git_operation",
+			"execute_command",
+			"start_process",
+			"list_processes",
+			"get_process_output",
+			"kill_process",
+			"memory",
+			"scratchpad",
 		},
 		bestFor: []string{
 			"Implementing new features",
@@ -41,13 +63,16 @@ var allModes = map[string]modeInfo{
 	"review": {
 		name:        "review",
 		description: "Read-only code analysis and review mode",
-		maxTokens:   12288,
+		maxTokens:   reviewModeMaxTokens,
 		tools: []string{
 			"read_file",
 			"list_directory",
-			"get_context",
 			"file_search",
+			"find_symbol",
+			"find_references",
+			"get_context",
 			"git_context",
+			"git_operation",
 		},
 		bestFor: []string{
 			"Code reviews and PR analysis",
@@ -59,11 +84,13 @@ var allModes = map[string]modeInfo{
 	"compact": {
 		name:        "compact",
 		description: "Quick queries with minimal context and tool access",
-		maxTokens:   4096,
+		maxTokens:   compactModeMaxTokens,
 		tools: []string{
 			"read_file",
-			"get_context",
+			"list_directory",
 			"file_search",
+			"find_symbol",
+			"get_context",
 		},
 		bestFor: []string{
 			"Quick questions",
@@ -75,10 +102,14 @@ var allModes = map[string]modeInfo{
 	"planning": {
 		name:        "planning",
 		description: "Task decomposition and planning mode with context-only tools",
-		maxTokens:   4096,
+		maxTokens:   planningModeMaxTokens,
 		tools: []string{
-			"get_context",
+			"read_file",
+			"list_directory",
 			"file_search",
+			"find_symbol",
+			"find_references",
+			"get_context",
 			"git_context",
 		},
 		bestFor: []string{
@@ -106,7 +137,7 @@ Available commands:
 		SilenceUsage: true,
 	}
 
-	// Add subcommands
+	// Add subcommands.
 	cmd.AddCommand(newModeListCmd())
 	cmd.AddCommand(newModeDescribeCmd())
 
@@ -156,22 +187,24 @@ Example:
 }
 
 // runModeList handles the 'spin mode list' command.
-func runModeList(cmd *cobra.Command, args []string) error {
-	fmt.Println("Available task modes:")
-	fmt.Println()
+func runModeList(cmd *cobra.Command, _ []string) error {
+	out := cmd.OutOrStdout()
 
-	// Print modes in a consistent order
+	fmt.Fprintln(out, "Available task modes:")
+	fmt.Fprintln(out)
+
+	// Print modes in a consistent order.
 	modeOrder := []string{"regular", "review", "compact", "planning"}
 	for _, name := range modeOrder {
 		info := allModes[name]
-		fmt.Printf("  %s\n", name)
-		fmt.Printf("    %s\n", info.description)
-		fmt.Printf("    Token budget: %d | Tools: %d\n", info.maxTokens, len(info.tools))
-		fmt.Println()
+		fmt.Fprintf(out, "  %s\n", name)
+		fmt.Fprintf(out, "    %s\n", info.description)
+		fmt.Fprintf(out, "    Token budget: %d | Tools: %d\n", info.maxTokens, len(info.tools))
+		fmt.Fprintln(out)
 	}
 
-	fmt.Println("Use 'spin mode describe <mode-name>' for detailed information.")
-	fmt.Println("Use 'spin --mode <mode-name>' to start with a specific mode.")
+	fmt.Fprintln(out, "Use 'spin mode describe <mode-name>' for detailed information.")
+	fmt.Fprintln(out, "Use 'spin --mode <mode-name>' to start with a specific mode.")
 
 	return nil
 }
@@ -180,39 +213,45 @@ func runModeList(cmd *cobra.Command, args []string) error {
 func runModeDescribe(cmd *cobra.Command, args []string) error {
 	modeName := args[0]
 
-	// Validate mode name
+	// Validate mode name.
 	info, exists := allModes[modeName]
 	if !exists {
-		return fmt.Errorf("unknown mode: %s (valid modes: regular, review, compact, planning)", modeName)
+		return fmt.Errorf("unknown mode: %s (valid modes: regular, review, compact, planning): %w", modeName, ErrUnknownMode)
 	}
 
-	// Print detailed mode information
-	fmt.Printf("Mode: %s\n", info.name)
-	fmt.Println()
-	fmt.Printf("Description:\n  %s\n", info.description)
-	fmt.Println()
-	fmt.Printf("Token Budget: %d tokens\n", info.maxTokens)
-	fmt.Println()
+	out := cmd.OutOrStdout()
 
-	// Print tools
-	fmt.Printf("Available Tools (%d):\n", len(info.tools))
+	// Print detailed mode information.
+	fmt.Fprintf(out, "Mode: %s\n", info.name)
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Description:\n  %s\n", info.description)
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Token Budget: %d tokens\n", info.maxTokens)
+	fmt.Fprintln(out)
+
+	// Print tools.
+	fmt.Fprintf(out, "Available Tools (%d):\n", len(info.tools))
+
 	for _, tool := range info.tools {
-		fmt.Printf("  - %s\n", tool)
+		fmt.Fprintf(out, "  - %s\n", tool)
 	}
-	fmt.Println()
 
-	// Print best use cases
-	fmt.Println("Best For:")
+	fmt.Fprintln(out)
+
+	// Print best use cases.
+	fmt.Fprintln(out, "Best For:")
+
 	for _, useCase := range info.bestFor {
-		fmt.Printf("  • %s\n", useCase)
+		fmt.Fprintf(out, "  • %s\n", useCase)
 	}
-	fmt.Println()
 
-	// Print usage examples
-	fmt.Println("Usage:")
-	fmt.Printf("  spin --mode %s              # Start TUI in %s mode\n", modeName, modeName)
-	fmt.Printf("  spin --mode %s exec <task>  # Execute task in %s mode\n", modeName, modeName)
-	fmt.Println()
+	fmt.Fprintln(out)
+
+	// Print usage examples.
+	fmt.Fprintln(out, "Usage:")
+	fmt.Fprintf(out, "  spin --mode %s              # Start TUI in %s mode\n", modeName, modeName)
+	fmt.Fprintf(out, "  spin --mode %s exec <task>  # Execute task in %s mode\n", modeName, modeName)
+	fmt.Fprintln(out)
 
 	return nil
 }

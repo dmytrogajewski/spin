@@ -4,12 +4,29 @@ package session
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/orchestration"
-	"github.com/dmytrogajewski/spin/internal/state"
 	"github.com/google/uuid"
+
+	"github.com/dmytrogajewski/spin/internal/state"
+	"github.com/dmytrogajewski/spin/pkg/apperr"
+)
+
+var (
+	// ErrCannotTransitionFromArchivedState is a sentinel error.
+	ErrCannotTransitionFromArchivedState = errors.New("cannot transition from archived state")
+	// ErrCannotTransitionFromToActive is a sentinel error.
+	ErrCannotTransitionFromToActive = errors.New("cannot transition from  to active")
+	// ErrSessionIDIsEmpty is a sentinel error.
+	ErrSessionIDIsEmpty = errors.New("session ID is empty")
+	// ErrWorkDirectoryIsEmpty is a sentinel error.
+	ErrWorkDirectoryIsEmpty = errors.New("work directory is empty")
+	// ErrUpdatedAtIsBeforeCreatedAt is a sentinel error.
+	ErrUpdatedAtIsBeforeCreatedAt = errors.New("updated_at is before created_at")
+	// ErrInvalidState is a sentinel error.
+	ErrInvalidState = errors.New("invalid state")
 )
 
 // CurrentSchemaVersion is the current session schema version for migrations.
@@ -21,99 +38,102 @@ type State = state.State
 
 // Session states - now using unified state constants.
 const (
-	StateActive    = state.StateIdle      // Session is active (idle, not running)
-	StateRunning   = state.StateRunning   // Session has active execution
-	StatePaused    = state.StatePaused    // Session is paused
-	StateCompleted = state.StateCompleted // Session completed successfully
-	StateFailed    = state.StateFailed    // Session failed
-	StateCancelled = state.StateCancelled // Session cancelled by user
-	StateArchived  = state.StateArchived  // Session archived
+	// StateActive is exported.
+	StateActive = state.StateIdle // Session is active (idle, not running).
+	// StateRunning is exported.
+	StateRunning = state.StateRunning // Session has active execution.
+	// StatePaused is exported.
+	StatePaused = state.StatePaused // Session is paused.
+	// StateCompleted is exported.
+	StateCompleted = state.StateCompleted // Session completed successfully.
+	// StateFailed is exported.
+	StateFailed = state.StateFailed // Session failed.
+	// StateCancelled is exported.
+	StateCancelled = state.StateCancelled // Session canceled by user.
+	// StateArchived is exported.
+	StateArchived = state.StateArchived // Session archived.
 )
 
 // Session-specific state methods are now handled by state.UnifiedState.
 
 // Session represents a persistent conversation session.
+// Note: Conversation content (messages) is stored separately in history.History.
+// Session only tracks metadata, state, and configuration.
 type Session struct {
-	ID        string                // Unique session identifier (UUID)
-	WorkDir   string                // Working directory for this session
-	CreatedAt time.Time             // Session creation timestamp
-	UpdatedAt time.Time             // Last update timestamp
-	Turns     []*orchestration.Turn // Conversation turns
-	Metadata  Metadata              // Session metadata
-	State     State                 // Current session state
-	Version   int                   // Schema version for migrations
-	mu        sync.RWMutex          // Protects all fields
+	ID        string        // Unique session identifier (UUID string, for storage).
+	WorkDir   string        // Working directory for this session.
+	CreatedAt time.Time     // Session creation timestamp.
+	UpdatedAt time.Time     // Last update timestamp.
+	Metadata  Metadata      // Session metadata.
+	State     State         // Current session state.
+	Version   int           // Schema version for migrations.
+	mu        *sync.RWMutex // Protects all fields.
 }
 
 // NewSession creates a new session with the given working directory.
-// A unique session ID (UUID) is automatically generated.
+// A unique session ID (UUID string) is automatically generated.
+// The ID is a string for storage compatibility, but should be converted to protocol.ConversationID
+// when used in conversation.Conversation.
 func NewSession(workDir string) *Session {
 	now := time.Now()
+
 	return &Session{
 		ID:        uuid.New().String(),
 		WorkDir:   workDir,
 		CreatedAt: now,
 		UpdatedAt: now,
-		Turns:     make([]*orchestration.Turn, 0),
 		Metadata:  Metadata{},
 		State:     StateActive,
 		Version:   CurrentSchemaVersion,
+		mu:        &sync.RWMutex{},
 	}
 }
 
-// AddTurn appends a turn to the session.
-func (s *Session) AddTurn(t *orchestration.Turn) error {
-	if t == nil {
-		return errors.New("turn cannot be nil")
+// ensureMu lazily initializes the mutex for deserialized sessions.
+func (s *Session) ensureMu() {
+	if s.mu == nil {
+		s.mu = &sync.RWMutex{}
 	}
+}
 
+// MigrateVersion applies schema version defaults for deserialized sessions.
+// If Version is zero (absent in old JSON), it sets it to CurrentSchemaVersion.
+func (s *Session) MigrateVersion() {
+	if s.Version == 0 {
+		s.Version = CurrentSchemaVersion
+	}
+}
+
+// IncrementTurnCount increments the turn counter and updates tokens used.
+// This is called when a turn completes. The actual messages are stored in history.History.
+func (s *Session) IncrementTurnCount(tokensUsed int) {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.Turns = append(s.Turns, t)
-	s.UpdatedAt = time.Now()
 	s.Metadata.TotalTurns++
-	s.Metadata.TokensUsed += t.Tokens.TotalTokens
-
-	return nil
+	s.Metadata.TokensUsed += tokensUsed
+	s.UpdatedAt = time.Now()
 }
 
-// GetTurn retrieves a turn by ID.
-func (s *Session) GetTurn(turnID string) (*orchestration.Turn, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// RecordLLMCall records cost metrics from a single LLM API call.
+// It atomically updates input/output tokens, cost, call count, and TokensUsed.
+func (s *Session) RecordLLMCall(inputTokens, outputTokens int, costUSD float64) {
+	s.ensureMu()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	for _, t := range s.Turns {
-		if t.ID == turnID {
-			return t, nil
-		}
-	}
-
-	return nil, fmt.Errorf("turn not found: %s", turnID)
-}
-
-// LastTurn returns the most recent turn.
-func (s *Session) LastTurn() *orchestration.Turn {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if len(s.Turns) == 0 {
-		return nil
-	}
-
-	return s.Turns[len(s.Turns)-1]
-}
-
-// TurnCount returns the number of turns.
-func (s *Session) TurnCount() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return len(s.Turns)
+	s.Metadata.CostTracking.InputTokens += inputTokens
+	s.Metadata.CostTracking.OutputTokens += outputTokens
+	s.Metadata.CostTracking.TotalCostUSD += costUSD
+	s.Metadata.CostTracking.APICallCount++
+	s.Metadata.TokensUsed += inputTokens + outputTokens
+	s.UpdatedAt = time.Now()
 }
 
 // UpdateMetadata updates session metadata using a callback function.
 func (s *Session) UpdateMetadata(fn func(*Metadata)) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -124,16 +144,18 @@ func (s *Session) UpdateMetadata(fn func(*Metadata)) error {
 }
 
 // SetState updates session state with validation.
-func (s *Session) SetState(state State) error {
+func (s *Session) SetState(newState State) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Validate state transition
-	if err := s.validateStateTransition(s.State, state); err != nil {
+	// Validate state transition.
+	err := s.validateStateTransition(s.State, newState)
+	if err != nil {
 		return err
 	}
 
-	s.State = state
+	s.State = newState
 	s.UpdatedAt = time.Now()
 
 	return nil
@@ -141,14 +163,14 @@ func (s *Session) SetState(state State) error {
 
 // validateStateTransition checks if a state transition is valid.
 func (s *Session) validateStateTransition(from, to State) error {
-	// Archived is terminal - cannot transition from it
+	// Archived is terminal - cannot transition from it.
 	if from == StateArchived {
-		return fmt.Errorf("cannot transition from archived state")
+		return ErrCannotTransitionFromArchivedState
 	}
 
-	// Cannot transition back to active from terminal states
+	// Cannot transition back to active from terminal states.
 	if to == StateActive && (from == StateCompleted || from == StateFailed || from == StateCancelled) {
-		return fmt.Errorf("cannot transition from %s to active", from)
+		return fmt.Errorf("cannot transition from %s to active: %w", from, ErrCannotTransitionFromToActive)
 	}
 
 	return nil
@@ -156,14 +178,13 @@ func (s *Session) validateStateTransition(from, to State) error {
 
 // AddTag adds a tag to the session.
 func (s *Session) AddTag(tag string) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Check for duplicate
-	for _, existingTag := range s.Metadata.Tags {
-		if existingTag == tag {
-			return nil // Silently ignore duplicate
-		}
+	// Check for duplicate.
+	if slices.Contains(s.Metadata.Tags, tag) {
+		return nil // Silently ignore duplicate.
 	}
 
 	s.Metadata.Tags = append(s.Metadata.Tags, tag)
@@ -174,16 +195,17 @@ func (s *Session) AddTag(tag string) error {
 
 // RemoveTag removes a tag from the session.
 func (s *Session) RemoveTag(tag string) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find and remove tag
-	for i, existingTag := range s.Metadata.Tags {
-		if existingTag == tag {
-			s.Metadata.Tags = append(s.Metadata.Tags[:i], s.Metadata.Tags[i+1:]...)
-			s.UpdatedAt = time.Now()
-			break
-		}
+	before := len(s.Metadata.Tags)
+	s.Metadata.Tags = slices.DeleteFunc(s.Metadata.Tags, func(existing string) bool {
+		return existing == tag
+	})
+
+	if len(s.Metadata.Tags) != before {
+		s.UpdatedAt = time.Now()
 	}
 
 	return nil
@@ -191,6 +213,7 @@ func (s *Session) RemoveTag(tag string) error {
 
 // SetTitle updates the session title.
 func (s *Session) SetTitle(title string) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -202,99 +225,49 @@ func (s *Session) SetTitle(title string) error {
 
 // Validate checks session integrity.
 func (s *Session) Validate() error {
+	s.ensureMu()
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var errs []error
+	var errs apperr.ErrorList
 
-	errs = append(errs, s.validateBasicFields()...)
-	errs = append(errs, s.validateTurns()...)
-	errs = append(errs, s.validateMetadata()...)
+	s.validateBasicFields(&errs)
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	return nil
+	return errs.Err()
 }
 
 // validateBasicFields validates basic session fields.
-func (s *Session) validateBasicFields() []error {
-	var errs []error
-
-	// Validate ID
+func (s *Session) validateBasicFields(errs *apperr.ErrorList) {
+	// Validate ID.
 	if s.ID == "" {
-		errs = append(errs, errors.New("session ID is empty"))
-	} else if _, err := uuid.Parse(s.ID); err != nil {
-		errs = append(errs, fmt.Errorf("session ID is not a valid UUID: %w", err))
+		errs.Add(ErrSessionIDIsEmpty)
 	}
 
-	// Validate WorkDir
+	_, err := uuid.Parse(s.ID)
+	if err != nil {
+		errs.Add(fmt.Errorf("session ID is not a valid UUID: %w", err))
+	}
+
+	// Validate WorkDir.
 	if s.WorkDir == "" {
-		errs = append(errs, errors.New("work directory is empty"))
+		errs.Add(ErrWorkDirectoryIsEmpty)
 	}
 
-	// Validate timestamps
+	// Validate timestamps.
 	if s.UpdatedAt.Before(s.CreatedAt) {
-		errs = append(errs, errors.New("updated_at is before created_at"))
+		errs.Add(ErrUpdatedAtIsBeforeCreatedAt)
 	}
 
-	// Validate state
+	// Validate state.
 	if !isValidState(s.State) {
-		errs = append(errs, fmt.Errorf("invalid state: %s", s.State))
+		errs.Add(fmt.Errorf("invalid state: %s: %w", s.State, ErrInvalidState))
 	}
-
-	return errs
-}
-
-// validateTurns validates turn-related fields.
-func (s *Session) validateTurns() []error {
-	var errs []error
-
-	// Check for duplicate turn IDs
-	turnIDs := make(map[string]bool)
-	for _, t := range s.Turns {
-		if turnIDs[t.ID] {
-			errs = append(errs, fmt.Errorf("duplicate turn ID: %s", t.ID))
-		}
-		turnIDs[t.ID] = true
-	}
-
-	return errs
-}
-
-// validateMetadata validates metadata consistency.
-func (s *Session) validateMetadata() []error {
-	var errs []error
-
-	// Validate turn count consistency
-	if s.Metadata.TotalTurns != len(s.Turns) {
-		errs = append(errs, fmt.Errorf("metadata turn count (%d) does not match actual turns (%d)",
-			s.Metadata.TotalTurns, len(s.Turns)))
-	}
-
-	// Validate token count consistency
-	actualTokens := s.calculateActualTokens()
-	if s.Metadata.TokensUsed != actualTokens {
-		errs = append(errs, fmt.Errorf("metadata tokens used (%d) does not match actual (%d)",
-			s.Metadata.TokensUsed, actualTokens))
-	}
-
-	return errs
-}
-
-// calculateActualTokens calculates the total tokens from all turns.
-func (s *Session) calculateActualTokens() int {
-	actualTokens := 0
-	for _, t := range s.Turns {
-		actualTokens += t.Tokens.TotalTokens
-	}
-	return actualTokens
 }
 
 // isValidState checks if a state value is valid.
-func isValidState(state State) bool {
-	switch state {
+func isValidState(st State) bool {
+	switch st {
 	case StateActive, StateCompleted, StateFailed, StateArchived, StateCancelled:
 		return true
 	default:

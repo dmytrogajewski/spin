@@ -5,6 +5,8 @@ import (
 )
 
 func TestGetTagColor(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		blockType BlockType
@@ -24,6 +26,8 @@ func TestGetTagColor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := GetTagColor(tt.blockType)
 			if got != tt.want {
 				t.Errorf("GetTagColor(%v) = %v, want %v", tt.blockType, got, tt.want)
@@ -33,6 +37,8 @@ func TestGetTagColor(t *testing.T) {
 }
 
 func TestColorString(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name  string
 		color Color
@@ -46,6 +52,8 @@ func TestColorString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.color.String()
 			if got != tt.want {
 				t.Errorf("Color.String() = %q, want %q", got, tt.want)
@@ -55,15 +63,20 @@ func TestColorString(t *testing.T) {
 }
 
 func TestSpacingConstants(t *testing.T) {
+	t.Parallel()
+
 	if S0 != 0 {
 		t.Errorf("S0 = %d, want 0", S0)
 	}
+
 	if S1 != 1 {
 		t.Errorf("S1 = %d, want 1", S1)
 	}
+
 	if S2 != 2 {
 		t.Errorf("S2 = %d, want 2", S2)
 	}
+
 	if S4 != 4 {
 		t.Errorf("S4 = %d, want 4", S4)
 	}

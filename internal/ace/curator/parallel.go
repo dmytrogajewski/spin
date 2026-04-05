@@ -2,95 +2,41 @@ package curator
 
 import (
 	"context"
-	"runtime"
-	"sync"
+	"fmt"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
-// jobResult holds the result of processing a single merge request
-type jobResult struct {
-	index  int
+// curateResult holds the result of processing a single merge request.
+type curateResult struct {
 	result *MergeResult
 	err    error
 }
 
-// curateBatchParallel processes requests in parallel using a worker pool
+// curateBatchParallel processes requests in parallel using a worker pool.
 func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeRequest, maxWorkers int) (*BatchMergeResult, error) {
-	// Determine worker count
-	numWorkers := maxWorkers
-	if numWorkers <= 0 {
-		numWorkers = runtime.NumCPU()
-	}
-	// Cap workers at number of requests
-	if numWorkers > len(requests) {
-		numWorkers = len(requests)
-	}
+	numWorkers := concurrency.EffectiveWorkers(maxWorkers, len(requests))
 
-	// Create channels
-	jobs := make(chan int, len(requests))
-	resultsChan := make(chan jobResult, len(requests))
+	poolResults := concurrency.WorkerPool(ctx, numWorkers, requests, func(ctx context.Context, req MergeRequest) curateResult {
+		result, err := c.Curate(ctx, req)
 
-	// Start workers
-	var wg sync.WaitGroup
-	for w := 0; w < numWorkers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case index, ok := <-jobs:
-					if !ok {
-						return
-					}
-					result, err := c.Curate(ctx, requests[index])
-					resultsChan <- jobResult{
-						index:  index,
-						result: result,
-						err:    err,
-					}
-				}
-			}
-		}()
-	}
+		return curateResult{result: result, err: err}
+	})
 
-	// Send jobs
-	go func() {
-		for i := range requests {
-			select {
-			case <-ctx.Done():
-				return
-			case jobs <- i:
-			}
-		}
-		close(jobs)
-	}()
-
-	// Wait for all workers
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Collect results
-	results := make([]MergeResult, len(requests))
-	errors := make([]error, len(requests))
-
-	for jobRes := range resultsChan {
-		if jobRes.err != nil {
-			errors[jobRes.index] = jobRes.err
-		} else {
-			results[jobRes.index] = *jobRes.result
-		}
-	}
-
-	// Check for context cancellation
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("batch merge canceled: %w", ctx.Err())
 	}
 
-	return &BatchMergeResult{
-		Results: results,
-		Errors:  errors,
-	}, nil
+	results := make([]MergeResult, len(requests))
+	errs := make([]error, len(requests))
+
+	for idx, res := range poolResults {
+		if res.err != nil {
+			errs[idx] = res.err
+		} else if res.result != nil {
+			results[idx] = *res.result
+		}
+	}
+
+	return &BatchMergeResult{Results: results, Errors: errs}, nil
 }

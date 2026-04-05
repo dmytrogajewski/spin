@@ -1,149 +1,300 @@
+// Package events provides event handling and emission.
 package events
 
 import (
 	"errors"
+	"maps"
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/google/uuid"
+
+	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
+
+// ErrEmitterIsClosed is a sentinel error.
+var ErrEmitterIsClosed = errors.New("emitter is closed")
 
 // Event represents a conversation event that can be streamed to UI.
 // Events are emitted during agent execution to provide real-time feedback
 // about content generation, tool calls, and system status.
 type Event struct {
-	Type      EventType   `json:"type"`
-	Timestamp time.Time   `json:"timestamp"`
-	Data      interface{} `json:"data"`
+	Type      EventType `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
+	Data      any       `json:"data"`
 }
 
-// GetType returns the event type (implements cycle.Event interface)
+// GetType returns the event type (implements cycle.Event interface).
 func (e Event) GetType() string {
 	return e.Type.String()
 }
 
-// GetTimestamp returns the event timestamp (implements cycle.Event interface)
+// GetTimestamp returns the event timestamp (implements cycle.Event interface).
 func (e Event) GetTimestamp() time.Time {
 	return e.Timestamp
 }
 
-// GetData returns the event data (implements cycle.Event interface)
-func (e Event) GetData() interface{} {
+// GetData returns the event data (implements cycle.Event interface).
+func (e Event) GetData() any {
 	return e.Data
+}
+
+// TypedData extracts the event's Data field as type T via a type assertion.
+// Returns the typed value and true if the assertion succeeds, or the zero
+// value of T and false otherwise.
+func TypedData[T any](e Event) (T, bool) {
+	data, ok := e.Data.(T)
+
+	return data, ok
 }
 
 // ToolCallStartData returns the event data as ToolCallStartData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolCallStartData() (ToolCallStartData, bool) {
-	data, ok := e.Data.(ToolCallStartData)
-	return data, ok
+	return TypedData[ToolCallStartData](e)
 }
 
 // ToolCallCompleteData returns the event data as ToolCallCompleteData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolCallCompleteData() (ToolCallCompleteData, bool) {
-	data, ok := e.Data.(ToolCallCompleteData)
-	return data, ok
+	return TypedData[ToolCallCompleteData](e)
+}
+
+// PlanUpdateData returns the event data as PlanUpdateData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) PlanUpdateData() (PlanUpdateData, bool) {
+	return TypedData[PlanUpdateData](e)
 }
 
 // ToolProgressData returns the event data as ToolProgressData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolProgressData() (ToolProgressData, bool) {
-	data, ok := e.Data.(ToolProgressData)
-	return data, ok
+	return TypedData[ToolProgressData](e)
 }
 
 // ContentDeltaData returns the event data as ContentDeltaData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ContentDeltaData() (ContentDeltaData, bool) {
-	data, ok := e.Data.(ContentDeltaData)
-	return data, ok
+	return TypedData[ContentDeltaData](e)
+}
+
+// ThinkingDeltaData returns the event data as ThinkingDeltaData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ThinkingDeltaData() (ThinkingDeltaData, bool) {
+	return TypedData[ThinkingDeltaData](e)
 }
 
 // TurnEventData returns the event data as TurnEventData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) TurnEventData() (TurnEventData, bool) {
-	data, ok := e.Data.(TurnEventData)
-	return data, ok
+	return TypedData[TurnEventData](e)
 }
 
 // ApprovalEventData returns the event data as ApprovalEventData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ApprovalEventData() (ApprovalEventData, bool) {
-	data, ok := e.Data.(ApprovalEventData)
-	return data, ok
+	return TypedData[ApprovalEventData](e)
 }
 
 // SystemEventData returns the event data as SystemEventData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) SystemEventData() (SystemEventData, bool) {
-	data, ok := e.Data.(SystemEventData)
-	return data, ok
+	return TypedData[SystemEventData](e)
 }
 
 // ErrorData returns the event data as ErrorData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ErrorData() (ErrorData, bool) {
-	data, ok := e.Data.(ErrorData)
-	return data, ok
+	return TypedData[ErrorData](e)
+}
+
+// ACERetrievalData returns the event data as ACERetrievalData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ACERetrievalData() (ACERetrievalData, bool) {
+	return TypedData[ACERetrievalData](e)
+}
+
+// ACELearningData returns the event data as ACELearningData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ACELearningData() (ACELearningData, bool) {
+	return TypedData[ACELearningData](e)
+}
+
+// CompactionTriggeredData returns the event data as CompactionTriggeredData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) CompactionTriggeredData() (CompactionTriggeredData, bool) {
+	return TypedData[CompactionTriggeredData](e)
+}
+
+// DoomLoopDetectedData returns the event data as DoomLoopDetectedData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) DoomLoopDetectedData() (DoomLoopDetectedData, bool) {
+	return TypedData[DoomLoopDetectedData](e)
+}
+
+// ReminderInjectedData returns the event data as ReminderInjectedData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ReminderInjectedData() (ReminderInjectedData, bool) {
+	return TypedData[ReminderInjectedData](e)
+}
+
+// SubagentSpawnData returns the event data as SubagentSpawnData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) SubagentSpawnData() (SubagentSpawnData, bool) {
+	return TypedData[SubagentSpawnData](e)
+}
+
+// SubagentCompleteData returns the event data as SubagentCompleteData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) SubagentCompleteData() (SubagentCompleteData, bool) {
+	return TypedData[SubagentCompleteData](e)
+}
+
+// PhaseThinkingData returns the event data as PhaseThinkingData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) PhaseThinkingData() (PhaseThinkingData, bool) {
+	return TypedData[PhaseThinkingData](e)
+}
+
+// PhaseCritiqueData returns the event data as PhaseCritiqueData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) PhaseCritiqueData() (PhaseCritiqueData, bool) {
+	return TypedData[PhaseCritiqueData](e)
 }
 
 // EventType represents the category of event.
 type EventType int
 
 const (
-	// Content events - text generation from LLM
+	// EventContentDelta represents text generation from LLM.
 	EventContentDelta EventType = iota
+	// EventThinkingDelta represents thinking/reasoning output.
+	EventThinkingDelta
+	// EventContentComplete indicates content generation is complete.
 	EventContentComplete
 
-	// Tool events - tool execution lifecycle
+	// EventToolCallStart indicates a tool execution has started.
 	EventToolCallStart
+	// EventToolCallProgress represents tool execution progress.
 	EventToolCallProgress
+	// EventToolCallComplete indicates a tool execution has completed.
 	EventToolCallComplete
+	// EventPlanUpdate represents a plan update event.
+	EventPlanUpdate
 
-	// Turn events - turn lifecycle
+	// EventTurnStart indicates a new turn has started.
 	EventTurnStart
+	// EventTurnProgress represents turn progress.
+	EventTurnProgress
+	// EventTurnComplete indicates a turn has completed.
 	EventTurnComplete
+	// EventTurnFailed indicates a turn has failed.
 	EventTurnFailed
+	// EventTurnPaused indicates a turn has been paused.
 	EventTurnPaused
+	// EventTurnResumed indicates a turn has been resumed.
 	EventTurnResumed
 
-	// Approval events - user approval required
+	// EventCommandApproval indicates user approval is required.
 	EventCommandApproval
+	// EventACERetrieval represents an ACE retrieval event.
+	EventACERetrieval
+	// EventACELearned represents an ACE learning event.
+	EventACELearned
+	// EventCommandApproved indicates a command was approved.
 	EventCommandApproved
+	// EventCommandDenied indicates a command was denied.
 	EventCommandDenied
+	// EventPolicyApplied indicates an approval policy was applied.
+	EventPolicyApplied
+	// EventPolicySaved indicates an approval policy was saved.
+	EventPolicySaved
 
-	// System events - system-level messages
+	// EventTypeToolSelection represents a dynamic tool discovery event.
+	EventTypeToolSelection
+
+	// EventError represents a system error event.
 	EventError
+	// EventWarning represents a system warning event.
 	EventWarning
+	// EventInfo represents a system info event.
 	EventInfo
+
+	// EventCompactionTriggered indicates context compaction was activated.
+	EventCompactionTriggered
+	// EventDoomLoopDetected indicates a doom-loop fingerprint threshold was exceeded.
+	EventDoomLoopDetected
+	// EventReminderInjected indicates a system reminder was injected.
+	EventReminderInjected
+	// EventSubagentSpawn indicates a subagent was launched.
+	EventSubagentSpawn
+	// EventSubagentComplete indicates a subagent finished execution.
+	EventSubagentComplete
+	// EventPhaseThinking indicates a thinking LLM call started or completed.
+	EventPhaseThinking
+	// EventPhaseCritique indicates a critique evaluation started or completed.
+	EventPhaseCritique
+	// EventUndoRecorded indicates a file operation was recorded for undo.
+	EventUndoRecorded
+	// EventBackgroundTaskStarted indicates a background task was launched.
+	EventBackgroundTaskStarted
+	// EventBackgroundTaskStopped indicates a background task has stopped.
+	EventBackgroundTaskStopped
+	// EventSnapshotTaken indicates a working-tree snapshot was captured.
+	EventSnapshotTaken
+	// EventSessionIndexRebuilt indicates the session index was rebuilt from metadata files.
+	EventSessionIndexRebuilt
+	// EventLSPDiagnostics indicates LSP diagnostics were received from a language server.
+	EventLSPDiagnostics
 )
 
 // String returns the string representation of EventType.
 func (e EventType) String() string {
 	names := []string{
 		"content_delta",
+		"thinking_delta",
 		"content_complete",
 		"tool_call_start",
 		"tool_call_progress",
 		"tool_call_complete",
+		"plan_update",
 		"turn_start",
+		"turn_progress",
 		"turn_complete",
 		"turn_failed",
 		"turn_paused",
 		"turn_resumed",
 		"command_approval",
+		"ace_retrieval",
+		"ace_learned",
 		"command_approved",
 		"command_denied",
+		"policy_applied",
+		"policy_saved",
+		"tool_selection",
 		"error",
 		"warning",
 		"info",
+		"compaction_triggered",
+		"doom_loop_detected",
+		"reminder_injected",
+		"subagent_spawn",
+		"subagent_complete",
+		"phase_thinking",
+		"phase_critique",
+		"undo_recorded",
+		"background_task_started",
+		"background_task_stopped",
+		"snapshot_taken",
+		"session_index_rebuilt",
+		"lsp_diagnostics",
 	}
 
 	if int(e) < len(names) {
 		return names[e]
 	}
+
 	return "unknown"
 }
 
@@ -151,6 +302,11 @@ func (e EventType) String() string {
 type ContentDeltaData struct {
 	Content string `json:"content"`
 	Role    string `json:"role"`
+}
+
+// ThinkingDeltaData contains incremental thinking content from LLM.
+type ThinkingDeltaData struct {
+	Content string `json:"content"`
 }
 
 // ToolCallStartData contains tool execution start information.
@@ -170,11 +326,17 @@ type ToolProgressData struct {
 
 // ToolCallCompleteData contains tool execution results.
 type ToolCallCompleteData struct {
-	ToolID   string `json:"tool_id"`
-	ToolName string `json:"tool_name"`
-	Success  bool   `json:"success"`
-	Output   string `json:"output"`
-	Error    string `json:"error,omitempty"`
+	ToolID   string         `json:"tool_id"`
+	ToolName string         `json:"tool_name"`
+	Success  bool           `json:"success"`
+	Output   string         `json:"output"`
+	Error    string         `json:"error,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+// PlanUpdateData contains the updated plan with current step statuses.
+type PlanUpdateData struct {
+	Plan any `json:"plan"`
 }
 
 // TurnEventData contains turn lifecycle information.
@@ -200,13 +362,41 @@ type ApprovalEventData struct {
 	Timestamp       time.Time      `json:"timestamp"`
 }
 
+// ApprovalStatus represents the status of an approval request.
 type ApprovalStatus string
 
 const (
-	ApprovalStatusPending  ApprovalStatus = "pending"
+	// ApprovalStatusPending indicates the approval is pending.
+	ApprovalStatusPending ApprovalStatus = "pending"
+	// ApprovalStatusApproved defines a ApprovalStatusApproved constant.
 	ApprovalStatusApproved ApprovalStatus = "approved"
-	ApprovalStatusDenied   ApprovalStatus = "denied"
+	// ApprovalStatusDenied indicates the approval was denied.
+	ApprovalStatusDenied ApprovalStatus = "denied"
 )
+
+// BulletData represents a single ACE bullet for display.
+type BulletData struct {
+	Content  string `json:"content"`
+	Category string `json:"category,omitempty"` // Optional category for grouping (success_pattern, error_mode, etc.)
+}
+
+// ACERetrievalData contains ACE progressive retrieval information.
+type ACERetrievalData struct {
+	Turn             int          `json:"turn"`
+	Trigger          string       `json:"trigger"`
+	Query            string       `json:"query"`
+	BulletsRetrieved int          `json:"bullets_retrieved"`
+	BulletsNew       int          `json:"bullets_new"`
+	CacheSize        int          `json:"cache_size"`
+	CacheHitRate     float64      `json:"cache_hit_rate"`
+	Bullets          []BulletData `json:"bullets"` // Actual bullet content for rendering.
+}
+
+// ACELearningData contains ACE learning information after trajectory execution.
+type ACELearningData struct {
+	Success bool         `json:"success"` // Whether the execution was successful.
+	Bullets []BulletData `json:"bullets"` // Learned bullets to display.
+}
 
 // SystemEventData contains informational or warning messages.
 type SystemEventData struct {
@@ -222,20 +412,66 @@ type ErrorData struct {
 	Details string `json:"details,omitempty"`
 }
 
+// CompactionTriggeredData contains context compaction event information.
+type CompactionTriggeredData struct {
+	Turn  int    `json:"turn"`
+	Stage string `json:"stage"`
+}
+
+// DoomLoopDetectedData contains doom-loop detection event information.
+type DoomLoopDetectedData struct {
+	Turn        int    `json:"turn"`
+	Fingerprint string `json:"fingerprint"`
+	Count       int    `json:"count"`
+	ToolName    string `json:"tool_name"`
+}
+
+// ReminderInjectedData contains reminder injection event information.
+type ReminderInjectedData struct {
+	Turn  int `json:"turn"`
+	Count int `json:"count"`
+}
+
+// SubagentSpawnData contains subagent launch event information.
+type SubagentSpawnData struct {
+	AgentType string `json:"agent_type"`
+	Query     string `json:"query"`
+}
+
+// SubagentCompleteData contains subagent completion event information.
+type SubagentCompleteData struct {
+	AgentType    string `json:"agent_type"`
+	Summary      string `json:"summary"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+}
+
+// PhaseThinkingData contains thinking phase event information.
+type PhaseThinkingData struct {
+	Turn   int    `json:"turn"`
+	Status string `json:"status"`
+}
+
+// PhaseCritiqueData contains critique phase event information.
+type PhaseCritiqueData struct {
+	Turn   int    `json:"turn"`
+	Status string `json:"status"`
+}
+
 // BackpressureMode defines how the emitter handles slow consumers.
 type BackpressureMode int
 
 const (
 	// BackpressureDrop drops events when subscriber buffer is full (fire-and-forget)
-	// Best for: Non-critical events, high-throughput scenarios
+	// Best for: Non-critical events, high-throughput scenarios.
 	BackpressureDrop BackpressureMode = iota
 
 	// BackpressureBlock blocks the emitter until subscriber is ready
-	// Best for: Critical events that must be delivered (approvals, errors)
+	// Best for: Critical events that must be delivered (approvals, errors).
 	BackpressureBlock
 
 	// BackpressureBuffer uses dynamic buffer growth up to limit
-	// Best for: Bursty workloads where temporary slowdowns are acceptable
+	// Best for: Bursty workloads where brief slowdowns are acceptable.
 	BackpressureBuffer
 )
 
@@ -255,14 +491,14 @@ func (m BackpressureMode) String() string {
 
 // EventEmitterConfig configures event emitter behavior.
 type EventEmitterConfig struct {
-	// BufferSize is the initial channel buffer size per subscriber
+	// BufferSize is the initial channel buffer size per subscriber.
 	BufferSize int
 
-	// BackpressureMode determines how to handle slow consumers
+	// BackpressureMode determines how to handle slow consumers.
 	BackpressureMode BackpressureMode
 
 	// BufferLimit is the maximum buffer size for BackpressureBuffer mode
-	// Ignored for other modes. Default: 10000 events
+	// Ignored for other modes. Default: 10000 events.
 	BufferLimit int
 }
 
@@ -275,10 +511,10 @@ type EventEmitter struct {
 	bufferSize  int
 	closed      bool
 
-	// Backpressure configuration
+	// Backpressure configuration.
 	config   EventEmitterConfig
-	buffers  map[string][]Event // Dynamic buffers for BackpressureBuffer mode
-	bufferMu sync.Mutex         // Protects buffers map
+	buffers  map[string][]Event // Dynamic buffers for BackpressureBuffer mode.
+	bufferMu sync.Mutex         // Protects buffers map.
 }
 
 // NewEventEmitter creates a new EventEmitter with default config (BackpressureDrop).
@@ -296,7 +532,7 @@ func NewEventEmitter(bufferSize int) *EventEmitter {
 // NewEventEmitterWithConfig creates a new EventEmitter with custom configuration.
 // This allows selecting different backpressure strategies for handling slow consumers.
 func NewEventEmitterWithConfig(config EventEmitterConfig) *EventEmitter {
-	// Set default buffer limit if not specified
+	// Set default buffer limit if not specified.
 	if config.BufferLimit == 0 {
 		config.BufferLimit = 10000
 	}
@@ -308,7 +544,7 @@ func NewEventEmitterWithConfig(config EventEmitterConfig) *EventEmitter {
 		closed:      false,
 	}
 
-	// Initialize buffers map for BackpressureBuffer mode
+	// Initialize buffers map for BackpressureBuffer mode.
 	if config.BackpressureMode == BackpressureBuffer {
 		emitter.buffers = make(map[string][]Event)
 	}
@@ -324,17 +560,17 @@ func (e *EventEmitter) Subscribe() (id string, events <-chan Event, err error) {
 	defer e.mu.Unlock()
 
 	if e.closed {
-		return "", nil, errors.New("emitter is closed")
+		return "", nil, ErrEmitterIsClosed
 	}
 
-	// Generate unique subscriber ID
+	// Generate unique subscriber ID.
 	id = uuid.New().String()
 
-	// Create buffered channel for subscriber
+	// Create buffered channel for subscriber.
 	ch := make(chan Event, e.bufferSize)
 	e.subscribers[id] = ch
 
-	// Initialize buffer for BackpressureBuffer mode
+	// Initialize buffer for BackpressureBuffer mode.
 	if e.config.BackpressureMode == BackpressureBuffer {
 		e.bufferMu.Lock()
 		e.buffers[id] = make([]Event, 0)
@@ -354,7 +590,7 @@ func (e *EventEmitter) Unsubscribe(id string) {
 		close(ch)
 		delete(e.subscribers, id)
 
-		// Clean up buffer for BackpressureBuffer mode
+		// Clean up buffer for BackpressureBuffer mode.
 		if e.config.BackpressureMode == BackpressureBuffer {
 			e.bufferMu.Lock()
 			delete(e.buffers, id)
@@ -366,74 +602,66 @@ func (e *EventEmitter) Unsubscribe(id string) {
 // Emit sends an event to all active subscribers using the configured backpressure strategy.
 // The timestamp is automatically set if not provided.
 func (e *EventEmitter) Emit(event Event) {
-	// Set timestamp if not provided
+	// Set timestamp if not provided.
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
 
 	e.mu.RLock()
-	// Don't emit if closed
+	// Don't emit if closed.
 	if e.closed {
 		e.mu.RUnlock()
+
 		return
 	}
 
 	mode := e.config.BackpressureMode
 
-	// For non-blocking modes, keep lock and emit directly
+	// For non-blocking modes, keep lock and emit directly.
 	if mode == BackpressureDrop || mode == BackpressureBuffer {
 		for id, ch := range e.subscribers {
 			switch mode {
 			case BackpressureDrop:
-				e.emitDrop(ch, event)
+				concurrency.TrySend(ch, event)
 			case BackpressureBuffer:
 				e.emitBuffer(id, ch, event)
+			default:
+				// BackpressureBlock handled below after lock release.
 			}
 		}
+
 		e.mu.RUnlock()
+
 		return
 	}
 
 	// For BackpressureBlock, we need to release the lock to avoid deadlock
-	// Take snapshot of subscribers
+	// Take snapshot of subscribers.
 	subscribers := make(map[string]chan Event)
-	for id, ch := range e.subscribers {
-		subscribers[id] = ch
-	}
+	maps.Copy(subscribers, e.subscribers)
+
 	e.mu.RUnlock()
 
-	// Emit with blocking (might take time)
+	// Emit with blocking (might take time).
 	for _, ch := range subscribers {
-		e.emitBlock(ch, event)
+		concurrency.SendWithTimeout(ch, event, emitBlockTimeout)
 	}
 }
 
-// emitDrop implements fire-and-forget (drops events if channel full).
-func (e *EventEmitter) emitDrop(ch chan Event, event Event) {
-	select {
-	case ch <- event:
-		// Successfully sent
-	default:
-		// Subscriber slow/blocked, drop event
-	}
-}
-
-// emitBlock implements blocking send (ensures delivery).
-func (e *EventEmitter) emitBlock(ch chan Event, event Event) {
-	ch <- event // Blocks until consumer ready
-}
+// emitBlockTimeout is the maximum time to wait for a blocking emit before dropping.
+const emitBlockTimeout = 5 * time.Second
 
 // emitBuffer implements dynamic buffering (buffers events up to limit).
 func (e *EventEmitter) emitBuffer(id string, ch chan Event, event Event) {
-	// First try to flush any existing buffered events
+	// First try to flush any existing buffered events.
 	e.tryFlushBuffer(id, ch)
 
-	// Then try to send current event
+	// Then try to send current event.
 	select {
 	case ch <- event:
-		// Successfully sent
+		// Successfully sent.
 	default:
-		// Channel full, add to dynamic buffer
+		// Channel full, add to dynamic buffer.
 		e.addToBuffer(id, event)
 	}
 }
@@ -447,7 +675,7 @@ func (e *EventEmitter) addToBuffer(id string, event Event) {
 	if len(buffer) < e.config.BufferLimit {
 		e.buffers[id] = append(buffer, event)
 	}
-	// If over limit, drop event (similar to BackpressureDrop)
+	// If over limit, drop event (similar to BackpressureDrop).
 }
 
 // tryFlushBuffer attempts to flush buffered events to channel (non-blocking).
@@ -460,8 +688,9 @@ func (e *EventEmitter) tryFlushBuffer(id string, ch chan Event) {
 		return
 	}
 
-	// Try to send buffered events (non-blocking)
+	// Try to send buffered events (non-blocking).
 	sent := 0
+
 	for i, event := range buffer {
 		select {
 		case ch <- event:
@@ -470,9 +699,10 @@ func (e *EventEmitter) tryFlushBuffer(id string, ch chan Event) {
 			goto done
 		}
 	}
+
 done:
 
-	// Remove sent events from buffer
+	// Remove sent events from buffer.
 	if sent > 0 {
 		e.buffers[id] = buffer[sent:]
 	}
@@ -486,18 +716,18 @@ func (e *EventEmitter) Close() {
 	defer e.mu.Unlock()
 
 	if e.closed {
-		return // Already closed
+		return // Already closed.
 	}
 
 	e.closed = true
 
-	// Close all subscriber channels
+	// Close all subscriber channels.
 	for id, ch := range e.subscribers {
 		close(ch)
 		delete(e.subscribers, id)
 	}
 
-	// Clean up buffers for BackpressureBuffer mode
+	// Clean up buffers for BackpressureBuffer mode.
 	if e.config.BackpressureMode == BackpressureBuffer {
 		e.bufferMu.Lock()
 		for id := range e.buffers {
@@ -510,14 +740,16 @@ func (e *EventEmitter) Close() {
 // Events returns a channel for receiving events (convenience method for testing).
 // This is a simple wrapper around Subscribe() that returns only the channel.
 // The subscription ID is not returned, so Unsubscribe cannot be called.
-// Use Subscribe() directly if you need to unsubscribe later.
+// Use Subscribe() directly if you need to unsubscribe.
 func (e *EventEmitter) Events() <-chan Event {
 	_, ch, err := e.Subscribe()
 	if err != nil {
-		// Return closed channel if subscription fails
+		// Return closed channel if subscription fails.
 		closedCh := make(chan Event)
 		close(closedCh)
+
 		return closedCh
 	}
+
 	return ch
 }

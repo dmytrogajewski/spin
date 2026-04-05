@@ -5,6 +5,8 @@ import (
 )
 
 func TestBlockType_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		blockType BlockType
@@ -24,6 +26,8 @@ func TestBlockType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := tt.blockType.String()
 			if result != tt.expected {
 				t.Errorf("BlockType.String() = %v, want %v", result, tt.expected)
@@ -33,6 +37,8 @@ func TestBlockType_String(t *testing.T) {
 }
 
 func TestBlockType_Valid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		blockType BlockType
@@ -54,6 +60,8 @@ func TestBlockType_Valid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := tt.blockType.Valid()
 			if result != tt.expected {
 				t.Errorf("BlockType.Valid() = %v, want %v", result, tt.expected)
@@ -63,6 +71,8 @@ func TestBlockType_Valid(t *testing.T) {
 }
 
 func TestFoldState_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		foldState FoldState
@@ -74,6 +84,8 @@ func TestFoldState_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := tt.foldState.String()
 			if result != tt.expected {
 				t.Errorf("FoldState.String() = %v, want %v", result, tt.expected)
@@ -83,6 +95,8 @@ func TestFoldState_String(t *testing.T) {
 }
 
 func TestFoldState_Valid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		foldState FoldState
@@ -96,6 +110,8 @@ func TestFoldState_Valid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := tt.foldState.Valid()
 			if result != tt.expected {
 				t.Errorf("FoldState.Valid() = %v, want %v", result, tt.expected)
@@ -105,6 +121,8 @@ func TestFoldState_Valid(t *testing.T) {
 }
 
 func TestSeverity_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		severity Severity
@@ -117,6 +135,8 @@ func TestSeverity_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := tt.severity.String()
 			if result != tt.expected {
 				t.Errorf("Severity.String() = %v, want %v", result, tt.expected)
@@ -126,6 +146,8 @@ func TestSeverity_String(t *testing.T) {
 }
 
 func TestSeverity_Valid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		severity Severity
@@ -140,6 +162,8 @@ func TestSeverity_Valid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := tt.severity.Valid()
 			if result != tt.expected {
 				t.Errorf("Severity.Valid() = %v, want %v", result, tt.expected)
@@ -149,64 +173,88 @@ func TestSeverity_Valid(t *testing.T) {
 }
 
 func TestBlockType_Constants(t *testing.T) {
-	// Test that all constants are properly defined
+	t.Parallel(
+	// Test that all constants are properly defined.
+	)
+
 	if BlockTypeExecute != "EXECUTE" {
 		t.Errorf("BlockTypeExecute = %v, want %v", BlockTypeExecute, "EXECUTE")
 	}
+
 	if BlockTypePlan != "PLAN" {
 		t.Errorf("BlockTypePlan = %v, want %v", BlockTypePlan, "PLAN")
 	}
+
 	if BlockTypeRead != "READ" {
 		t.Errorf("BlockTypeRead = %v, want %v", BlockTypeRead, "READ")
 	}
+
 	if BlockTypeGrep != "GREP" {
 		t.Errorf("BlockTypeGrep = %v, want %v", BlockTypeGrep, "GREP")
 	}
+
 	if BlockTypeApplyPatch != "APPLY_PATCH" {
 		t.Errorf("BlockTypeApplyPatch = %v, want %v", BlockTypeApplyPatch, "APPLY_PATCH")
 	}
+
 	if BlockTypeSummary != "SUMMARY" {
 		t.Errorf("BlockTypeSummary = %v, want %v", BlockTypeSummary, "SUMMARY")
 	}
+
 	if BlockTypeTool != "TOOL" {
 		t.Errorf("BlockTypeTool = %v, want %v", BlockTypeTool, "TOOL")
 	}
+
 	if BlockTypeTesting != "TESTING" {
 		t.Errorf("BlockTypeTesting = %v, want %v", BlockTypeTesting, "TESTING")
 	}
+
 	if BlockTypeNotice != "NOTICE" {
 		t.Errorf("BlockTypeNotice = %v, want %v", BlockTypeNotice, "NOTICE")
 	}
+
 	if BlockTypeError != "ERROR" {
 		t.Errorf("BlockTypeError = %v, want %v", BlockTypeError, "ERROR")
 	}
 }
 
 func TestFoldState_Constants(t *testing.T) {
-	// Test that all constants are properly defined
+	t.Parallel(
+	// Test that all constants are properly defined.
+	)
+
 	if FoldStateExpanded != "expanded" {
 		t.Errorf("FoldStateExpanded = %v, want %v", FoldStateExpanded, "expanded")
 	}
+
 	if FoldStateCollapsed != "collapsed" {
 		t.Errorf("FoldStateCollapsed = %v, want %v", FoldStateCollapsed, "collapsed")
 	}
 }
 
 func TestSeverity_Constants(t *testing.T) {
-	// Test that all constants are properly defined
+	t.Parallel(
+	// Test that all constants are properly defined.
+	)
+
 	if SeverityInfo != "info" {
 		t.Errorf("SeverityInfo = %v, want %v", SeverityInfo, "info")
 	}
+
 	if SeverityWarn != "warn" {
 		t.Errorf("SeverityWarn = %v, want %v", SeverityWarn, "warn")
 	}
+
 	if SeverityError != "error" {
 		t.Errorf("SeverityError = %v, want %v", SeverityError, "error")
 	}
 }
 
 func TestBlockType_AllValid(t *testing.T) {
-	// Test that all defined block types are valid
+	t.Parallel(
+	// Test that all defined block types are valid.
+	)
+
 	blockTypes := []BlockType{
 		BlockTypeExecute,
 		BlockTypePlan,
@@ -228,7 +276,10 @@ func TestBlockType_AllValid(t *testing.T) {
 }
 
 func TestFoldState_AllValid(t *testing.T) {
-	// Test that all defined fold states are valid
+	t.Parallel(
+	// Test that all defined fold states are valid.
+	)
+
 	foldStates := []FoldState{
 		FoldStateExpanded,
 		FoldStateCollapsed,
@@ -242,7 +293,10 @@ func TestFoldState_AllValid(t *testing.T) {
 }
 
 func TestSeverity_AllValid(t *testing.T) {
-	// Test that all defined severities are valid
+	t.Parallel(
+	// Test that all defined severities are valid.
+	)
+
 	severities := []Severity{
 		SeverityInfo,
 		SeverityWarn,

@@ -2,28 +2,29 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
+	termx "golang.org/x/term"
+
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
-	"github.com/dmytrogajewski/spin/internal/events"
-	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
-	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/security"
-	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
-	"github.com/dmytrogajewski/spin/internal/tools"
+	llmrecorder "github.com/dmytrogajewski/spin/internal/llm/recorder"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
-	"github.com/spf13/cobra"
-	termx "golang.org/x/term"
+	spinterm "github.com/dmytrogajewski/spin/internal/ui/term"
 )
+
+// ErrNoPromptProvidedUseCommandLine is a sentinel error.
+var ErrNoPromptProvidedUseCommandLine = errors.New("no prompt provided (use command line args or stdin)")
 
 // newExecCmd creates the exec command for non-interactive execution.
 func newExecCmd() *cobra.Command {
@@ -40,13 +41,14 @@ Examples:
 		RunE: runExec,
 	}
 
-	// Exec-specific flags
+	// Exec-specific flags.
 	cmd.Flags().Bool("auto-approve", false, "Automatically approve all operations (DANGEROUS)")
 	cmd.Flags().String("timeout", "", "Maximum execution time (e.g., 5m, 1h)")
-	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().String("format", formatText, "Output format (text, json)")
 	cmd.Flags().Bool("no-stream", false, "Disable streaming output")
 	cmd.Flags().Bool("exit-on-error", true, "Exit immediately on first error")
 	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
+	cmd.Flags().String("record-fixture", "", "Record LLM responses to JSONL fixture file for test replay")
 
 	return cmd
 }
@@ -58,246 +60,180 @@ func runExec(cmd *cobra.Command, args []string) error {
 
 	setupSignalHandling(cancel)
 
-	// Parse prompt from args or stdin
-	prompt, err := parsePrompt(args)
+	// Parse prompt from args or stdin.
+	prompt, err := parsePrompt(args, cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
 
-	// Load configuration
-	configLoader, err := loadConfig()
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
-	// Create auth manager
-	authMgr := createAuthManager()
-
-	// Build LLM provider
-	provider, err := buildProvider(ctx, configLoader, authMgr)
-	if err != nil {
-		return fmt.Errorf("create provider: %w", err)
-	}
-	defer provider.Close()
-
-	// Get exec-specific flags
+	// Get exec-specific flags.
+	debugFlag, _ := cmd.Flags().GetBool("debug")
 	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
 	timeout, _ := cmd.Flags().GetString("timeout")
 	format, _ := cmd.Flags().GetString("format")
 	noStream, _ := cmd.Flags().GetBool("no-stream")
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
-	debugFlag, _ := cmd.Flags().GetBool("debug")
-
-	// Enable debug logging if requested
-	if debugFlag {
-		slog.SetLogLoggerLevel(slog.LevelDebug)
+	// Load configuration using new unified API.
+	cfg, err := config.Load(config.Source{
+		File: flagConfigFile(cmd),
+		Flags: config.FlagOverrides{
+			Provider: flagProvider(cmd),
+			Model:    flagModel(cmd),
+			Debug:    debugFlag,
+		},
+		WorkDir: flagWorkDir(cmd),
+	})
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
 
-	// Apply timeout if specified
+	// Apply --agents-md flag override.
+	if agentsMD := flagAgentsMD(cmd); agentsMD != "" {
+		cfg.AgentsMD.Path = agentsMD
+	}
+
+	authMgr := createAuthManager()
+
+	provider, err := buildProvider(ctx, cfg, authMgr)
+	if err != nil {
+		return fmt.Errorf("create provider: %w", err)
+	}
+
+	defer provider.Close()
+
+	// Wrap provider with recorder if --record-fixture is specified.
+	if recordPath, _ := cmd.Flags().GetString("record-fixture"); recordPath != "" {
+		rec, recErr := llmrecorder.New(provider, recordPath)
+		if recErr != nil {
+			return fmt.Errorf("create fixture recorder: %w", recErr)
+		}
+
+		provider = rec
+
+		defer rec.Close()
+	}
+
+	// Configure logging based on debug flag.
+	if debugFlag {
+		// In debug mode, enable DEBUG level logs.
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	} else {
+		// In normal mode, suppress INFO/DEBUG logs (only show WARN and ERROR).
+		slog.SetLogLoggerLevel(slog.LevelWarn)
+	}
+
+	// Apply timeout if specified.
 	if timeout != "" {
-		duration, err := parseDuration(timeout)
+		var duration time.Duration
+
+		duration, err = time.ParseDuration(timeout)
 		if err != nil {
 			return fmt.Errorf("invalid timeout: %w", err)
 		}
+
 		ctx, cancel = context.WithTimeout(ctx, duration)
 		defer cancel()
 	}
 
-	// Create conversation using builder pattern
-	conv, err := createConversationForExec(ctx, provider, configLoader, autoApprove, debugFlag)
+	// Create conversation using shared builder pattern.
+	ui, uiErr := createExecUI(cmd.OutOrStdout())
+	if uiErr != nil {
+		return fmt.Errorf("create TUI: %w", uiErr)
+	}
+
+	var approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
+	if autoApprove {
+		approvalHandler = createAutoApproveHandler()
+	}
+
+	const eventBufferSize = 100
+
+	conv, err := createConversation(ctx, provider, cfg, conversationConfig{
+		approvalHandler: approvalHandler,
+		ui:              ui,
+		sessionPrefix:   "exec",
+		eventBufferSize: eventBufferSize,
+	})
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
-	defer conv.Close()
+	defer conv.Close(ctx)
 
-	// Execute the prompt non-interactively with TUI display
+	// Execute the prompt non-interactively with TUI display.
 	err = executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
 
-	// Explicitly exit after execution completes
+	// Explicitly exit after execution completes.
 	if err != nil {
 		return err
 	}
+
 	return nil
-}
-
-// loadConfig loads configuration from file or defaults.
-func loadConfig() (*config.Loader, error) {
-	configLoader := config.NewLoader()
-
-	// Load from explicit config file if provided
-	if flagConfigFile != "" {
-		if err := configLoader.LoadFromFile(flagConfigFile); err != nil {
-			return nil, err
-		}
-	} else {
-		// Try to load from default locations (ignore error if not found)
-		_ = configLoader.Load("")
-	}
-
-	return configLoader, nil
 }
 
 // createAuthManager creates an auth manager with platform-specific keystore.
 func createAuthManager() *auth.Manager {
 	keystore := auth.NewKeystore()
+
 	return auth.NewManager(keystore)
 }
 
 // buildProvider creates an LLM provider from configuration.
-func buildProvider(ctx context.Context, configLoader *config.Loader, authMgr *auth.Manager) (llm.Provider, error) {
-	// Create builder
-	b := builder.NewBuilder(configLoader, authMgr)
-
-	// Build provider with flags as overrides (only if flags are set)
-	cfg := builder.Config{}
-	if flagProvider != "" {
-		cfg.Provider = flagProvider
+func buildProvider(ctx context.Context, cfg *config.V2, authMgr *auth.Manager) (llm.Provider, error) {
+	extra, ok, err := createProviderForExecExtra(cfg.LLM.Provider)
+	if err != nil {
+		return nil, err
+	} else if ok {
+		return extra, nil
 	}
-	if flagModel != "" {
-		cfg.Model = flagModel
-	}
-	// Additional flags can be added here in the future
-	// BaseURL:  flagBaseURL,
-	// KeyName:  flagKeyName,
 
-	return b.Build(ctx, cfg)
+	b := builder.NewBuilder(cfg, authMgr)
+
+	return b.Build(ctx)
 }
 
-// parsePrompt parses the prompt from command line args or stdin.
-func parsePrompt(args []string) (string, error) {
+// parsePrompt parses the prompt from command line args or the given reader.
+// If no args are provided, it reads from r (typically [os.Stdin]).
+func parsePrompt(args []string, r io.Reader) (string, error) {
 	if len(args) > 0 {
-		// Join all args as prompt
+		// Join all args as prompt.
 		return args[0], nil
 	}
 
-	// Read from stdin
-	data, err := io.ReadAll(os.Stdin)
+	// Read from the provided reader.
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", fmt.Errorf("read stdin: %w", err)
 	}
 
 	prompt := string(data)
-	if len(prompt) == 0 {
-		return "", fmt.Errorf("no prompt provided (use command line args or stdin)")
+	if prompt == "" {
+		return "", ErrNoPromptProvidedUseCommandLine
 	}
 
 	return prompt, nil
 }
 
-// parseDuration parses a duration string like "5m", "1h", etc.
-func parseDuration(s string) (time.Duration, error) {
-	return time.ParseDuration(s)
-}
-
-// createConversationForExec creates a conversation configured for exec mode.
-func createConversationForExec(ctx context.Context, provider llm.Provider, configLoader *config.Loader, autoApprove bool, debug bool) (*conversation.Conversation, error) {
-	workDir := getWorkingDirectory()
-	cfg := buildConfig(configLoader, 0, workDir) // No max turns limit for exec
-
-	// Apply debug flag to configuration
-	applyDebugFlag(cfg, debug)
-
-	// Create tool registry with same tools as TUI
-	registry := tools.NewRegistry()
-	registry.Register(tools.NewReadFileTool())
-	registry.Register(tools.NewWriteFileTool())
-	registry.Register(tools.NewListDirectoryTool())
-
-	// Create approval handler for exec mode
-	var approvalHandler func(security.ApprovalRequest) security.ApprovalResponse
-	if autoApprove {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  true,
-				Reason:    "auto-approved",
-			}
-		}
-	} else {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			// In exec mode without auto-approve, deny dangerous commands
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  false,
-				Reason:    "exec mode requires --auto-approve for dangerous operations",
-			}
-		}
+// createExecUI creates the UI adapter for exec mode.
+// The out writer is used for all output; when nil it defaults to [os.Stdout].
+func createExecUI(out io.Writer) (*adapters.PureTTY, error) {
+	if out == nil {
+		out = os.Stdout
 	}
 
-	// Create services based on configuration
-	logger := slog.Default()
+	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
 
-	var gitSvc *gitpkg.Service
-	var shellSvc *shellpkg.Service
-	var mcpSvc *mcppkg.Service
-	var err error
+	// Check if the writer is a real terminal; if not, use a mock TTY.
+	if f, ok := out.(*os.File); !ok || !termx.IsTerminal(spinterm.SafeFd(f.Fd())) {
+		const (
+			mockTermWidth  = 120
+			mockTermHeight = 30
+		)
 
-	if cfg.EnableGit {
-		gitSvc, err = gitpkg.NewService(true, workDir, logger)
-		if err != nil {
-			return nil, fmt.Errorf("create git service: %w", err)
-		}
+		mockTty := &mockTTY{width: mockTermWidth, height: mockTermHeight}
+		opts = append(opts, adapters.WithTTY(mockTty))
 	}
 
-	if cfg.EnableShell {
-		shellSvc, err = shellpkg.NewService(true, workDir, logger, cfg.ShellTimeout)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			return nil, fmt.Errorf("create shell service: %w", err)
-		}
-	}
-
-	if cfg.EnableMCP && len(cfg.MCPServers) > 0 {
-		mcpCfg := &mcppkg.Config{
-			EnableMCP:  true,
-			MCPServers: make([]mcppkg.MCPServerConfig, len(cfg.MCPServers)),
-		}
-		for i, srv := range cfg.MCPServers {
-			mcpCfg.MCPServers[i] = mcppkg.MCPServerConfig{
-				Name:    srv.Name,
-				Command: srv.Command,
-				Args:    srv.Args,
-				Env:     srv.Env,
-			}
-		}
-		var err error
-		mcpSvc, err = mcppkg.NewService(mcpCfg, logger)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			if shellSvc != nil {
-				shellSvc.Close()
-			}
-			return nil, fmt.Errorf("create mcp service: %w", err)
-		}
-	}
-
-	// Build conversation with services
-	builder := conversation.NewBuilder(cfg, workDir).
-		WithLLM(provider).
-		WithToolRegistry(registry).
-		WithApprovalHandler(approvalHandler)
-
-	if gitSvc != nil {
-		builder = builder.WithGit(gitSvc)
-	}
-	if shellSvc != nil {
-		builder = builder.WithShell(shellSvc)
-	}
-	if mcpSvc != nil {
-		builder = builder.WithMCP(mcpSvc)
-	}
-
-	conv, err := builder.Build(ctx)
-	if err != nil {
-		// Builder.Build() already cleans up services on error
-		return nil, fmt.Errorf("build conversation: %w", err)
-	}
-
-	return conv, nil
+	return adapters.NewPureTTY(out, opts...)
 }
 
 // mockTTY implements term.TerminalController for non-terminal environments.
@@ -305,94 +241,60 @@ type mockTTY struct {
 	width, height int
 }
 
-func (m *mockTTY) Enter() error               { return nil }
-func (m *mockTTY) Exit() error                { return nil }
-func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
-func (m *mockTTY) OnResize(cb func(w, h int)) {}
+func (m *mockTTY) Enter() error              { return nil }
+func (m *mockTTY) Exit() error               { return nil }
+func (m *mockTTY) Size() (width, height int) { return m.width, m.height }
+func (m *mockTTY) OnResize(_ func(w, h int)) {}
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
-func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, format string, noStream, exitOnError bool) error {
-	// Create TUI adapter. Use real TTY when available; otherwise, mock one.
-	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
-	if !(termx.IsTerminal(int(os.Stdout.Fd())) && termx.IsTerminal(int(os.Stdin.Fd()))) {
-		mockTty := &mockTTY{width: 120, height: 30}
-		opts = append(opts, adapters.WithTTY(mockTty))
-	}
-	ui, err := adapters.NewPureTTY(os.Stdout, opts...)
+func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, _ string, _, exitOnError bool) error {
+	pureTTY, err := createExecUI(nil)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
 	}
-	defer ui.Stop()
 
-	// Initialize UI with conversation metadata
-	ui.SetTaskMode(conv.GetTaskMode())
+	defer func() { _ = pureTTY.Stop() }()
 
-	// Create event mapper
-	mapper := tui.NewTUIMapper(ui)
+	pureTTY.SetTaskMode(conv.GetTaskMode())
+
+	mapper := tui.NewMapper(pureTTY)
 	defer mapper.Close()
 
-	// Start streaming channel
 	streamCh := mapper.StartStreaming()
 	streamDone := make(chan struct{})
+
 	go func() {
-		ui.PrintChunks(ctx, streamCh)
+		_ = pureTTY.PrintChunks(ctx, streamCh)
+
 		close(streamDone)
 	}()
 
-	// Subscribe to conversation events
-	eventStream := conv.Stream()
+	eventsDone := startEventLoop(ctx, conv.Stream(), mapper, pureTTY, conv)
 
-	// Start turn in background
 	errChan := make(chan error, 1)
+
 	go func() {
 		errChan <- conv.RunTurn(ctx, prompt)
 	}()
 
-	// Process events and map them to TUI
-	// NOTE: In exec mode, we process events but don't wait for the stream to close
-	// because the conversation's event stream stays open for potential future turns
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-eventStream:
-				if !ok {
-					return
-				}
-				if err := mapper.MapEvent(event); err != nil {
-					ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", err))
-				}
-
-				// Update token count from conversation history after each event
-				if event.Type == events.EventTurnComplete || event.Type == events.EventContentComplete {
-					tokenCount := int64(conv.GetTokenCount())
-					ui.SetTokenCount(tokenCount)
-				}
-			}
-		}
-	}()
-
-	// Wait for completion
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("execution canceled: %w", ctx.Err())
 
-	case err := <-errChan:
-		// Stop streaming to close the channel
+	case err = <-errChan:
+		// Close the emitter to flush all remaining events through the event loop,
+		// then wait for the event loop to finish processing before stopping the stream.
+		conv.GetEmitter().Close()
+		<-eventsDone
 		mapper.StopStreaming()
-
-		// Wait for streaming to complete
 		<-streamDone
 
-		// EventTurnComplete is now emitted after all post-execution processing
-		// (including ACE bullet generation), so we don't need to wait here
+		if err != nil && exitOnError {
+			return err
+		}
 
 		if err != nil {
-			if exitOnError {
-				return err
-			}
-			ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
+			_ = pureTTY.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
 		}
 
 		return nil

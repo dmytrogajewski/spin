@@ -2,37 +2,42 @@ package refine
 
 import (
 	"context"
-	"fmt"
-	"math"
+	"errors"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
+	"github.com/dmytrogajewski/spin/pkg/alg/similarity"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
+
+// ErrSourceAndTargetBulletsCannotBe is a sentinel error.
+var ErrSourceAndTargetBulletsCannotBe = errors.New("source and target bullets cannot be nil")
 
 // MergePair represents two bullets to merge.
 type MergePair struct {
-	SourceID   string  // Bullet to merge from (will be removed)
-	TargetID   string  // Bullet to merge into (will be kept)
-	Similarity float64 // Similarity score
+	SourceID   string  // Bullet to merge from (removed during merge).
+	TargetID   string  // Bullet to merge into (kept after merge).
+	Similarity float64 // Similarity score.
 }
 
 // MergeResult contains merge operation outcome.
 type MergeResult struct {
-	KeptID        string // ID of kept bullet
-	RemovedID     string // ID of removed bullet
-	MergedContent string // Content of kept bullet
+	KeptID        string         // ID of kept bullet.
+	RemovedID     string         // ID of removed bullet.
+	MergedContent string         // Content of kept bullet.
+	MergedBullet  *bullet.Bullet // The merged bullet with combined counters and tags.
 }
 
 // MergeEngine identifies and merges similar bullets.
 type MergeEngine struct {
 	embedder   embedding.Embedder
-	similarity float64 // Threshold for merging (0.0-1.0)
+	similarity float64 // Threshold for merging (0.0-1.0).
 }
 
 // NewMergeEngine creates a new merge engine.
 func NewMergeEngine(embedder embedding.Embedder, similarityThreshold float64) *MergeEngine {
 	if similarityThreshold < 0.0 || similarityThreshold > 1.0 {
-		similarityThreshold = 0.90 // Default to 0.90
+		similarityThreshold = 0.90 // Default to 0.90.
 	}
 
 	return &MergeEngine{
@@ -45,22 +50,22 @@ func NewMergeEngine(embedder embedding.Embedder, similarityThreshold float64) *M
 func (m *MergeEngine) FindMergeCandidates(ctx context.Context, bullets []*bullet.Bullet) ([]MergePair, error) {
 	pairs := make([]MergePair, 0)
 
-	// O(n²) similarity comparison (acceptable for < 1000 bullets)
-	for i := 0; i < len(bullets); i++ {
+	// O(n²) similarity comparison (acceptable for < 1000 bullets).
+	for i := range bullets {
 		for j := i + 1; j < len(bullets); j++ {
-			similarity, err := m.calculateSimilarity(ctx, bullets[i], bullets[j])
+			simScore, err := m.calculateSimilarity(ctx, bullets[i], bullets[j])
 			if err != nil {
-				continue // Skip on error
+				continue // Skip on error.
 			}
 
-			if similarity >= m.similarity {
-				// Choose which to keep based on utility score
+			if simScore >= m.similarity {
+				// Choose which to keep based on utility score.
 				sourceID, targetID := m.chooseMergeDirection(bullets[i], bullets[j])
 
 				pairs = append(pairs, MergePair{
 					SourceID:   sourceID,
 					TargetID:   targetID,
-					Similarity: similarity,
+					Similarity: simScore,
 				})
 			}
 		}
@@ -71,12 +76,12 @@ func (m *MergeEngine) FindMergeCandidates(ctx context.Context, bullets []*bullet
 
 // MergeBullets combines source into target.
 // Returns the result with kept and removed bullet IDs.
-func (m *MergeEngine) MergeBullets(ctx context.Context, source, target *bullet.Bullet) (*MergeResult, error) {
+func (m *MergeEngine) MergeBullets(_ context.Context, source, target *bullet.Bullet) (*MergeResult, error) {
 	if source == nil || target == nil {
-		return nil, fmt.Errorf("source and target bullets cannot be nil")
+		return nil, ErrSourceAndTargetBulletsCannotBe
 	}
 
-	// Determine which to keep based on utility score
+	// Determine which to keep based on utility score.
 	kept := target
 	removed := source
 
@@ -85,17 +90,18 @@ func (m *MergeEngine) MergeBullets(ctx context.Context, source, target *bullet.B
 		removed = target
 	}
 
-	// Clone the kept bullet to avoid modifying the original
+	// Clone the kept bullet to avoid modifying the original.
 	merged := kept.Clone()
 
-	// Transfer utility counters
+	// Transfer utility counters.
 	merged.HelpfulCount += removed.HelpfulCount
 	merged.HarmfulCount += removed.HarmfulCount
 
-	// Merge tags (kept's tags take precedence)
+	// Merge tags (kept's tags take precedence).
 	if merged.Tags == nil {
 		merged.Tags = make(map[string]string)
 	}
+
 	for k, v := range removed.Tags {
 		if _, exists := merged.Tags[k]; !exists {
 			merged.Tags[k] = v
@@ -106,17 +112,18 @@ func (m *MergeEngine) MergeBullets(ctx context.Context, source, target *bullet.B
 		KeptID:        merged.ID,
 		RemovedID:     removed.ID,
 		MergedContent: merged.Content,
+		MergedBullet:  merged,
 	}, nil
 }
 
 // calculateSimilarity computes cosine similarity between two bullets.
 func (m *MergeEngine) calculateSimilarity(ctx context.Context, b1, b2 *bullet.Bullet) (float64, error) {
-	// If both have embeddings, use them
+	// If both have embeddings, use them.
 	if len(b1.Embedding) > 0 && len(b2.Embedding) > 0 {
-		return m.cosineSimilarity(b1.Embedding, b2.Embedding), nil
+		return vector.CosineSimilarity(b1.Embedding, b2.Embedding), nil
 	}
 
-	// If embedder is available, generate embeddings
+	// If embedder is available, generate embeddings.
 	if m.embedder != nil {
 		emb1, err := m.embedder.Embed(ctx, b1.Content)
 		if err != nil {
@@ -128,69 +135,27 @@ func (m *MergeEngine) calculateSimilarity(ctx context.Context, b1, b2 *bullet.Bu
 			return 0.0, err
 		}
 
-		return m.cosineSimilarity(emb1, emb2), nil
+		return vector.CosineSimilarity(emb1, emb2), nil
 	}
 
-	// No embeddings available - fall back to simple content comparison
-	return m.simpleSimilarity(b1.Content, b2.Content), nil
-}
-
-// cosineSimilarity calculates cosine similarity between two vectors.
-func (m *MergeEngine) cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0.0
-	}
-
-	var dotProduct, normA, normB float64
-	for i := range a {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0.0
-	}
-
-	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
-}
-
-// simpleSimilarity provides basic content-based similarity when no embeddings available.
-func (m *MergeEngine) simpleSimilarity(content1, content2 string) float64 {
-	// Exact match
-	if content1 == content2 {
-		return 1.0
-	}
-
-	// Length-based heuristic (very basic)
-	minLen := len(content1)
-	maxLen := len(content2)
-	if maxLen < minLen {
-		minLen, maxLen = maxLen, minLen
-	}
-
-	if maxLen == 0 {
-		return 0.0
-	}
-
-	// Simple ratio (not very accurate, but better than nothing)
-	return float64(minLen) / float64(maxLen)
+	// No embeddings available — fall back to word-set (Jaccard) comparison.
+	return similarity.JaccardSimilarity(b1.Content, b2.Content), nil
 }
 
 // chooseMergeDirection determines which bullet should be kept.
-// Returns (sourceID, targetID) where source will be merged into target.
+// Returns (sourceID, targetID) where source is merged into target.
 func (m *MergeEngine) chooseMergeDirection(b1, b2 *bullet.Bullet) (sourceID, targetID string) {
-	// Keep the bullet with higher utility score
+	// Keep the bullet with higher utility score.
 	score1 := b1.Score()
 	score2 := b2.Score()
 
 	if score1 > score2 {
-		return b2.ID, b1.ID // b2 is source (removed), b1 is target (kept)
+		return b2.ID, b1.ID // b2 is source (removed), b1 is target (kept).
 	} else if score2 > score1 {
-		return b1.ID, b2.ID // b1 is source (removed), b2 is target (kept)
+		return b1.ID, b2.ID // b1 is source (removed), b2 is target (kept).
 	}
 
-	// If equal scores, prefer higher helpful count
+	// If equal scores, prefer higher helpful count.
 	if b1.HelpfulCount > b2.HelpfulCount {
 		return b2.ID, b1.ID
 	}

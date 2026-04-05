@@ -2,68 +2,85 @@ package status
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
-// FormatAdaptive selects the appropriate format based on terminal width.
+// DetailLevel controls how much information the status bar displays.
+type DetailLevel int
+
+const (
+	// DetailCompact shows minimal info: activity, context%, state.
+	DetailCompact DetailLevel = iota
+	// DetailMedium adds provider/model and TPS.
+	DetailMedium
+	// DetailFull adds absolute token counts, task mode, conversation ID.
+	DetailFull
+)
+
+// PercentMultiplier converts a ratio to a percentage value.
+const PercentMultiplier = 100
+
+// Terminal width breakpoints for adaptive formatting.
+const (
+	compactWidthThreshold = 60
+	mediumWidthThreshold  = 100
+
+	// Truncation limits for status bar fields.
+	mediumStateTruncate = 15
+	mediumModelTruncate = 12
+	fullStateTruncate   = 20
+	fullModelTruncate   = 20
+	convIDShortLength   = 6
+
+	// Number formatting thresholds.
+	kiloThreshold = 1000
+	megaThreshold = 1000000
+
+	// StateReady is the default agent state.
+	StateReady = "Ready"
+
+	// tpsNoiseThreshold filters out negligible TPS values.
+	tpsNoiseThreshold = 1.0
+)
+
+// FormatAdaptive selects the appropriate detail level based on terminal width.
 func (m *Manager) FormatAdaptive(width int) string {
-	if width < 60 {
-		return m.FormatCompact(width)
-	} else if width < 100 {
-		return m.FormatMedium(width)
+	if width < compactWidthThreshold {
+		return m.Format(DetailCompact, width)
+	} else if width < mediumWidthThreshold {
+		return m.Format(DetailMedium, width)
 	}
-	return m.FormatFull(width)
+
+	return m.Format(DetailFull, width)
+}
+
+// FormatCompact formats status for narrow terminals (<60 columns).
+// Delegates to Format with DetailCompact.
+func (m *Manager) FormatCompact(width int) string {
+	return m.Format(DetailCompact, width)
 }
 
 // FormatMedium formats status for medium-width terminals (60-100 columns).
-// Shows: activity, context%, state, provider/model, TPS
+// Delegates to Format with DetailMedium.
 func (m *Manager) FormatMedium(width int) string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if !m.enabled {
-		return ""
-	}
-
-	parts := []string{}
-
-	// Activity indicator
-	activity := activityIndicator(m.status.Metrics.Connected)
-	parts = append(parts, activity)
-
-	// Context percentage
-	if m.status.Metrics.MaxTokens > 0 {
-		pct := formatPercentage(m.status.Metrics.TokenUsage)
-		parts = append(parts, pct)
-	}
-
-	// Agent state
-	state := m.status.Metrics.AgentState
-	if state == "" {
-		state = "Ready"
-	}
-	parts = append(parts, truncate(state, 15))
-
-	// Provider/model (truncated)
-	if m.status.Metrics.Provider != "" {
-		provider := fmt.Sprintf("%s/%s",
-			m.status.Metrics.Provider,
-			truncate(m.status.Metrics.Model, 12))
-		parts = append(parts, provider)
-	}
-
-	// TPS (only if actively generating and non-zero)
-	if m.status.Metrics.TokensPerSec > 1.0 { // Use 1.0 threshold to filter out noise
-		tps := fmt.Sprintf("%.0ftok/s", m.status.Metrics.TokensPerSec)
-		parts = append(parts, tps)
-	}
-
-	return strings.Join(parts, "  ")
+	return m.Format(DetailMedium, width)
 }
 
-// FormatFull formats status for wide terminals (≥100 columns).
-// Shows all fields including context absolute values, conversation ID, and hotkeys.
+// FormatFull formats status for wide terminals (>=100 columns).
+// Delegates to Format with DetailFull.
 func (m *Manager) FormatFull(width int) string {
+	return m.Format(DetailFull, width)
+}
+
+// Format produces a status string at the requested detail level.
+//
+//   - DetailCompact: activity, context%, state
+//   - DetailMedium: + provider/model, TPS
+//   - DetailFull: + absolute token counts, task mode, conversation ID
+func (m *Manager) Format(level DetailLevel, _ int) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -71,74 +88,38 @@ func (m *Manager) FormatFull(width int) string {
 		return ""
 	}
 
-	parts := []string{}
-
-	// Activity indicator
-	activity := activityIndicator(m.status.Metrics.Connected)
-	parts = append(parts, activity)
-
-	// Context usage (percentage and absolute)
-	if m.status.Metrics.MaxTokens > 0 {
-		pct := formatPercentage(m.status.Metrics.TokenUsage)
-		abs := fmt.Sprintf("(%s/%s)",
-			humanizeNumber(m.status.Metrics.TokenCount),
-			humanizeNumber(m.status.Metrics.MaxTokens))
-		parts = append(parts, pct, abs)
+	// Compact-only: honor explicit status text (legacy behavior).
+	if level == DetailCompact && m.status.Text != "" {
+		return m.status.Text
 	}
 
-	// Agent state
-	state := m.status.Metrics.AgentState
-	if state == "" {
-		state = "Ready"
-	}
-	parts = append(parts, truncate(state, 20))
-
-	// Task mode (if not default)
-	if m.status.Metrics.TaskMode != "" && m.status.Metrics.TaskMode != "regular" {
-		parts = append(parts, capitalize(m.status.Metrics.TaskMode))
+	spinnerFrame := ""
+	if m.spinner != nil && m.spinner.IsRunning() {
+		spinnerFrame = m.spinner.Frame()
 	}
 
-	// Provider/model
-	if m.status.Metrics.Provider != "" {
-		provider := fmt.Sprintf("%s/%s",
-			m.status.Metrics.Provider,
-			truncate(m.status.Metrics.Model, 20))
-		parts = append(parts, provider)
-	}
-
-	// TPS (only if actively generating and non-zero)
-	if m.status.Metrics.TokensPerSec > 1.0 { // Use 1.0 threshold to filter out noise
-		tps := fmt.Sprintf("%.0f tok/s", m.status.Metrics.TokensPerSec)
-		parts = append(parts, tps)
-	}
-
-	// Conversation ID (shortened to first 6 chars)
-	if m.status.Metrics.ConversationID != "" {
-		shortID := m.status.Metrics.ConversationID
-		if len(shortID) > 6 {
-			shortID = shortID[:6]
-		}
-		convID := "conv:" + shortID
-		parts = append(parts, convID)
-	}
-
-	// Hotkeys (only on very wide terminals, and only if explicitly enabled)
-	// Disabled for now as it adds clutter
-	// if width >= 140 {
-	// 	parts = append(parts, "?:help ^C:quit")
-	// }
-
-	return strings.Join(parts, "  ")
+	return FormatMetrics(&m.status.Metrics, level, spinnerFrame)
 }
 
-// Helper functions
+// Helper functions.
 
 // activityIndicator returns the activity indicator based on connection status.
 func activityIndicator(connected bool) string {
 	if connected {
-		return "[●]" // Active (will be colored green in render phase)
+		return "[●]" // Active (colored green in render phase).
 	}
-	return "[○]" // Idle (will be colored gray in render phase)
+
+	return "[○]" // Idle (colored gray in render phase).
+}
+
+// activityIndicatorWithSpinner returns the activity indicator with optional spinner.
+// When spinner is active, shows the spinning animation instead of static indicator.
+func activityIndicatorWithSpinner(connected bool, spinnerFrame string) string {
+	if spinnerFrame != "" {
+		return "[" + spinnerFrame + "]"
+	}
+
+	return activityIndicator(connected)
 }
 
 // formatPercentage formats a percentage value.
@@ -148,23 +129,126 @@ func formatPercentage(pct float64) string {
 
 // humanizeNumber formats large numbers with K/M suffixes.
 func humanizeNumber(n int64) string {
-	if n < 1000 {
-		return fmt.Sprintf("%d", n)
-	} else if n < 1000000 {
-		return fmt.Sprintf("%.1fK", float64(n)/1000)
+	if n < kiloThreshold {
+		return strconv.FormatInt(n, 10)
+	} else if n < megaThreshold {
+		return fmt.Sprintf("%.1fK", float64(n)/kiloThreshold)
 	}
-	return fmt.Sprintf("%.1fM", float64(n)/1000000)
+
+	return fmt.Sprintf("%.1fM", float64(n)/megaThreshold)
 }
 
-// truncate truncates a string to maxLen characters, adding "..." if truncated.
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
+// FormatMetrics formats raw metrics at the given detail level without requiring
+// a Manager. This is the shared formatting core used by both Manager.Format
+// and Renderer.buildMetricsLine.
+func FormatMetrics(metrics *Metrics, level DetailLevel, spinnerFrame string) string {
+	parts := []string{}
+
+	// Activity indicator.
+	parts = append(parts, activityIndicatorWithSpinner(metrics.Connected, spinnerFrame))
+
+	// Context usage.
+	parts = appendContextParts(parts, metrics, level)
+
+	// Agent state.
+	parts = appendStateParts(parts, metrics, level)
+
+	// Provider/model and TPS (medium and full).
+	parts = appendProviderAndTPS(parts, metrics, level)
+
+	// Conversation ID (full only).
+	parts = appendConversationID(parts, metrics, level)
+
+	sep := "  "
+	if level == DetailCompact {
+		sep = " "
 	}
-	if maxLen < 3 {
-		return s[:maxLen]
+
+	return strings.Join(parts, sep)
+}
+
+// appendContextParts appends context usage percentage (and absolute counts at full level).
+func appendContextParts(parts []string, metrics *Metrics, level DetailLevel) []string {
+	if metrics.MaxTokens <= 0 {
+		return parts
 	}
-	return s[:maxLen-3] + "..."
+
+	parts = append(parts, formatPercentage(metrics.TokenUsage))
+
+	if level >= DetailFull {
+		abs := fmt.Sprintf("(%s/%s)",
+			humanizeNumber(metrics.TokenCount),
+			humanizeNumber(metrics.MaxTokens))
+		parts = append(parts, abs)
+	}
+
+	return parts
+}
+
+// appendStateParts appends agent state and task mode.
+func appendStateParts(parts []string, metrics *Metrics, level DetailLevel) []string {
+	stateTrunc := mediumStateTruncate
+	if level >= DetailFull {
+		stateTrunc = fullStateTruncate
+	}
+
+	state := metrics.AgentState
+	if state == "" {
+		state = StateReady
+	}
+
+	parts = append(parts, textwidth.TruncateRight(state, stateTrunc))
+
+	// Task mode (full only, non-default).
+	if level >= DetailFull && metrics.TaskMode != "" && metrics.TaskMode != "regular" {
+		parts = append(parts, capitalize(metrics.TaskMode))
+	}
+
+	return parts
+}
+
+// appendProviderAndTPS appends provider/model and TPS for medium and full levels.
+func appendProviderAndTPS(parts []string, metrics *Metrics, level DetailLevel) []string {
+	if level < DetailMedium {
+		return parts
+	}
+
+	modelTrunc := mediumModelTruncate
+	if level >= DetailFull {
+		modelTrunc = fullModelTruncate
+	}
+
+	if metrics.Provider != "" {
+		provider := fmt.Sprintf("%s/%s",
+			metrics.Provider,
+			textwidth.TruncateRight(metrics.Model, modelTrunc))
+		parts = append(parts, provider)
+	}
+
+	if metrics.TokensPerSec > tpsNoiseThreshold {
+		tpsFmt := "%.0ftok/s"
+		if level >= DetailFull {
+			tpsFmt = "%.0f tok/s"
+		}
+
+		parts = append(parts, fmt.Sprintf(tpsFmt, metrics.TokensPerSec))
+	}
+
+	return parts
+}
+
+// appendConversationID appends shortened conversation ID for full level.
+func appendConversationID(parts []string, metrics *Metrics, level DetailLevel) []string {
+	if level < DetailFull || metrics.ConversationID == "" {
+		return parts
+	}
+
+	shortID := metrics.ConversationID
+	if len(shortID) > convIDShortLength {
+		shortID = shortID[:convIDShortLength]
+	}
+
+	return append(parts, "conv:"+shortID)
 }
 
 // capitalize capitalizes the first letter of a string.
@@ -172,5 +256,6 @@ func capitalize(s string) string {
 	if s == "" {
 		return s
 	}
+
 	return strings.ToUpper(s[:1]) + s[1:]
 }

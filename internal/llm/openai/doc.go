@@ -64,5 +64,5 @@
 //	}
 //
 //	resp, err := provider.Complete(context.Background(), req)
-//	// resp.ToolCalls contains the function calls to execute
+//	resp.ToolCalls contains the function calls to execute.
 package openai

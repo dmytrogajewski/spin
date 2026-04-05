@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -14,26 +15,33 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm/openai"
 )
 
-// ProviderOptions contains provider-specific configuration options.
-//
-// Zero value defaults:
-//   - AutoTune: false (must be explicitly enabled)
-//   - VRAMHeadroomMiB: 0 (will use default 1024 if zero)
-type ProviderOptions struct {
-	// AutoTune enables automatic VRAM-based optimization (Ollama only).
-	AutoTune bool
+var (
+	// ErrUnknownProviderType is a sentinel error.
+	ErrUnknownProviderType = errors.New("unknown provider type")
+	// ErrKeynameProvidedButNoAuthManager is a sentinel error.
+	ErrKeynameProvidedButNoAuthManager = errors.New("keyName  provided but no auth manager configured")
+	// ErrAuthenticationRequiredFor is a sentinel error.
+	ErrAuthenticationRequiredFor = errors.New("authentication required for")
+	// ErrProviderTypeIsRequired is a sentinel error.
+	ErrProviderTypeIsRequired = errors.New("provider type is required")
+	// ErrBaseurlIsRequiredFor is a sentinel error.
+	ErrBaseurlIsRequiredFor = errors.New("baseURL is required for")
+	// ErrModelIsRequiredFor is a sentinel error.
+	ErrModelIsRequiredFor = errors.New("model is required for")
+	// ErrModelIsRequiredForOllama is a sentinel error.
+	ErrModelIsRequiredForOllama = errors.New("model is required for ollama")
+)
 
-	// VRAMHeadroomMiB specifies VRAM headroom in MiB for auto-tuning (Ollama only).
-	// If zero, defaults to 1024 (1GB).
-	VRAMHeadroomMiB int
+// ProviderOptions contains provider-specific configuration options.
+type ProviderOptions struct {
 }
 
 // ProviderConfig contains configuration for provider creation.
 type ProviderConfig struct {
-	// Type is the provider type (e.g., "openai", "ollama", "lmstudio", "openai-compatible")
+	// Type is the provider type (e.g., "openai", "ollama", "lmstudio", "openai-compatible").
 	Type string
 
-	// BaseURL is the API endpoint URL
+	// BaseURL is the API endpoint URL.
 	BaseURL string
 
 	// KeyName is the name of the credential in the keystore (recommended).
@@ -42,18 +50,18 @@ type ProviderConfig struct {
 	KeyName string
 
 	// APIKey is the authentication key (optional for local providers).
-	// DEPRECATED: Use KeyName with secure keystore instead.
-	// This field will be removed in v2.0.
 	// Only use for backward compatibility or testing.
+	//
+	// Deprecated: Use KeyName with secure keystore instead.
 	APIKey string
 
-	// Model is the default model identifier
+	// Model is the default model identifier.
 	Model string
 
-	// Timeout is the request timeout
+	// Timeout is the request timeout.
 	Timeout time.Duration
 
-	// Options contains provider-specific options
+	// Options contains provider-specific options.
 	Options ProviderOptions
 }
 
@@ -63,11 +71,12 @@ type ProviderFactory func(ProviderConfig) (llm.Provider, error)
 // Factory creates LLM providers with optional authentication support.
 type Factory struct {
 	authMgr *auth.Manager
+	logger  *slog.Logger
 }
 
 // NewFactory creates a new provider factory with optional auth support.
 //
-// If authMgr is nil, only direct APIKey credentials will be supported (deprecated).
+// If authMgr is nil, only direct APIKey credentials are supported (deprecated).
 // For secure credential storage, provide an auth.Manager initialized with a keystore.
 //
 // Example:
@@ -78,6 +87,7 @@ type Factory struct {
 func NewFactory(authMgr *auth.Manager) *Factory {
 	return &Factory{
 		authMgr: authMgr,
+		logger:  slog.Default(),
 	}
 }
 
@@ -110,12 +120,13 @@ func NewFactory(authMgr *auth.Manager) *Factory {
 //	}
 //	provider, err := factory.NewProvider(context.Background(), cfg)
 func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Provider, error) {
-	// Validate configuration
-	if err := validateConfig(cfg); err != nil {
+	// Validate configuration.
+	err := validateConfig(cfg)
+	if err != nil {
 		return nil, err
 	}
 
-	// Create provider based on type
+	// Create provider based on type.
 	providers := map[string]func(context.Context, ProviderConfig) (llm.Provider, error){
 		"openai":            f.newOpenAIProvider,
 		"openai-compatible": f.newOpenAIProvider,
@@ -123,10 +134,14 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 		"lmstudio":          f.newLMStudioProvider,
 	}
 
+	// Add test provider if enabled via build tags.
+	f.addTestProvider(providers)
+
 	if provider, exists := providers[cfg.Type]; exists {
 		return provider(ctx, cfg)
 	}
-	return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
+
+	return nil, fmt.Errorf("unknown provider type: %s: %w", cfg.Type, ErrUnknownProviderType)
 }
 
 // resolveCredential resolves a credential from configuration.
@@ -138,10 +153,10 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 // If requiresAuth is true and no credential is found, an error is returned.
 // If requiresAuth is false, empty string is returned for local providers.
 func (f *Factory) resolveCredential(ctx context.Context, cfg ProviderConfig, requiresAuth bool) (string, error) {
-	// Priority 1: KeyName (secure keystore)
+	// Priority 1: KeyName (secure keystore).
 	if cfg.KeyName != "" {
 		if f.authMgr == nil {
-			return "", fmt.Errorf("keyName %q provided but no auth manager configured", cfg.KeyName)
+			return "", fmt.Errorf("keyName %q provided but no auth manager configured: %w", cfg.KeyName, ErrKeynameProvidedButNoAuthManager)
 		}
 
 		cred, err := f.authMgr.GetCredential(ctx, cfg.KeyName)
@@ -152,25 +167,30 @@ func (f *Factory) resolveCredential(ctx context.Context, cfg ProviderConfig, req
 		return cred.Value, nil
 	}
 
-	// Priority 2: APIKey (deprecated, direct)
+	// Priority 2: APIKey (deprecated, direct).
 	if cfg.APIKey != "" {
-		// Log deprecation warning
-		slog.Warn("Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead", "provider_type", cfg.Type)
+		// Log deprecation warning.
+		f.logger.WarnContext(ctx,
+			"Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead",
+			"provider_type", cfg.Type)
+
 		return cfg.APIKey, nil
 	}
 
-	// Priority 3: No authentication
+	// Priority 3: No authentication.
 	if requiresAuth {
-		return "", fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated)", cfg.Type)
+		return "", fmt.Errorf(
+			"authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w",
+			cfg.Type, ErrAuthenticationRequiredFor)
 	}
 
-	return "", nil // No auth needed (e.g., local Ollama)
+	return "", nil // No auth needed (e.g., local Ollama).
 }
 
 // validateConfig validates provider configuration.
 func validateConfig(cfg ProviderConfig) error {
 	if cfg.Type == "" {
-		return fmt.Errorf("provider type is required")
+		return ErrProviderTypeIsRequired
 	}
 
 	validators := map[string]func(ProviderConfig) error{
@@ -181,7 +201,8 @@ func validateConfig(cfg ProviderConfig) error {
 	}
 
 	if validator, exists := validators[cfg.Type]; exists {
-		if err := validator(cfg); err != nil {
+		err := validator(cfg)
+		if err != nil {
 			return err
 		}
 	}
@@ -192,33 +213,33 @@ func validateConfig(cfg ProviderConfig) error {
 // validateOpenAIConfig validates OpenAI provider configuration.
 func validateOpenAIConfig(cfg ProviderConfig) error {
 	if cfg.BaseURL == "" {
-		return fmt.Errorf("baseURL is required for %s", cfg.Type)
+		return fmt.Errorf("baseURL is required for %s: %w", cfg.Type, ErrBaseurlIsRequiredFor)
 	}
+
 	if cfg.KeyName == "" && cfg.APIKey == "" {
-		return fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated)", cfg.Type)
+		return fmt.Errorf(
+			"authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w",
+			cfg.Type, ErrAuthenticationRequiredFor)
 	}
+
 	if cfg.Model == "" {
-		return fmt.Errorf("model is required for %s", cfg.Type)
+		return fmt.Errorf("model is required for %s: %w", cfg.Type, ErrModelIsRequiredFor)
 	}
+
 	return nil
 }
 
 // validateOllamaConfig validates Ollama provider configuration.
 func validateOllamaConfig(cfg ProviderConfig) error {
-	if cfg.BaseURL == "" {
-		return fmt.Errorf("baseURL is required for ollama")
-	}
 	if cfg.Model == "" {
-		return fmt.Errorf("model is required for ollama")
+		return ErrModelIsRequiredForOllama
 	}
+
 	return nil
 }
 
 // validateLMStudioConfig validates LMStudio provider configuration.
-func validateLMStudioConfig(cfg ProviderConfig) error {
-	if cfg.Model == "" {
-		return fmt.Errorf("model is required for lmstudio")
-	}
+func validateLMStudioConfig(_ ProviderConfig) error {
 	return nil
 }
 
@@ -227,30 +248,28 @@ func validateBaseURL(baseURL string) error {
 	if baseURL == "" {
 		return nil
 	}
-	if _, err := url.Parse(baseURL); err != nil {
+
+	_, err := url.Parse(baseURL)
+	if err != nil {
 		return fmt.Errorf("invalid baseURL: %w", err)
 	}
+
 	return nil
 }
 
 // newOpenAIProvider creates an OpenAI provider from config (with auth support).
 func (f *Factory) newOpenAIProvider(ctx context.Context, cfg ProviderConfig) (llm.Provider, error) {
-	// Resolve credential (required for OpenAI)
+	// Resolve credential (required for OpenAI).
 	apiKey, err := f.resolveCredential(ctx, cfg, true)
 	if err != nil {
 		return nil, err
-	}
-
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
 	}
 
 	openaiCfg := openai.Config{
 		BaseURL: cfg.BaseURL,
 		APIKey:  apiKey,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	return openai.NewProvider(openaiCfg)
@@ -259,21 +278,16 @@ func (f *Factory) newOpenAIProvider(ctx context.Context, cfg ProviderConfig) (ll
 // newOllamaProvider creates an Ollama provider from config (with auth support).
 func (f *Factory) newOllamaProvider(ctx context.Context, cfg ProviderConfig) (llm.Provider, error) {
 	// Ollama doesn't require authentication (local provider)
-	// But we still resolve in case user wants to use auth for custom setup
+	// But we still resolve in case user wants to use auth for custom setup.
 	_, err := f.resolveCredential(ctx, cfg, false)
 	if err != nil {
 		return nil, err
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	ollamaCfg := ollama.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	p, err := ollama.NewProvider(ollamaCfg)
@@ -281,44 +295,21 @@ func (f *Factory) newOllamaProvider(ctx context.Context, cfg ProviderConfig) (ll
 		return nil, err
 	}
 
-	if f.shouldAutoTune(cfg.Options) {
-		headroom := f.extractVRAMHeadroom(cfg.Options)
-		// best-effort; ignore error
-		_ = p.AutoTune(ctx, headroom)
-	}
 	return p, nil
-}
-
-// shouldAutoTune determines if auto-tuning should be enabled.
-func (f *Factory) shouldAutoTune(options ProviderOptions) bool {
-	return options.AutoTune
-}
-
-// extractVRAMHeadroom extracts VRAM headroom from options.
-func (f *Factory) extractVRAMHeadroom(options ProviderOptions) int64 {
-	if options.VRAMHeadroomMiB == 0 {
-		return 1024 * 1024 * 1024 // Default 1GB
-	}
-	return int64(options.VRAMHeadroomMiB) * 1024 * 1024
 }
 
 // newLMStudioProvider creates an LMStudio provider from config (with auth support).
 func (f *Factory) newLMStudioProvider(ctx context.Context, cfg ProviderConfig) (llm.Provider, error) {
-	// LMStudio doesn't typically require authentication (local provider)
+	// LMStudio doesn't typically require authentication (local provider).
 	_, err := f.resolveCredential(ctx, cfg, false)
 	if err != nil {
 		return nil, err
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	lmstudioCfg := lmstudio.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	return lmstudio.NewProvider(lmstudioCfg)

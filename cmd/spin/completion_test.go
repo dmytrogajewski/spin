@@ -7,6 +7,8 @@ import (
 )
 
 func TestCompletionCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := newCompletionCmd()
 
 	if !strings.HasPrefix(cmd.Use, "completion") {
@@ -19,8 +21,9 @@ func TestCompletionCommand(t *testing.T) {
 }
 
 func TestCompletionCommand_Bash(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newCompletionCmd())
 	rootCmd.SetArgs([]string{"completion", "bash"})
 
 	var out bytes.Buffer
@@ -38,8 +41,9 @@ func TestCompletionCommand_Bash(t *testing.T) {
 }
 
 func TestCompletionCommand_Zsh(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newCompletionCmd())
 	rootCmd.SetArgs([]string{"completion", "zsh"})
 
 	var out bytes.Buffer
@@ -57,8 +61,9 @@ func TestCompletionCommand_Zsh(t *testing.T) {
 }
 
 func TestCompletionCommand_Fish(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newCompletionCmd())
 	rootCmd.SetArgs([]string{"completion", "fish"})
 
 	var out bytes.Buffer
@@ -76,8 +81,9 @@ func TestCompletionCommand_Fish(t *testing.T) {
 }
 
 func TestCompletionCommand_Powershell(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newCompletionCmd())
 	rootCmd.SetArgs([]string{"completion", "powershell"})
 
 	var out bytes.Buffer
@@ -95,8 +101,9 @@ func TestCompletionCommand_Powershell(t *testing.T) {
 }
 
 func TestCompletionCommand_InvalidShell(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newCompletionCmd())
 	rootCmd.SetArgs([]string{"completion", "invalid"})
 
 	var out bytes.Buffer
@@ -115,8 +122,9 @@ func TestCompletionCommand_InvalidShell(t *testing.T) {
 }
 
 func TestCompletionCommand_NoArgs(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newCompletionCmd())
 	rootCmd.SetArgs([]string{"completion"})
 
 	var out bytes.Buffer

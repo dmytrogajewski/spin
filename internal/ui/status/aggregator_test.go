@@ -6,11 +6,17 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
+const (
+	testStateThinking = "Thinking"
+)
+
 func TestAggregator_ProcessEvent(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// Test turn start
+	// Test turn start.
 	event := &events.Event{Type: events.EventTurnStart}
 	aggregator.ProcessEvent(event)
 
@@ -18,20 +24,21 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 	if metrics.AgentState != "Starting" {
 		t.Errorf("Expected agent state 'Starting', got %q", metrics.AgentState)
 	}
+
 	if metrics.TurnCount != 1 {
 		t.Errorf("Expected turn count 1 (incremented on turn start), got %d", metrics.TurnCount)
 	}
 
-	// Test content generation
+	// Test content generation.
 	event = &events.Event{Type: events.EventContentDelta}
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()
-	if metrics.AgentState != "Thinking" {
+	if metrics.AgentState != testStateThinking {
 		t.Errorf("Expected agent state 'Thinking', got %q", metrics.AgentState)
 	}
 
-	// Test tool execution
+	// Test tool execution.
 	event = &events.Event{Type: events.EventToolCallStart}
 	aggregator.ProcessEvent(event)
 
@@ -40,26 +47,28 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 		t.Errorf("Expected agent state 'Calling tools', got %q", metrics.AgentState)
 	}
 
-	// Test content complete
+	// Test content complete — state stays unchanged (will be set to "Idle" by TurnComplete).
 	event = &events.Event{Type: events.EventContentComplete}
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()
-	if metrics.AgentState != "Ready" {
-		t.Errorf("Expected agent state 'Ready', got %q", metrics.AgentState)
+	if metrics.AgentState != "Calling tools" {
+		t.Errorf("Expected agent state 'Calling tools' (unchanged), got %q", metrics.AgentState)
 	}
 }
 
 func TestAggregator_ProcessEvent_Disabled(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
-	manager.Disable() // Disable the manager
+	manager.Disable() // Disable the manager.
 	aggregator := NewAggregator(manager)
 
-	// Process an event
+	// Process an event.
 	event := &events.Event{Type: events.EventToolCallStart}
 	aggregator.ProcessEvent(event)
 
-	// Agent state should not change because manager is disabled
+	// Agent state should not change because manager is disabled.
 	metrics := manager.GetMetrics()
 	if metrics.AgentState != "" {
 		t.Errorf("Expected empty agent state (manager disabled), got %q", metrics.AgentState)
@@ -67,34 +76,39 @@ func TestAggregator_ProcessEvent_Disabled(t *testing.T) {
 }
 
 func TestAggregator_SetMaxTokens(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// Add some tokens first
+	// Add some tokens first.
 	manager.AddTokens(100, 50)
 
-	// Set max tokens
+	// Set max tokens.
 	aggregator.SetMaxTokens(1000)
 
 	metrics := manager.GetMetrics()
 	if metrics.MaxTokens != 1000 {
 		t.Errorf("Expected max tokens 1000, got %d", metrics.MaxTokens)
 	}
+
 	if metrics.TokenUsage != 15.0 { // 150/1000 * 100
 		t.Errorf("Expected token usage 15.0%%, got %.1f%%", metrics.TokenUsage)
 	}
 }
 
 func TestAggregator_UnknownEvent(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
-	manager.SetAgentState("InitialState") // Set an initial state
+	manager.SetAgentState("InitialState") // Set an initial state.
 	aggregator := NewAggregator(manager)
 
-	// Process unknown event type (use a high number that doesn't exist)
+	// Process unknown event type (use a high number that doesn't exist).
 	event := &events.Event{Type: events.EventType(999)}
 	aggregator.ProcessEvent(event)
 
-	// Unknown events should NOT change the state (new behavior)
+	// Unknown events should NOT change the state (new behavior).
 	metrics := manager.GetMetrics()
 	if metrics.AgentState != "InitialState" {
 		t.Errorf("Expected agent state to remain 'InitialState' for unknown event, got %q", metrics.AgentState)
@@ -102,6 +116,8 @@ func TestAggregator_UnknownEvent(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		event         *events.Event
@@ -156,6 +172,8 @@ func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			manager := NewManager()
 			aggregator := NewAggregator(manager)
 
@@ -170,10 +188,12 @@ func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_ContentDelta_WithData(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// Process content delta with data
+	// Process content delta with data.
 	event := &events.Event{
 		Type: events.EventContentDelta,
 		Data: events.ContentDeltaData{Content: "This is some test content with enough characters to count tokens"},
@@ -181,20 +201,22 @@ func TestAggregator_ProcessEvent_ContentDelta_WithData(t *testing.T) {
 	aggregator.ProcessEvent(event)
 
 	metrics := manager.GetMetrics()
-	if metrics.AgentState != "Thinking" {
+	if metrics.AgentState != testStateThinking {
 		t.Errorf("Expected agent state 'Thinking', got %q", metrics.AgentState)
 	}
-	// TPS should be calculated
+	// TPS should be calculated.
 	if metrics.TokensPerSec < 0 {
 		t.Error("Expected non-negative TPS")
 	}
 }
 
 func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// Process content delta with very short content (less than 4 chars)
+	// Process content delta with very short content (less than 4 chars).
 	event := &events.Event{
 		Type: events.EventContentDelta,
 		Data: events.ContentDeltaData{Content: "Hi"},
@@ -202,16 +224,18 @@ func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
 	aggregator.ProcessEvent(event)
 
 	metrics := manager.GetMetrics()
-	if metrics.AgentState != "Thinking" {
+	if metrics.AgentState != testStateThinking {
 		t.Errorf("Expected agent state 'Thinking', got %q", metrics.AgentState)
 	}
 }
 
-func TestAggregator_ProcessEvent_TurnComplete_WithTokens(t *testing.T) {
+func TestAggregator_ProcessEvent_TurnComplete(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// Process turn complete with token data
+	// Process turn complete.
 	event := &events.Event{
 		Type: events.EventTurnComplete,
 		Data: events.TurnEventData{TokensUsed: 500},
@@ -222,35 +246,40 @@ func TestAggregator_ProcessEvent_TurnComplete_WithTokens(t *testing.T) {
 	if metrics.AgentState != "Idle" {
 		t.Errorf("Expected agent state 'Idle', got %q", metrics.AgentState)
 	}
-	if metrics.TokenCount != 500 {
-		t.Errorf("Expected token count 500, got %d", metrics.TokenCount)
+	// Note: TokenCount is NOT updated from EventTurnComplete.TokensUsed
+	// Token counting is handled by SetTokenCount() in the main event loop
+	// which pulls the authoritative count from conversation history.
+	if metrics.TokenCount != 0 {
+		t.Errorf("Expected token count 0 (not updated from event), got %d", metrics.TokenCount)
 	}
 }
 
 func TestAggregator_ProcessEvent_ContentComplete_ResetsStreaming(t *testing.T) {
+	t.Parallel()
+
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// First, start streaming with content delta
+	// First, start streaming with content delta.
 	event := &events.Event{
 		Type: events.EventContentDelta,
 		Data: events.ContentDeltaData{Content: "Some streaming content"},
 	}
 	aggregator.ProcessEvent(event)
 
-	// Verify TPS was calculated
-	metrics := manager.GetMetrics()
-	// TPS might be 0 or positive, just verify it's set
+	// Verify TPS was calculated (GetMetrics called to ensure state is updated).
+	manager.GetMetrics()
+	// TPS might be 0 or positive, just verify it's set.
 
-	// Now complete the content
+	// Now complete the content.
 	event = &events.Event{Type: events.EventContentComplete}
 	aggregator.ProcessEvent(event)
 
-	metrics = manager.GetMetrics()
-	if metrics.AgentState != "Ready" {
-		t.Errorf("Expected agent state 'Ready' after content complete, got %q", metrics.AgentState)
+	metrics := manager.GetMetrics()
+	if metrics.AgentState != "Thinking" {
+		t.Errorf("Expected agent state 'Thinking' after content complete (unchanged), got %q", metrics.AgentState)
 	}
-	// TPS should be reset to 0
+	// TPS should be reset to 0.
 	if metrics.TokensPerSec != 0 {
 		t.Errorf("Expected TPS to be reset to 0 after content complete, got %.2f", metrics.TokensPerSec)
 	}

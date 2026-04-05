@@ -4,7 +4,7 @@
 //   - Buffer: Editable text buffer with cursor management
 //   - History: Command history with navigation and draft preservation
 //   - Model: Combined buffer + history state machine
-//   - Renderer: ANSI-based single-line prompt rendering with Unicode support
+//   - TermRenderer: ANSI-based single-line prompt rendering with Unicode support
 //
 // All components are designed for testing and composition with terminal layers.
 //
@@ -12,26 +12,31 @@
 //
 //	m := prompt.NewModel(1000) // 1000 history entries
 //
-//	// Insert text
+// Insert text
+//
 //	m.Insert('h')
 //	m.Insert('i')
 //
-//	// Edit
+// Edit
+//
 //	m.Backspace()
 //	m.Delete()
 //	m.MoveLeft()
 //	m.MoveRight()
 //
-//	// Kill-line operations
+// Kill-line operations
+//
 //	m.ClearLineLeft()  // Ctrl-U
 //	m.ClearLineRight() // Ctrl-K
 //	m.DeleteWord()     // Ctrl-W
 //
-//	// History navigation
+// History navigation
+//
 //	m.PrevHistory() // Up arrow
 //	m.NextHistory() // Down arrow
 //
-//	// Submit
+// Submit
+//
 //	text := m.Submit() // Returns text, adds to history, clears buffer
 //
 // # Architecture
@@ -41,14 +46,14 @@
 //   - Buffer: Low-level rune buffer with cursor (buffer.go)
 //   - History: Ring buffer with navigation state (history.go)
 //   - Model: High-level API combining buffer + history (model.go)
-//   - Renderer: Single-line ANSI rendering with Unicode width calculation (renderer.go)
+//   - TermRenderer: Single-line ANSI rendering with Unicode width calculation (renderer.go)
 //
 // This separation allows testing each layer independently and provides
 // flexibility for different UI implementations.
 //
 // # Rendering
 //
-// The Renderer provides single-line prompt rendering with:
+// The TermRenderer provides single-line prompt rendering with:
 //   - Accurate cursor positioning using rivo/uniseg for width calculation
 //   - Optional right-aligned status text
 //   - Horizontal scrolling for long lines
@@ -56,7 +61,7 @@
 //
 // Example:
 //
-//	r := prompt.NewRenderer(os.Stdout, 80, "> ")
+//	r := prompt.NewTermRenderer(os.Stdout, 80, "> ")
 //	r.Redraw(model, "typing")  // Renders: "> hello█                typing"
 //
 // # Unicode Handling

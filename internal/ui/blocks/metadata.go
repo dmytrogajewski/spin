@@ -2,7 +2,54 @@ package blocks
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
+)
+
+var (
+	// ErrCommandIsRequired is a sentinel error.
+	ErrCommandIsRequired = errors.New("command is required")
+	// ErrCwdIsRequired is a sentinel error.
+	ErrCwdIsRequired = errors.New("cwd is required")
+	// ErrImpactMustBeLowMediumOr is a sentinel error.
+	ErrImpactMustBeLowMediumOr = errors.New("impact must be low, medium, or high")
+	// ErrExitCodeMustBe0 is a sentinel error.
+	ErrExitCodeMustBe0 = errors.New("exit_code must be >= 0")
+	// ErrDurationMsMustBe0 is a sentinel error.
+	ErrDurationMsMustBe0 = errors.New("duration_ms must be >= 0")
+	// ErrLinesOutMustBe0 is a sentinel error.
+	ErrLinesOutMustBe0 = errors.New("lines_out must be >= 0")
+	// ErrFileIsRequired is a sentinel error.
+	ErrFileIsRequired = errors.New("file is required")
+	// ErrOffsetMustBe0 is a sentinel error.
+	ErrOffsetMustBe0 = errors.New("offset must be >= 0")
+	// ErrLimitMustBe0 is a sentinel error.
+	ErrLimitMustBe0 = errors.New("limit must be >= 0")
+	// ErrPatternIsRequired is a sentinel error.
+	ErrPatternIsRequired = errors.New("pattern is required")
+	// ErrModeMustBeContentFilesWith is a sentinel error.
+	ErrModeMustBeContentFilesWith = errors.New("mode must be content, files_with_matches, or count")
+	// ErrContextMustBe0 is a sentinel error.
+	ErrContextMustBe0 = errors.New("context must be >= 0")
+	// ErrToolNameIsRequired is a sentinel error.
+	ErrToolNameIsRequired = errors.New("tool_name is required")
+	// ErrLinesAddedMustBe0 is a sentinel error.
+	ErrLinesAddedMustBe0 = errors.New("lines_added must be >= 0")
+	// ErrLinesRemovedMustBe0 is a sentinel error.
+	ErrLinesRemovedMustBe0 = errors.New("lines_removed must be >= 0")
+	// ErrTotalMustBe0 is a sentinel error.
+	ErrTotalMustBe0 = errors.New("total must be >= 0")
+	// ErrPendingMustBe0 is a sentinel error.
+	ErrPendingMustBe0 = errors.New("pending must be >= 0")
+	// ErrInProgressMustBe0 is a sentinel error.
+	ErrInProgressMustBe0 = errors.New("in_progress must be >= 0")
+	// ErrCompletedMustBe0 is a sentinel error.
+	ErrCompletedMustBe0 = errors.New("completed must be >= 0")
+	// ErrPendingInProgressCompletedMustEqual is a sentinel error.
+	ErrPendingInProgressCompletedMustEqual = errors.New("pending + in_progress + completed () must equal total ()")
+	// ErrMetadataIsEmpty is a sentinel error.
+	ErrMetadataIsEmpty = errors.New("metadata is empty")
 )
 
 // ExecuteMeta holds metadata for EXECUTE blocks.
@@ -32,23 +79,29 @@ type ExecuteMeta struct {
 // Validate validates the execute metadata.
 func (m *ExecuteMeta) Validate() error {
 	if m.Command == "" {
-		return fmt.Errorf("command is required")
+		return ErrCommandIsRequired
 	}
+
 	if m.CWD == "" {
-		return fmt.Errorf("cwd is required")
+		return ErrCwdIsRequired
 	}
+
 	if m.Impact != "low" && m.Impact != "medium" && m.Impact != "high" {
-		return fmt.Errorf("impact must be low, medium, or high")
+		return ErrImpactMustBeLowMediumOr
 	}
+
 	if m.ExitCode != nil && *m.ExitCode < 0 {
-		return fmt.Errorf("exit_code must be >= 0")
+		return ErrExitCodeMustBe0
 	}
+
 	if m.DurationMS != nil && *m.DurationMS < 0 {
-		return fmt.Errorf("duration_ms must be >= 0")
+		return ErrDurationMsMustBe0
 	}
+
 	if m.LinesOut != nil && *m.LinesOut < 0 {
-		return fmt.Errorf("lines_out must be >= 0")
+		return ErrLinesOutMustBe0
 	}
+
 	return nil
 }
 
@@ -67,14 +120,17 @@ type ReadMeta struct {
 // Validate validates the read metadata.
 func (m *ReadMeta) Validate() error {
 	if m.File == "" {
-		return fmt.Errorf("file is required")
+		return ErrFileIsRequired
 	}
+
 	if m.Offset < 0 {
-		return fmt.Errorf("offset must be >= 0")
+		return ErrOffsetMustBe0
 	}
+
 	if m.Limit < 0 {
-		return fmt.Errorf("limit must be >= 0")
+		return ErrLimitMustBe0
 	}
+
 	return nil
 }
 
@@ -93,14 +149,17 @@ type GrepMeta struct {
 // Validate validates the grep metadata.
 func (m *GrepMeta) Validate() error {
 	if m.Pattern == "" {
-		return fmt.Errorf("pattern is required")
+		return ErrPatternIsRequired
 	}
+
 	if m.Mode != "content" && m.Mode != "files_with_matches" && m.Mode != "count" {
-		return fmt.Errorf("mode must be content, files_with_matches, or count")
+		return ErrModeMustBeContentFilesWith
 	}
+
 	if m.Context < 0 {
-		return fmt.Errorf("context must be >= 0")
+		return ErrContextMustBe0
 	}
+
 	return nil
 }
 
@@ -115,8 +174,9 @@ type ToolMeta struct {
 // Validate validates the tool metadata.
 func (m *ToolMeta) Validate() error {
 	if m.ToolName == "" {
-		return fmt.Errorf("tool_name is required")
+		return ErrToolNameIsRequired
 	}
+
 	return nil
 }
 
@@ -145,14 +205,17 @@ type PatchMeta struct {
 // Validate validates the patch metadata.
 func (m *PatchMeta) Validate() error {
 	if m.File == "" {
-		return fmt.Errorf("file is required")
+		return ErrFileIsRequired
 	}
+
 	if m.LinesAdded != nil && *m.LinesAdded < 0 {
-		return fmt.Errorf("lines_added must be >= 0")
+		return ErrLinesAddedMustBe0
 	}
+
 	if m.LinesRemoved != nil && *m.LinesRemoved < 0 {
-		return fmt.Errorf("lines_removed must be >= 0")
+		return ErrLinesRemovedMustBe0
 	}
+
 	return nil
 }
 
@@ -174,170 +237,102 @@ type PlanMeta struct {
 // Validate validates the plan metadata.
 func (m *PlanMeta) Validate() error {
 	if m.Total < 0 {
-		return fmt.Errorf("total must be >= 0")
+		return ErrTotalMustBe0
 	}
+
 	if m.Pending < 0 {
-		return fmt.Errorf("pending must be >= 0")
+		return ErrPendingMustBe0
 	}
+
 	if m.InProgress < 0 {
-		return fmt.Errorf("in_progress must be >= 0")
+		return ErrInProgressMustBe0
 	}
+
 	if m.Completed < 0 {
-		return fmt.Errorf("completed must be >= 0")
+		return ErrCompletedMustBe0
 	}
+
 	sum := m.Pending + m.InProgress + m.Completed
 	if sum != m.Total {
-		return fmt.Errorf("pending + in_progress + completed (%d) must equal total (%d)", sum, m.Total)
+		return fmt.Errorf(
+			"pending + in_progress + completed (%d) must equal total (%d): %w",
+			sum, m.Total, ErrPendingInProgressCompletedMustEqual,
+		)
 	}
+
+	return nil
+}
+
+// ParseMeta is a generic function that extracts a typed metadata struct from
+// a block's raw JSON metadata. It handles nil-check and JSON unmarshalling.
+func ParseMeta[T any](b *Block) (*T, error) {
+	if len(b.Meta) == 0 {
+		return nil, ErrMetadataIsEmpty
+	}
+
+	var meta T
+
+	err := json.Unmarshal(b.Meta, &meta)
+	if err != nil {
+		typeName := reflect.TypeOf(meta).Name()
+		return nil, fmt.Errorf("failed to unmarshal %s: %w", typeName, err)
+	}
+
+	return &meta, nil
+}
+
+// SetMeta is a generic function that validates a metadata struct and assigns
+// its JSON representation to the block's Meta field.
+func SetMeta[T interface{ Validate() error }](b *Block, m T) error {
+	err := m.Validate()
+	if err != nil {
+		typeName := reflect.TypeOf(m).Elem().Name()
+		return fmt.Errorf("invalid %s: %w", typeName, err)
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		typeName := reflect.TypeOf(m).Elem().Name()
+		return fmt.Errorf("failed to marshal %s: %w", typeName, err)
+	}
+
+	b.Meta = data
+
 	return nil
 }
 
 // ParseExecuteMeta extracts ExecuteMeta from a block's metadata.
-func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
-	}
-	var meta ExecuteMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ExecuteMeta: %w", err)
-	}
-	return &meta, nil
-}
+func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) { return ParseMeta[ExecuteMeta](b) }
 
 // ParseReadMeta extracts ReadMeta from a block's metadata.
-func ParseReadMeta(b *Block) (*ReadMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
-	}
-	var meta ReadMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ReadMeta: %w", err)
-	}
-	return &meta, nil
-}
+func ParseReadMeta(b *Block) (*ReadMeta, error) { return ParseMeta[ReadMeta](b) }
 
 // ParseGrepMeta extracts GrepMeta from a block's metadata.
-func ParseGrepMeta(b *Block) (*GrepMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
-	}
-	var meta GrepMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal GrepMeta: %w", err)
-	}
-	return &meta, nil
-}
+func ParseGrepMeta(b *Block) (*GrepMeta, error) { return ParseMeta[GrepMeta](b) }
 
 // ParseToolMeta extracts ToolMeta from a block's metadata.
-func ParseToolMeta(b *Block) (*ToolMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
-	}
-	var meta ToolMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
-	}
-	return &meta, nil
-}
+func ParseToolMeta(b *Block) (*ToolMeta, error) { return ParseMeta[ToolMeta](b) }
 
 // ParsePatchMeta extracts PatchMeta from a block's metadata.
-func ParsePatchMeta(b *Block) (*PatchMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
-	}
-	var meta PatchMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PatchMeta: %w", err)
-	}
-	return &meta, nil
-}
+func ParsePatchMeta(b *Block) (*PatchMeta, error) { return ParseMeta[PatchMeta](b) }
 
 // ParsePlanMeta extracts PlanMeta from a block's metadata.
-func ParsePlanMeta(b *Block) (*PlanMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
-	}
-	var meta PlanMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PlanMeta: %w", err)
-	}
-	return &meta, nil
-}
+func ParsePlanMeta(b *Block) (*PlanMeta, error) { return ParseMeta[PlanMeta](b) }
 
 // SetExecuteMeta sets ExecuteMeta on a block.
-func SetExecuteMeta(b *Block, m *ExecuteMeta) error {
-	if err := m.Validate(); err != nil {
-		return fmt.Errorf("invalid ExecuteMeta: %w", err)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ExecuteMeta: %w", err)
-	}
-	b.Meta = data
-	return nil
-}
+func SetExecuteMeta(b *Block, m *ExecuteMeta) error { return SetMeta(b, m) }
 
 // SetReadMeta sets ReadMeta on a block.
-func SetReadMeta(b *Block, m *ReadMeta) error {
-	if err := m.Validate(); err != nil {
-		return fmt.Errorf("invalid ReadMeta: %w", err)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ReadMeta: %w", err)
-	}
-	b.Meta = data
-	return nil
-}
+func SetReadMeta(b *Block, m *ReadMeta) error { return SetMeta(b, m) }
 
 // SetGrepMeta sets GrepMeta on a block.
-func SetGrepMeta(b *Block, m *GrepMeta) error {
-	if err := m.Validate(); err != nil {
-		return fmt.Errorf("invalid GrepMeta: %w", err)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal GrepMeta: %w", err)
-	}
-	b.Meta = data
-	return nil
-}
+func SetGrepMeta(b *Block, m *GrepMeta) error { return SetMeta(b, m) }
 
 // SetToolMeta sets ToolMeta on a block.
-func SetToolMeta(b *Block, m *ToolMeta) error {
-	if err := m.Validate(); err != nil {
-		return fmt.Errorf("invalid ToolMeta: %w", err)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ToolMeta: %w", err)
-	}
-	b.Meta = data
-	return nil
-}
+func SetToolMeta(b *Block, m *ToolMeta) error { return SetMeta(b, m) }
 
 // SetPatchMeta sets PatchMeta on a block.
-func SetPatchMeta(b *Block, m *PatchMeta) error {
-	if err := m.Validate(); err != nil {
-		return fmt.Errorf("invalid PatchMeta: %w", err)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal PatchMeta: %w", err)
-	}
-	b.Meta = data
-	return nil
-}
+func SetPatchMeta(b *Block, m *PatchMeta) error { return SetMeta(b, m) }
 
 // SetPlanMeta sets PlanMeta on a block.
-func SetPlanMeta(b *Block, m *PlanMeta) error {
-	if err := m.Validate(); err != nil {
-		return fmt.Errorf("invalid PlanMeta: %w", err)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal PlanMeta: %w", err)
-	}
-	b.Meta = data
-	return nil
-}
+func SetPlanMeta(b *Block, m *PlanMeta) error { return SetMeta(b, m) }

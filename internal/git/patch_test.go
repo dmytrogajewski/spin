@@ -12,15 +12,17 @@ import (
 )
 
 func TestApplyPatch_SimplePatch(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
-	// Create initial file
+	// Create initial file.
 	testFile := filepath.Join(tmpDir, "hello.txt")
-	err := os.WriteFile(testFile, []byte("Hello World\n"), 0644)
+	err := os.WriteFile(testFile, []byte("Hello World\n"), 0o600)
 	require.NoError(t, err)
-	exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "commit", "-m", "initial").Run()
 
 	patchText := `diff --git a/hello.txt b/hello.txt
 index 557db03..980a0d5 100644
@@ -40,12 +42,14 @@ index 557db03..980a0d5 100644
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Message, "successfully")
 
-	// Verify file changed
+	// Verify file changed.
 	content, _ := os.ReadFile(testFile)
 	assert.Equal(t, "Hello Spin\n", string(content))
 }
 
 func TestApplyPatch_AddFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -66,7 +70,7 @@ index 0000000..ce01362
 	require.NoError(t, err)
 	assert.True(t, result.Success)
 
-	// Verify file was created
+	// Verify file was created.
 	newFile := filepath.Join(tmpDir, "new.txt")
 	assert.FileExists(t, newFile)
 	content, _ := os.ReadFile(newFile)
@@ -74,14 +78,16 @@ index 0000000..ce01362
 }
 
 func TestApplyPatch_DeleteFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
-	// Create file to delete
+	// Create file to delete.
 	testFile := filepath.Join(tmpDir, "delete.txt")
-	os.WriteFile(testFile, []byte("to be deleted\n"), 0644)
-	exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	exec.Command("git", "-C", tmpDir, "commit", "-m", "add file").Run()
+	_ = os.WriteFile(testFile, []byte("to be deleted\n"), 0o600)
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "commit", "-m", "add file").Run()
 
 	patchText := `diff --git a/delete.txt b/delete.txt
 deleted file mode 100644
@@ -100,19 +106,21 @@ index abc123..0000000
 	require.NoError(t, err)
 	assert.True(t, result.Success)
 
-	// Verify file was deleted
+	// Verify file was deleted.
 	_, err = os.Stat(testFile)
 	assert.True(t, os.IsNotExist(err))
 }
 
 func TestApplyPatch_DryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
 	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("line 1\nline 2\n"), 0644)
-	exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
+	_ = os.WriteFile(testFile, []byte("line 1\nline 2\n"), 0o600)
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "commit", "-m", "initial").Run()
 
 	patchText := `diff --git a/test.txt b/test.txt
 index abc..def 100644
@@ -135,12 +143,14 @@ index abc..def 100644
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Message, "dry-run")
 
-	// Verify file was NOT modified
+	// Verify file was NOT modified.
 	content, _ := os.ReadFile(testFile)
 	assert.Equal(t, "line 1\nline 2\n", string(content))
 }
 
 func TestApplyPatch_EmptyPatch(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -155,6 +165,8 @@ func TestApplyPatch_EmptyPatch(t *testing.T) {
 }
 
 func TestApplyPatch_ContextCancellation(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -162,15 +174,17 @@ func TestApplyPatch_ContextCancellation(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
 	_, err = repo.ApplyPatch(ctx, "some patch", ApplyPatchOptions{})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context canceled")
 }
 
 func TestPatchError_Error(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		patchErr  *PatchError
@@ -207,26 +221,30 @@ func TestPatchError_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.patchErr.Error()
 			assert.Equal(t, tt.wantMatch, got)
 		})
 	}
 }
 
-// setupGitRepo initializes a git repository in the given directory
+// setupGitRepo initializes a git repository in the given directory.
 func setupGitRepo(t *testing.T, dir string) {
 	t.Helper()
 
-	cmd := exec.Command("git", "init")
+	ctx := t.Context()
+
+	cmd := exec.CommandContext(ctx, "git", "init")
 	cmd.Dir = dir
 	require.NoError(t, cmd.Run(), "git init failed")
 
-	exec.Command("git", "-C", dir, "config", "user.email", "test@example.com").Run()
-	exec.Command("git", "-C", dir, "config", "user.name", "Test User").Run()
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "config", "user.email", "test@example.com").Run()
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "config", "user.name", "Test User").Run()
 
-	// Create initial commit
+	// Create initial commit.
 	readmeFile := filepath.Join(dir, "README.md")
-	os.WriteFile(readmeFile, []byte("# Test Repo\n"), 0644)
-	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "Initial commit").Run()
+	_ = os.WriteFile(readmeFile, []byte("# Test Repo\n"), 0o600)
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "add", ".").Run()
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "commit", "-m", "Initial commit").Run()
 }

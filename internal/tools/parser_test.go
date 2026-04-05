@@ -8,160 +8,130 @@ import (
 )
 
 func TestNewArgumentParser(t *testing.T) {
-	parser := NewArgumentParser()
+	t.Parallel()
+
+	parser := &ArgumentParser{AllowEmpty: true}
 	assert.NotNil(t, parser)
 	assert.True(t, parser.AllowEmpty, "default parser should allow empty arguments")
 }
 
 func TestNewStrictArgumentParser(t *testing.T) {
+	t.Parallel()
+
 	parser := NewStrictArgumentParser()
 	assert.NotNil(t, parser)
 	assert.False(t, parser.AllowEmpty, "strict parser should not allow empty arguments")
 }
 
-func TestArgumentParser_Parse(t *testing.T) {
+func TestArgumentParser_Parse_Valid(t *testing.T) {
+	t.Parallel()
+
+	parser := &ArgumentParser{AllowEmpty: true}
+
 	tests := []struct {
-		name       string
-		parser     *ArgumentParser
-		input      string
-		want       map[string]interface{} // Keep for comparison via ToMap()
-		wantErr    bool
-		errContain string
+		name  string
+		input string
+		want  map[string]any
 	}{
 		{
-			name:   "valid_json_arguments",
-			parser: NewArgumentParser(),
-			input:  `{"path": "/tmp", "recursive": true}`,
-			want: map[string]interface{}{
-				"path":      "/tmp",
-				"recursive": true,
-			},
-			wantErr: false,
+			name: "valid_json_arguments", input: `{"path": "/tmp", "recursive": true}`,
+			want: map[string]any{"path": "/tmp", "recursive": true},
 		},
+		{name: "empty_json_object", input: `{}`, want: map[string]any{}},
+		{name: "empty_string_with_allow_empty", input: "", want: map[string]any{}},
 		{
-			name:    "empty_json_object",
-			parser:  NewArgumentParser(),
-			input:   `{}`,
-			want:    map[string]interface{}{},
-			wantErr: false,
-		},
-		{
-			name:    "empty_string_with_allow_empty",
-			parser:  NewArgumentParser(),
-			input:   "",
-			want:    map[string]interface{}{},
-			wantErr: false,
-		},
-		{
-			name:       "empty_string_with_strict_parser",
-			parser:     NewStrictArgumentParser(),
-			input:      "",
-			want:       nil,
-			wantErr:    true,
-			errContain: "cannot be empty",
-		},
-		{
-			name:       "invalid_json",
-			parser:     NewArgumentParser(),
-			input:      `{"path": "/tmp"`,
-			want:       nil,
-			wantErr:    true,
-			errContain: "failed to parse",
-		},
-		{
-			name:       "not_json_object",
-			parser:     NewArgumentParser(),
-			input:      `["not", "an", "object"]`,
-			want:       nil,
-			wantErr:    true,
-			errContain: "failed to parse",
-		},
-		{
-			name:   "complex_nested_json",
-			parser: NewArgumentParser(),
-			input:  `{"config": {"host": "localhost", "port": 8080}, "enabled": true}`,
-			want: map[string]interface{}{
-				"config": map[string]interface{}{
-					"host": "localhost",
-					"port": float64(8080), // JSON numbers unmarshal to float64
-				},
+			name:  "complex_nested_json",
+			input: `{"config": {"host": "localhost", "port": 8080}, "enabled": true}`,
+			want: map[string]any{
+				"config":  map[string]any{"host": "localhost", "port": float64(8080)},
 				"enabled": true,
 			},
-			wantErr: false,
 		},
+		{name: "json_with_null_values", input: `{"path": null, "count": 0}`, want: map[string]any{"path": nil, "count": float64(0)}},
 		{
-			name:   "json_with_null_values",
-			parser: NewArgumentParser(),
-			input:  `{"path": null, "count": 0}`,
-			want: map[string]interface{}{
-				"path":  nil,
-				"count": float64(0),
-			},
-			wantErr: false,
-		},
-		{
-			name:   "json_with_array_value",
-			parser: NewArgumentParser(),
-			input:  `{"files": ["a.txt", "b.txt"], "verbose": true}`,
-			want: map[string]interface{}{
-				"files":   []interface{}{"a.txt", "b.txt"},
-				"verbose": true,
-			},
-			wantErr: false,
+			name:  "json_with_array_value",
+			input: `{"files": ["a.txt", "b.txt"], "verbose": true}`,
+			want:  map[string]any{"files": []any{"a.txt", "b.txt"}, "verbose": true},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.parser.Parse(tt.input)
+			t.Parallel()
 
-			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errContain != "" {
-					assert.Contains(t, err.Error(), tt.errContain)
-				}
-				assert.Equal(t, ToolParameters{}, got)
-			} else {
-				require.NoError(t, err)
-				// Compare via ToMap() for easier assertion
-				assert.Equal(t, tt.want, got.ToMap())
-			}
+			got, err := parser.Parse(tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got.ToMap())
+		})
+	}
+}
+
+func TestArgumentParser_Parse_Errors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		parser     *ArgumentParser
+		input      string
+		errContain string
+	}{
+		{name: "empty_string_with_strict_parser", parser: NewStrictArgumentParser(), input: "", errContain: "cannot be empty"},
+		{name: "invalid_json", parser: &ArgumentParser{AllowEmpty: true}, input: `{"path": "/tmp"`, errContain: "failed to parse"},
+		{
+			name: "not_json_object", parser: &ArgumentParser{AllowEmpty: true},
+			input: `["not", "an", "object"]`, errContain: "failed to parse",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.parser.Parse(tt.input)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContain)
+			assert.Equal(t, ToolParameters{}, got)
 		})
 	}
 }
 
 func TestArgumentParser_CustomConfiguration(t *testing.T) {
+	t.Parallel()
 	t.Run("can_modify_allow_empty", func(t *testing.T) {
+		t.Parallel()
+
 		parser := &ArgumentParser{AllowEmpty: false}
 
-		// Should error on empty
+		// Should error on empty.
 		_, err := parser.Parse("")
-		assert.Error(t, err)
+		require.Error(t, err)
 
-		// Change to allow empty
+		// Change to allow empty.
 		parser.AllowEmpty = true
 		result, err := parser.Parse("")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, ToolParameters{}, result)
 	})
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkArgumentParser_Parse(b *testing.B) {
-	parser := NewArgumentParser()
-	input := `{"path": "/tmp/file.txt", "mode": 0644, "recursive": true}`
+	parser := &ArgumentParser{AllowEmpty: true}
+	input := `{"path": "/tmp/file.txt", "mode": 0o600, "recursive": true}`
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = parser.Parse(input)
 	}
 }
 
 func BenchmarkArgumentParser_ParseEmpty(b *testing.B) {
-	parser := NewArgumentParser()
+	parser := &ArgumentParser{AllowEmpty: true}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = parser.Parse("")
 	}
 }

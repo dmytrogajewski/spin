@@ -4,22 +4,25 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/retrieval"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewGenerator_Success(t *testing.T) {
-	// Setup
+	t.Parallel()
+
+	// Setup.
 	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
 
-	// Create generator
+	// Create generator.
 	gen, err := NewGenerator(Config{
 		LLM:       mockLLM,
 		Playbook:  pb,
@@ -31,6 +34,8 @@ func TestNewGenerator_Success(t *testing.T) {
 }
 
 func TestNewGenerator_MissingLLM(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
 
@@ -39,12 +44,14 @@ func TestNewGenerator_MissingLLM(t *testing.T) {
 		Retriever: ret,
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "LLM provider is required")
 }
 
 func TestNewGenerator_MissingPlaybook(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
@@ -54,12 +61,14 @@ func TestNewGenerator_MissingPlaybook(t *testing.T) {
 		Retriever: ret,
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "playbook is required")
 }
 
 func TestNewGenerator_MissingRetriever(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 
@@ -68,15 +77,17 @@ func TestNewGenerator_MissingRetriever(t *testing.T) {
 		Playbook: pb,
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "retriever is required")
 }
 
 func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
-	// Setup with empty playbook
+	// Setup with empty playbook.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("The answer is 42")
 
@@ -90,7 +101,7 @@ func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Execute ItemizedLearning
+	// Execute ItemizedLearning.
 	req := ItemizedLearningRequest{
 		Query:       "What is the answer?",
 		TopK:        5,
@@ -110,13 +121,15 @@ func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
 }
 
 func TestItemizedLearning_WithBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
-	// Setup playbook with bullets
+	// Setup playbook with bullets.
 	embedder := embedding.NewMockEmbedder(1536)
 	pb := playbook.New(nil, embedder)
 
-	// Add bullets with embeddings
+	// Add bullets with embeddings.
 	emb1, err := embedder.Embed(ctx, "Always validate input")
 	require.NoError(t, err)
 	b1, err := bullet.New("Always validate input", bullet.WithEmbedding(emb1))
@@ -129,7 +142,7 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, pb.Add(ctx, b2))
 
-	// Setup mock LLM with feedback
+	// Setup mock LLM with feedback.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("Use proper validation.\n\nHELPFUL: [B0]\nHARMFUL: []")
 
@@ -141,7 +154,7 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Execute ItemizedLearning
+	// Execute ItemizedLearning.
 	req := ItemizedLearningRequest{
 		Query:       "How to validate?",
 		TopK:        2,
@@ -161,14 +174,22 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 	assert.Len(t, resp.Feedback.HelpfulBullets, 1)
 	assert.Equal(t, "B0", resp.Feedback.HelpfulBullets[0])
 
-	// Verify bullet counters were updated
-	updatedBullet, found := pb.Get(b1.ID)
+	// Verify exactly one bullet had its helpful count incremented (B0 maps to
+	// whichever bullet was retrieved first — order depends on similarity tie-breaking).
+	updatedB1, found := pb.Get(b1.ID)
 	require.True(t, found)
-	assert.Equal(t, 1, updatedBullet.HelpfulCount)
-	assert.Equal(t, 0, updatedBullet.HarmfulCount)
+	updatedB2, found := pb.Get(b2.ID)
+	require.True(t, found)
+
+	totalHelpful := updatedB1.HelpfulCount + updatedB2.HelpfulCount
+	assert.Equal(t, 1, totalHelpful, "exactly one bullet should have been marked helpful")
+	assert.Equal(t, 0, updatedB1.HarmfulCount)
+	assert.Equal(t, 0, updatedB2.HarmfulCount)
 }
 
 func TestItemizedLearning_WithGroundTruth(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -196,11 +217,13 @@ func TestItemizedLearning_WithGroundTruth(t *testing.T) {
 	resp, err := gen.ItemizedLearning(ctx, req)
 
 	require.NoError(t, err)
-	assert.True(t, resp.Success) // Has ground truth and non-empty output
+	assert.True(t, resp.Success) // Has ground truth and non-empty output.
 	assert.True(t, resp.Trajectory.Success)
 }
 
 func TestItemizedLearning_TrajectoryMetadata(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -228,17 +251,19 @@ func TestItemizedLearning_TrajectoryMetadata(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "gpt-4", resp.Trajectory.Metadata.Model)
-	assert.Equal(t, 0.8, resp.Trajectory.Metadata.Temperature)
+	assert.InDelta(t, 0.8, resp.Trajectory.Metadata.Temperature, 1e-9)
 	assert.Equal(t, 2000, resp.Trajectory.Metadata.MaxTokens)
-	assert.GreaterOrEqual(t, resp.Trajectory.Metadata.TotalTokens, 0) // MockProvider generates usage
+	assert.GreaterOrEqual(t, resp.Trajectory.Metadata.TotalTokens, 0) // MockProvider generates usage.
 	assert.Equal(t, 1, resp.Trajectory.Metadata.Turns)
 	assert.GreaterOrEqual(t, resp.Trajectory.Metadata.Duration.Milliseconds(), int64(0))
 }
 
 func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
-	// Setup playbook with bullets
+	// Setup playbook with bullets.
 	embedder := embedding.NewMockEmbedder(1536)
 	pb := playbook.New(nil, embedder)
 
@@ -248,7 +273,7 @@ func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, pb.Add(ctx, b))
 
-	// Mock LLM marks bullet as harmful
+	// Mock LLM marks bullet as harmful.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("Don't use that advice.\n\nHELPFUL: []\nHARMFUL: [B0]")
 
@@ -273,7 +298,7 @@ func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.Feedback.HarmfulBullets, 1)
 
-	// Verify harmful counter was incremented
+	// Verify harmful counter was incremented.
 	updatedBullet, found := pb.Get(b.ID)
 	require.True(t, found)
 	assert.Equal(t, 0, updatedBullet.HelpfulCount)
@@ -281,9 +306,11 @@ func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 }
 
 func TestItemizedLearning_InvalidFeedbackGraceful(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
-	// Mock LLM with malformed feedback
+	// Mock LLM with malformed feedback.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("Just a response with no feedback markers")
 
@@ -307,7 +334,7 @@ func TestItemizedLearning_InvalidFeedbackGraceful(t *testing.T) {
 
 	resp, err := gen.ItemizedLearning(ctx, req)
 
-	// Should succeed even with invalid feedback
+	// Should succeed even with invalid feedback.
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Empty(t, resp.Feedback.HelpfulBullets)
@@ -315,6 +342,8 @@ func TestItemizedLearning_InvalidFeedbackGraceful(t *testing.T) {
 }
 
 func TestGenerateBullets_FromTask(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -350,12 +379,14 @@ func TestGenerateBullets_FromTask(t *testing.T) {
 	assert.Contains(t, bullets[1].Content, "SQL injection")
 	assert.Contains(t, bullets[2].Content, "error handling")
 
-	// Check tags were applied
+	// Check tags were applied.
 	assert.Equal(t, "security", bullets[0].Tags["category"])
 	assert.Equal(t, "task", bullets[0].Tags["source"])
 }
 
 func TestGenerateBullets_FromTrajectory(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -389,21 +420,12 @@ func TestGenerateBullets_FromTrajectory(t *testing.T) {
 }
 
 func TestGenerateBullets_FromFeedback(t *testing.T) {
-	ctx := context.Background()
+	t.Parallel()
 
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse(`1. Add more comprehensive input validation
-2. Include timeout mechanisms for external calls`)
+	mockLLM.SetResponse("1. Add more comprehensive input validation\n2. Include timeout mechanisms for external calls")
 
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, mockLLM)
 
 	req := BulletGenerationRequest{
 		Input:      "Users reported timeout issues during high load...",
@@ -411,13 +433,15 @@ func TestGenerateBullets_FromFeedback(t *testing.T) {
 		MaxBullets: 2,
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.NoError(t, err)
 	assert.Len(t, bullets, 2)
 }
 
 func TestGenerateBullets_FromError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -452,10 +476,10 @@ func TestGenerateBullets_FromError(t *testing.T) {
 	assert.Equal(t, "runtime-error", bullets[0].Tags["type"])
 }
 
-func TestGenerateBullets_EmptyInput(t *testing.T) {
-	ctx := context.Background()
+// newTestGenerator creates a generator with a mock LLM for testing.
+func newTestGenerator(t *testing.T, mockLLM *llm.MockProvider) Generator {
+	t.Helper()
 
-	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
 
@@ -465,6 +489,14 @@ func TestGenerateBullets_EmptyInput(t *testing.T) {
 		Retriever: ret,
 	})
 	require.NoError(t, err)
+
+	return gen
+}
+
+func TestGenerateBullets_EmptyInput(t *testing.T) {
+	t.Parallel()
+
+	gen := newTestGenerator(t, llm.NewMockProvider("test-provider"))
 
 	req := BulletGenerationRequest{
 		Input:      "",
@@ -472,26 +504,17 @@ func TestGenerateBullets_EmptyInput(t *testing.T) {
 		MaxBullets: 5,
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, bullets)
 	assert.Contains(t, err.Error(), "input is required")
 }
 
 func TestGenerateBullets_UnknownSourceType(t *testing.T) {
-	ctx := context.Background()
+	t.Parallel()
 
-	mockLLM := llm.NewMockProvider("test-provider")
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, llm.NewMockProvider("test-provider"))
 
 	req := BulletGenerationRequest{
 		Input:      "Some input",
@@ -499,81 +522,60 @@ func TestGenerateBullets_UnknownSourceType(t *testing.T) {
 		MaxBullets: 5,
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, bullets)
 	assert.Contains(t, err.Error(), "unknown source type")
 }
 
 func TestGenerateBullets_NoLimit(t *testing.T) {
-	ctx := context.Background()
+	t.Parallel()
 
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse(`1. First strategy
-2. Second strategy
-3. Third strategy
-4. Fourth strategy
-5. Fifth strategy
-6. Sixth strategy`)
+	mockLLM.SetResponse(
+		"1. First strategy\n2. Second strategy\n3. Third strategy\n" +
+			"4. Fourth strategy\n5. Fifth strategy\n6. Sixth strategy")
 
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, mockLLM)
 
 	req := BulletGenerationRequest{
 		Input:      "Test input",
 		SourceType: "task",
-		MaxBullets: 0, // No limit - model decides
+		MaxBullets: 0, // No limit - model decides.
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.NoError(t, err)
-	assert.Len(t, bullets, 6) // All 6 bullets returned, no truncation
+	assert.Len(t, bullets, 6) // All 6 bullets returned, no truncation.
 }
 
 func TestGenerateBullets_AllReturned(t *testing.T) {
-	ctx := context.Background()
+	t.Parallel()
 
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse(`1. Strategy one
-2. Strategy two
-3. Strategy three
-4. Strategy four
-5. Strategy five
-6. Strategy six
-7. Strategy seven`)
+	mockLLM.SetResponse(
+		"1. Strategy one\n2. Strategy two\n3. Strategy three\n" +
+			"4. Strategy four\n5. Strategy five\n6. Strategy six\n7. Strategy seven")
 
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, mockLLM)
 
 	req := BulletGenerationRequest{
 		Input:      "Test input",
 		SourceType: "task",
-		MaxBullets: 0, // No limit
+		MaxBullets: 0, // No limit.
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.NoError(t, err)
-	assert.Len(t, bullets, 7) // All 7 bullets returned
+	assert.Len(t, bullets, 7) // All 7 bullets returned.
 }
 
 func TestParseBulletCandidates(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -618,6 +620,8 @@ func TestParseBulletCandidates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := parseBulletCandidates(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})

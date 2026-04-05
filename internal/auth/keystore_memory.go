@@ -1,6 +1,10 @@
 package auth
 
-import "sync"
+import (
+	"context"
+	"fmt"
+	"sync"
+)
 
 // memoryKeystore implements Keystore using in-memory storage.
 // This is used as a fallback when platform-specific keystores are unavailable.
@@ -10,14 +14,18 @@ type memoryKeystore struct {
 }
 
 // newMemoryKeystore creates a new in-memory keystore.
-func newMemoryKeystore() Keystore {
+func newMemoryKeystore() *memoryKeystore {
 	return &memoryKeystore{
 		data: make(map[string]string),
 	}
 }
 
 // Get retrieves a value by key.
-func (m *memoryKeystore) Get(key string) (string, error) {
+func (m *memoryKeystore) Get(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("keystore get: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -25,29 +33,44 @@ func (m *memoryKeystore) Get(key string) (string, error) {
 	if !exists {
 		return "", ErrNotFound
 	}
+
 	return value, nil
 }
 
 // Set stores a key-value pair.
-func (m *memoryKeystore) Set(key, value string) error {
+func (m *memoryKeystore) Set(ctx context.Context, key, value string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("keystore set: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.data[key] = value
+
 	return nil
 }
 
 // Delete removes a key-value pair.
-func (m *memoryKeystore) Delete(key string) error {
+func (m *memoryKeystore) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("keystore delete: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.data, key)
+
 	return nil
 }
 
 // List returns all stored keys.
-func (m *memoryKeystore) List() ([]string, error) {
+func (m *memoryKeystore) List(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("keystore list: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -55,5 +78,6 @@ func (m *memoryKeystore) List() ([]string, error) {
 	for k := range m.data {
 		keys = append(keys, k)
 	}
+
 	return keys, nil
 }

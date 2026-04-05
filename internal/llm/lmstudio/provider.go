@@ -1,5 +1,3 @@
-// Package lmstudio provides an LMStudio LLM provider implementation.
-// LMStudio is a desktop application for running LLMs locally with an OpenAI-compatible API.
 package lmstudio
 
 import (
@@ -19,10 +17,10 @@ type Config struct {
 	// BaseURL is the API endpoint URL (default: http://localhost:1234/v1)
 	BaseURL string
 
-	// Model is the model name (optional, can be specified per request)
+	// Model is the model name (optional, can be specified per request).
 	Model string
 
-	// Timeout is the request timeout (defaults to 5 minutes)
+	// Timeout is the request timeout (defaults to 5 minutes).
 	Timeout time.Duration
 }
 
@@ -34,30 +32,25 @@ type Provider struct {
 
 // NewProvider creates a new LMStudio provider.
 func NewProvider(cfg Config) (*Provider, error) {
-	// Set defaults
+	// Set defaults.
 	baseURL := cfg.BaseURL
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	model := cfg.Model
 	// If model is empty, use a placeholder - LMStudio can accept empty model
-	// as it may use the loaded model automatically
+	// as it may use the loaded model automatically.
 	if model == "" {
 		model = "local-model"
 	}
 
-	// Create OpenAI provider with resolved config
+	// Create OpenAI provider with resolved config.
 	openaiCfg := openai.Config{
 		BaseURL: baseURL,
-		APIKey:  "", // No API key for local LMStudio
+		APIKey:  "", // No API key for local LMStudio.
 		Model:   model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	openaiProvider, err := openai.NewProvider(openaiCfg)
@@ -75,10 +68,10 @@ func (p *Provider) Name() string {
 
 // Capabilities returns the provider's capabilities.
 func (p *Provider) Capabilities() llm.Capabilities {
-	// Get capabilities from OpenAI provider
+	// Get capabilities from OpenAI provider.
 	caps := p.Provider.Capabilities()
 
-	// LMStudio typically doesn't support vision
+	// LMStudio typically doesn't support vision.
 	caps.Vision = false
 
 	return caps

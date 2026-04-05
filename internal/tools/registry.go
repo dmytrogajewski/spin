@@ -3,56 +3,108 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"sync"
+	"slices"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
+)
+
+var (
+	// ErrEnumValueMustBeString is a sentinel error.
+	ErrEnumValueMustBeString = errors.New("enum value must be string")
+	// ErrValueNotInAllowedValues is a sentinel error.
+	ErrValueNotInAllowedValues = errors.New("value  not in allowed values")
 )
 
 // Registry manages tool registration, lookup, and execution.
 // It provides a centralized registry for all tools available to the agent.
 type Registry struct {
-	mu    sync.RWMutex
-	tools map[string]Tool
+	tools *syncmap.Map[string, Tool]
 }
 
 // NewRegistry creates a new empty tool registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		tools: make(map[string]Tool),
+		tools: syncmap.New[string, Tool](),
 	}
+}
+
+// NewRegistryWithBuiltins creates a new registry pre-populated with all builtin tools.
+// This is the recommended constructor for most use cases.
+func NewRegistryWithBuiltins() *Registry {
+	registry := NewRegistry()
+	for _, tool := range BuiltinTools {
+		if regErr := registry.Register(tool); regErr != nil {
+			panic(fmt.Sprintf("failed to register builtin tool %q: %v", tool.Name(), regErr))
+		}
+	}
+
+	return registry
+}
+
+// NewDefaultRegistry creates a new registry with all builtin tools properly configured.
+// This factory function accepts workDir string and environment interface for tools that need them.
+//
+// Tools registered:
+//   - read_file, write_file, list_directory (no parameters needed)
+//   - shell_command (accepts nil parameters, can be configured separately)
+//   - get_context (requires env interface{}, can be *agent.Environment or nil)
+//   - apply_patch (requires workDir string)
+//   - file_search (requires workDir string)
+//   - git_context (requires workDir string)
+//
+// This is the recommended factory for most use cases where tools need proper configuration.
+// If workDir is empty, tools that require WorkDir are created with empty string.
+// If env is nil, get_context is created with nil.
+func NewDefaultRegistry(workDir string, env fmt.Stringer) *Registry {
+	// Create registry with builtin tools as base.
+	registry := NewRegistryWithBuiltins()
+
+	// Replace tools that need configuration with properly configured versions
+	// Note: shell_command is left as-is (nil parameters) since it can be configured
+	// separately via RegisterOrReplace if needed.
+	if err := registry.RegisterOrReplace(NewGetContextTool(env)); err != nil {
+		panic(fmt.Sprintf("failed to register get_context tool: %v", err))
+	}
+
+	if err := registry.RegisterOrReplace(NewApplyPatchTool(workDir)); err != nil {
+		panic(fmt.Sprintf("failed to register apply_patch tool: %v", err))
+	}
+
+	if err := registry.RegisterOrReplace(NewFileSearchTool(workDir)); err != nil {
+		panic(fmt.Sprintf("failed to register file_search tool: %v", err))
+	}
+
+	if err := registry.RegisterOrReplace(NewGitContextTool(workDir)); err != nil {
+		panic(fmt.Sprintf("failed to register git_context tool: %v", err))
+	}
+
+	return registry
 }
 
 // Register adds a tool to the registry.
 // Returns ErrDuplicateTool if a tool with the same name already exists.
 func (r *Registry) Register(tool Tool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	name := tool.Name()
-	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("%w: %s", ErrDuplicateTool, name)
+	if !r.tools.SetIfAbsent(tool.Name(), tool) {
+		return fmt.Errorf("%w: %s", ErrDuplicateTool, tool.Name())
 	}
 
-	r.tools[name] = tool
 	return nil
 }
 
 // RegisterOrReplace adds a tool to the registry, replacing any existing tool with the same name.
 // This is useful when you want to override default tools with custom implementations.
 func (r *Registry) RegisterOrReplace(tool Tool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.tools.Set(tool.Name(), tool)
 
-	r.tools[tool.Name()] = tool
 	return nil
 }
 
 // Get retrieves a tool by name.
 // Returns ErrToolNotFound if the tool doesn't exist.
 func (r *Registry) Get(name string) (Tool, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	tool, exists := r.tools[name]
+	tool, exists := r.tools.Get(name)
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", ErrToolNotFound, name)
 	}
@@ -62,27 +114,19 @@ func (r *Registry) Get(name string) (Tool, error) {
 
 // List returns all registered tools.
 func (r *Registry) List() []Tool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	tools := make([]Tool, 0, len(r.tools))
-	for _, tool := range r.tools {
-		tools = append(tools, tool)
-	}
-
-	return tools
+	return r.tools.Values()
 }
 
 // ListSchemas returns the schemas for all registered tools.
 // This is used to provide available tools to the LLM.
 func (r *Registry) ListSchemas() []ToolSchema {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	var schemas []ToolSchema
 
-	schemas := make([]ToolSchema, 0, len(r.tools))
-	for _, tool := range r.tools {
+	r.tools.Range(func(_ string, tool Tool) bool {
 		schemas = append(schemas, tool.Schema())
-	}
+
+		return true
+	})
 
 	return schemas
 }
@@ -90,18 +134,19 @@ func (r *Registry) ListSchemas() []ToolSchema {
 // Execute runs a tool by name with the given parameters.
 // It validates parameters against the tool's schema before execution.
 func (r *Registry) Execute(ctx context.Context, name string, params ToolParameters) (ToolResult, error) {
-	// Get the tool
+	// Get the tool.
 	tool, err := r.Get(name)
 	if err != nil {
 		return ToolResult{}, err
 	}
 
-	// Validate parameters
-	if err := r.validateParams(tool.Schema(), params); err != nil {
+	// Validate parameters.
+	err = validateParams(tool.Schema(), params)
+	if err != nil {
 		return ToolResult{}, err
 	}
 
-	// Execute the tool
+	// Execute the tool.
 	result, err := tool.Execute(ctx, params)
 	if err != nil {
 		return ToolResult{}, fmt.Errorf("tool execution failed: %w", err)
@@ -111,57 +156,62 @@ func (r *Registry) Execute(ctx context.Context, name string, params ToolParamete
 }
 
 // validateParams validates tool parameters against the schema.
-func (r *Registry) validateParams(schema ToolSchema, params ToolParameters) error {
+func validateParams(schema ToolSchema, params ToolParameters) error {
 	paramSchema := schema.Function.Parameters
 
-	if err := r.validateRequiredParams(paramSchema, params); err != nil {
+	err := validateRequiredParams(paramSchema, params)
+	if err != nil {
 		return err
 	}
 
-	return r.validateParameterTypes(paramSchema, params)
+	return validateParameterTypes(paramSchema, params)
 }
 
 // validateRequiredParams checks that all required parameters are present.
-func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params ToolParameters) error {
+func validateRequiredParams(paramSchema ParameterSchema, params ToolParameters) error {
 	for _, required := range paramSchema.Required {
 		if !params.Has(required) {
 			return fmt.Errorf("%w: missing required parameter %s", ErrInvalidParameters, required)
 		}
 	}
+
 	return nil
 }
 
 // validateParameterTypes validates the types and values of all parameters.
-func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params ToolParameters) error {
+func validateParameterTypes(paramSchema ParameterSchema, params ToolParameters) error {
 	for _, name := range params.Keys() {
-		if err := r.validateParameter(paramSchema, name, params); err != nil {
+		err := validateParameter(paramSchema, name, params)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
 // validateParameter validates a single parameter.
-func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, params ToolParameters) error {
+func validateParameter(paramSchema ParameterSchema, name string, params ToolParameters) error {
 	propDef, exists := paramSchema.Properties[name]
 	if !exists {
-		return r.createUnknownParameterError(name, paramSchema.Properties)
+		return createUnknownParameterError(name, paramSchema.Properties)
 	}
 
-	// Get the raw JSON value for this parameter
+	// Get the raw JSON value for this parameter.
 	rawValue, exists := params.raw[name]
 	if !exists {
 		return fmt.Errorf("%w: parameter %s not found", ErrInvalidParameters, name)
 	}
 
-	if !r.validateTypeFromJSON(rawValue, propDef.Type) {
+	if !validateTypeFromJSON(rawValue, propDef.Type) {
 		return fmt.Errorf("%w: parameter %s has wrong type (expected %s)",
 			ErrInvalidParameters, name, propDef.Type)
 	}
 
 	if len(propDef.Enum) > 0 {
-		if err := r.validateEnumFromJSON(rawValue, propDef.Enum); err != nil {
-			return fmt.Errorf("%w: parameter %s %v", ErrInvalidParameters, name, err)
+		err := validateEnumFromJSON(rawValue, propDef.Enum)
+		if err != nil {
+			return fmt.Errorf("%w: parameter %s %w", ErrInvalidParameters, name, err)
 		}
 	}
 
@@ -169,57 +219,63 @@ func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, p
 }
 
 // createUnknownParameterError creates an error for unknown parameters.
-func (r *Registry) createUnknownParameterError(name string, properties map[string]PropertyDefinition) error {
+func createUnknownParameterError(name string, properties map[string]PropertyDefinition) error {
 	validParams := make([]string, 0, len(properties))
 	for pname := range properties {
 		validParams = append(validParams, pname)
 	}
+
 	return fmt.Errorf("%w: unknown parameter %q (valid parameters: %v)",
 		ErrInvalidParameters, name, validParams)
 }
 
 // validateTypeFromJSON checks if a JSON value matches the expected JSON schema type.
-func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType string) bool {
+func validateTypeFromJSON(rawValue json.RawMessage, expectedType string) bool {
 	switch expectedType {
 	case "string":
 		var s string
+
 		return json.Unmarshal(rawValue, &s) == nil && string(rawValue[0]) == `"`
 	case "number":
 		var f float64
+
 		return json.Unmarshal(rawValue, &f) == nil
 	case "integer":
-		// Check if it's a valid number
+		// Check if it's a valid number.
 		var f float64
-		if err := json.Unmarshal(rawValue, &f); err != nil {
+
+		err := json.Unmarshal(rawValue, &f)
+		if err != nil {
 			return false
 		}
-		// Check if it's an integer (no decimal point in JSON)
+		// Check if it's an integer (no decimal point in JSON).
 		return f == float64(int64(f))
 	case "boolean":
 		var b bool
+
 		return json.Unmarshal(rawValue, &b) == nil && (string(rawValue) == "true" || string(rawValue) == "false")
 	case "array":
 		return len(rawValue) > 0 && rawValue[0] == '['
 	case "object":
 		return len(rawValue) > 0 && rawValue[0] == '{'
 	default:
-		// Unknown type - accept for now
+		// Unknown type - accept.
 		return true
 	}
 }
 
 // validateEnumFromJSON checks if a JSON value is in the allowed enum values.
-func (r *Registry) validateEnumFromJSON(rawValue json.RawMessage, enum []string) error {
+func validateEnumFromJSON(rawValue json.RawMessage, enum []string) error {
 	var strValue string
-	if err := json.Unmarshal(rawValue, &strValue); err != nil {
-		return fmt.Errorf("enum value must be string")
+
+	err := json.Unmarshal(rawValue, &strValue)
+	if err != nil {
+		return ErrEnumValueMustBeString
 	}
 
-	for _, allowed := range enum {
-		if strValue == allowed {
-			return nil
-		}
+	if slices.Contains(enum, strValue) {
+		return nil
 	}
 
-	return fmt.Errorf("value %q not in allowed values %v", strValue, enum)
+	return fmt.Errorf("value %q not in allowed values %v: %w", strValue, enum, ErrValueNotInAllowedValues)
 }

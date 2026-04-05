@@ -2,10 +2,10 @@ package playbook
 
 import (
 	"context"
-	"math"
 	"sort"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 // searchResult holds a bullet with its similarity score.
@@ -18,67 +18,84 @@ type searchResult struct {
 // Returns top-k most similar bullets sorted by similarity (descending).
 // Returns empty slice if embedder is nil or no bullets have embeddings.
 func (p *Playbook) Search(ctx context.Context, query string, topK int) ([]*bullet.Bullet, error) {
-	if p.embedder == nil {
-		return []*bullet.Bullet{}, nil
-	}
-
-	// Generate query embedding
-	queryEmbed, err := p.embedder.Embed(ctx, query)
+	scored, err := p.SearchWithScores(ctx, query, topK)
 	if err != nil {
 		return nil, err
 	}
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	// Calculate similarities
-	results := make([]searchResult, 0)
-	for _, b := range p.bullets {
-		if len(b.Embedding) == 0 {
-			continue
-		}
-
-		similarity := cosineSimilarity(queryEmbed, b.Embedding)
-		results = append(results, searchResult{
-			bullet:     b,
-			similarity: similarity,
-		})
-	}
-
-	// Sort by similarity descending
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].similarity > results[j].similarity
-	})
-
-	// Return top-k
-	if topK > len(results) {
-		topK = len(results)
-	}
-
-	bullets := make([]*bullet.Bullet, topK)
-	for i := 0; i < topK; i++ {
-		bullets[i] = results[i].bullet
+	bullets := make([]*bullet.Bullet, len(scored))
+	for i, r := range scored {
+		bullets[i] = r.Bullet
 	}
 
 	return bullets, nil
 }
 
-// cosineSimilarity calculates cosine similarity between two vectors.
-func cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0.0
+// SearchResult contains a bullet with its similarity score.
+type SearchResult struct {
+	Bullet     *bullet.Bullet
+	Similarity float64
+}
+
+// SearchWithScores finds bullets by semantic similarity and returns scores.
+// Returns top-k most similar bullets with their similarity scores sorted by similarity (descending).
+// Returns empty slice if embedder is nil or no bullets have embeddings.
+func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int) ([]SearchResult, error) {
+	if p.embedder == nil {
+		return []SearchResult{}, nil
 	}
 
-	var dotProduct, normA, normB float64
-	for i := 0; i < len(a); i++ {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
+	// Generate query embedding.
+	queryEmbed, err := p.embedder.Embed(ctx, query)
+	if err != nil {
+		return nil, err
 	}
 
-	if normA == 0 || normB == 0 {
-		return 0.0
+	// Calculate similarities.
+	results := make([]searchResult, 0)
+
+	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
+		if len(b.Embedding) == 0 {
+			return true
+		}
+
+		similarity := vector.CosineSimilarity(queryEmbed, b.Embedding)
+		// Clamp similarity to [0, 1] to avoid floating point precision issues.
+		if similarity > 1.0 {
+			similarity = 1.0
+		} else if similarity < 0.0 {
+			similarity = 0.0
+		}
+
+		results = append(results, searchResult{
+			bullet:     b,
+			similarity: similarity,
+		})
+
+		return true
+	})
+
+	// Sort by similarity descending, breaking ties by bullet ID for deterministic ordering.
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].similarity != results[j].similarity {
+			return results[i].similarity > results[j].similarity
+		}
+
+		return results[i].bullet.ID < results[j].bullet.ID
+	})
+
+	// Return top-k.
+	if topK > len(results) {
+		topK = len(results)
 	}
 
-	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
+	searchResults := make([]SearchResult, topK)
+	for i := range topK {
+		searchResults[i] = SearchResult{
+			Bullet:     results[i].bullet,
+			Similarity: results[i].similarity,
+		}
+	}
+
+	return searchResults, nil
 }

@@ -2,8 +2,22 @@ package blocks
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+)
+
+var (
+	// ErrBlockIDIsEmpty is returned when a block has an empty ID.
+	ErrBlockIDIsEmpty = errors.New("block ID is empty")
+	// ErrInvalidBlockType is returned when a block type is not recognized.
+	ErrInvalidBlockType = errors.New("invalid block type")
+	// ErrInvalidFoldState is a sentinel error.
+	ErrInvalidFoldState = errors.New("invalid fold state")
+	// ErrInvalidSeverity is a sentinel error.
+	ErrInvalidSeverity = errors.New("invalid severity")
+	// ErrInvalidTimestamp is a sentinel error.
+	ErrInvalidTimestamp = errors.New("invalid timestamp")
 )
 
 // Block represents a single block in the TUI timeline.
@@ -51,7 +65,7 @@ type Block struct {
 //   - Current timestamp
 func NewBlock(blockType BlockType) *Block {
 	return &Block{
-		ID:        GenerateBlockID(0), // sequence will be set by caller if needed
+		ID:        GenerateBlockID(0), // sequence is set by caller if needed.
 		Type:      blockType,
 		Meta:      nil,
 		Body:      "",
@@ -71,24 +85,29 @@ func NewBlock(blockType BlockType) *Block {
 //   - Timestamp is zero or negative
 func (b *Block) Validate() error {
 	if b.ID == "" {
-		return fmt.Errorf("block ID is empty")
+		return ErrBlockIDIsEmpty
 	}
+
 	if !b.Type.Valid() {
-		return fmt.Errorf("invalid block type: %s", b.Type)
+		return fmt.Errorf("invalid block type: %s: %w", b.Type, ErrInvalidBlockType)
 	}
+
 	if !b.FoldState.Valid() {
-		return fmt.Errorf("invalid fold state: %s", b.FoldState)
+		return fmt.Errorf("invalid fold state: %s: %w", b.FoldState, ErrInvalidFoldState)
 	}
+
 	if !b.Severity.Valid() {
-		return fmt.Errorf("invalid severity: %s", b.Severity)
+		return fmt.Errorf("invalid severity: %s: %w", b.Severity, ErrInvalidSeverity)
 	}
+
 	if b.Timestamp <= 0 {
-		return fmt.Errorf("invalid timestamp: %d", b.Timestamp)
+		return fmt.Errorf("invalid timestamp: %d: %w", b.Timestamp, ErrInvalidTimestamp)
 	}
+
 	return nil
 }
 
-// Type-safe metadata accessors
+// Type-safe metadata accessors.
 
 // GetExecuteMeta retrieves ExecuteMeta from the block.
 func (b *Block) GetExecuteMeta() (*ExecuteMeta, error) {
@@ -160,8 +179,9 @@ func (b *Block) SetPlanMeta(m *PlanMeta) error {
 func GenerateBlockID(seq int) string {
 	ts := time.Now().UnixMilli()
 	if seq == 0 {
-		// Use nanoseconds mod 100 as sequence for uniqueness within same millisecond
-		seq = int(time.Now().UnixNano()%100) + 1
+		// Use nanoseconds mod 100 as sequence for uniqueness within same millisecond.
+		seq = int(time.Now().UnixNano()%blockIDSeqMod) + 1
 	}
+
 	return fmt.Sprintf("blk_%d_%02d", ts, seq)
 }

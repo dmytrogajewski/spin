@@ -1,6 +1,9 @@
 package auth
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 // Keystore provides platform-agnostic credential storage.
 //
@@ -14,29 +17,29 @@ type Keystore interface {
 	// Get retrieves a value by key.
 	//
 	// Returns ErrNotFound if the key doesn't exist.
-	Get(key string) (string, error)
+	Get(ctx context.Context, key string) (string, error)
 
 	// Set stores a key-value pair.
 	//
 	// If the key already exists, the value is overwritten.
-	Set(key, value string) error
+	Set(ctx context.Context, key, value string) error
 
 	// Delete removes a key-value pair.
 	//
 	// This operation is idempotent - deleting a non-existent key succeeds.
-	Delete(key string) error
+	Delete(ctx context.Context, key string) error
 
 	// List returns all stored keys.
 	//
 	// Returns an empty slice if no keys are stored.
-	List() ([]string, error)
+	List(ctx context.Context) ([]string, error)
 }
 
 var (
-	// ErrNotFound indicates the requested key was not found
+	// ErrNotFound indicates the requested key was not found.
 	ErrNotFound = errors.New("key not found")
 
-	// ErrNoKeystore indicates no keystore is available
+	// ErrNoKeystore indicates no keystore is available.
 	ErrNoKeystore = errors.New("no keystore available")
 )
 

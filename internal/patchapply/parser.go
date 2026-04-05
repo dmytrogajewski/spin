@@ -2,22 +2,40 @@ package patchapply
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strings"
 )
 
+var (
+	// ErrLine is a sentinel error.
+	ErrLine = errors.New("line")
+	// ErrUnexpectedEOFMissingEndPatch is a sentinel error.
+	ErrUnexpectedEOFMissingEndPatch = errors.New("unexpected EOF: missing '*** End Patch'")
+	// ErrUnknownOperation is a sentinel error.
+	ErrUnknownOperation = errors.New("unknown operation")
+	// ErrInvalidPath is a sentinel error.
+	ErrInvalidPath = errors.New("invalid path")
+	// ErrInvalidLineFormat is a sentinel error.
+	ErrInvalidLineFormat = errors.New("invalid line format")
+	// ErrInvalidNewPath is a sentinel error.
+	ErrInvalidNewPath = errors.New("invalid new path")
+	// ErrInvalidLinePrefix is a sentinel error.
+	ErrInvalidLinePrefix = errors.New("invalid line prefix")
+)
+
 // Parser parses patch text into structured Patch AST.
-// It uses a streaming approach with bufio.Scanner for memory efficiency.
+// It uses a streaming approach with [bufio.Scanner] for memory efficiency.
 type Parser struct {
 	scanner  *bufio.Scanner
 	lineNum  int
-	peeked   *string // Peeked line for lookahead
-	peekLine int     // Line number of peeked line
+	peeked   *string // Peeked line for lookahead.
+	peekLine int     // Line number of peeked line.
 }
 
 // NewParser creates a new patch parser for the given text.
 //
-// The parser uses a streaming approach with bufio.Scanner for memory efficiency.
+// The parser uses a streaming approach with [bufio.Scanner] for memory efficiency.
 // It can handle large patches (>10k lines) without loading everything into memory.
 func NewParser(text string) *Parser {
 	return &Parser{
@@ -38,10 +56,11 @@ func NewParser(text string) *Parser {
 // Errors include line numbers for precise debugging.
 func (p *Parser) Parse() (*Patch, error) {
 	if !p.expectLine("*** Begin Patch") {
-		return nil, fmt.Errorf("line %d: expected '*** Begin Patch'", p.lineNum)
+		return nil, fmt.Errorf("line %d: expected '*** Begin Patch': %w", p.lineNum, ErrLine)
 	}
 
 	var ops []FileOperation
+
 	for {
 		line, ok := p.nextLine()
 		if !ok {
@@ -58,14 +77,16 @@ func (p *Parser) Parse() (*Patch, error) {
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", p.lineNum, err)
 		}
+
 		ops = append(ops, op)
 	}
 
-	if err := p.scanner.Err(); err != nil {
+	err := p.scanner.Err()
+	if err != nil {
 		return nil, fmt.Errorf("scan error at line %d: %w", p.lineNum, err)
 	}
 
-	return nil, fmt.Errorf("unexpected EOF: missing '*** End Patch'")
+	return nil, ErrUnexpectedEOFMissingEndPatch
 }
 
 // nextLine returns the next line, either from peek buffer or scanner.
@@ -75,13 +96,16 @@ func (p *Parser) nextLine() (string, bool) {
 		p.lineNum = p.peekLine
 		p.peeked = nil
 		p.peekLine = 0
+
 		return line, true
 	}
 
 	if !p.scanner.Scan() {
 		return "", false
 	}
+
 	p.lineNum++
+
 	return p.scanner.Text(), true
 }
 
@@ -98,6 +122,7 @@ func (p *Parser) peek() (string, bool) {
 	line := p.scanner.Text()
 	p.peeked = &line
 	p.peekLine = p.lineNum + 1
+
 	return line, true
 }
 
@@ -107,6 +132,7 @@ func (p *Parser) expectLine(expected string) bool {
 	if !ok {
 		return false
 	}
+
 	return strings.TrimSpace(line) == expected
 }
 
@@ -115,45 +141,45 @@ func (p *Parser) parseOperation(line string) (FileOperation, error) {
 	switch {
 	case strings.HasPrefix(line, "*** Add File: "):
 		path := strings.TrimSpace(strings.TrimPrefix(line, "*** Add File: "))
+
 		return p.parseAddFile(path)
 	case strings.HasPrefix(line, "*** Delete File: "):
 		path := strings.TrimSpace(strings.TrimPrefix(line, "*** Delete File: "))
+
 		return p.parseDeleteFile(path)
 	case strings.HasPrefix(line, "*** Update File: "):
 		path := strings.TrimSpace(strings.TrimPrefix(line, "*** Update File: "))
+
 		return p.parseUpdateFile(path)
 	default:
-		return nil, fmt.Errorf("unknown operation: %q", line)
+		return nil, fmt.Errorf("unknown operation: %q: %w", line, ErrUnknownOperation)
 	}
 }
 
 // parseAddFile parses an add file operation.
 func (p *Parser) parseAddFile(path string) (*AddFile, error) {
-	// Validate path
-	if strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed", path)
-	}
-	if strings.Contains(path, "..") {
-		return nil, fmt.Errorf("invalid path %q: path traversal not allowed", path)
+	if err := validatePath(path, ErrInvalidPath); err != nil {
+		return nil, err
 	}
 
 	lines := make([]string, 0)
+
 	for {
 		line, ok := p.peek()
 		if !ok {
 			break
 		}
 
-		// Check for next operation or end
+		// Check for next operation or end.
 		if strings.HasPrefix(strings.TrimSpace(line), "***") {
 			break
 		}
 
-		// Consume the line
+		// Consume the line.
 		line, _ = p.nextLine()
 
 		if !strings.HasPrefix(line, "+") {
-			return nil, fmt.Errorf("invalid line format: expected '+' prefix, got: %q", line)
+			return nil, fmt.Errorf("invalid line format: expected '+' prefix, got: %q: %w", line, ErrInvalidLineFormat)
 		}
 
 		lines = append(lines, strings.TrimPrefix(line, "+"))
@@ -167,12 +193,8 @@ func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 
 // parseDeleteFile parses a delete file operation.
 func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
-	// Validate path
-	if strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed", path)
-	}
-	if strings.Contains(path, "..") {
-		return nil, fmt.Errorf("invalid path %q: path traversal not allowed", path)
+	if err := validatePath(path, ErrInvalidPath); err != nil {
+		return nil, err
 	}
 
 	return &DeleteFile{
@@ -182,12 +204,8 @@ func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 
 // parseUpdateFile parses an update file operation.
 func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
-	// Validate path
-	if strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed", path)
-	}
-	if strings.Contains(path, "..") {
-		return nil, fmt.Errorf("invalid path %q: path traversal not allowed", path)
+	if err := validatePath(path, ErrInvalidPath); err != nil {
+		return nil, err
 	}
 
 	update := &UpdateFile{
@@ -195,31 +213,64 @@ func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 		Hunks:    make([]Hunk, 0),
 	}
 
-	// Check for optional move operation or first hunk
+	if err := p.parseMoveDirective(update); err != nil {
+		return nil, err
+	}
+
+	if err := p.parseHunks(update); err != nil {
+		return nil, err
+	}
+
+	return update, nil
+}
+
+// validatePath checks a path for absolute paths and path traversal.
+func validatePath(path string, sentinel error) error {
+	if strings.HasPrefix(path, "/") {
+		return fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, sentinel)
+	}
+
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, sentinel)
+	}
+
+	return nil
+}
+
+// parseMoveDirective parses an optional "*** Move to:" directive.
+func (p *Parser) parseMoveDirective(update *UpdateFile) error {
 	line, ok := p.peek()
 	if !ok {
-		return update, nil
+		return nil
 	}
 
 	line = strings.TrimSpace(line)
-
-	// Check for move operation
-	if strings.HasPrefix(line, "*** Move to: ") {
-		p.nextLine() // consume the peeked line
-		newPath := strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: "))
-		if strings.HasPrefix(newPath, "/") {
-			return nil, fmt.Errorf("invalid new path %q: absolute paths not allowed", newPath)
-		}
-		if strings.Contains(newPath, "..") {
-			return nil, fmt.Errorf("invalid new path %q: path traversal not allowed", newPath)
-		}
-		update.NewPath = newPath
-
-		// After move, check for hunks
-		// (will be checked in the parse hunks loop below)
+	if !strings.HasPrefix(line, "*** Move to: ") {
+		return nil
 	}
 
-	// Parse hunks
+	p.nextLine()
+
+	newPath := strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: "))
+	if err := validatePath(newPath, ErrInvalidNewPath); err != nil {
+		return err
+	}
+
+	update.NewPath = newPath
+
+	return nil
+}
+
+// isOperationBoundary returns true if the line starts a new operation or ends the patch.
+func isOperationBoundary(line string) bool {
+	return strings.HasPrefix(line, "*** End Patch") ||
+		strings.HasPrefix(line, "*** Add File") ||
+		strings.HasPrefix(line, "*** Delete File") ||
+		strings.HasPrefix(line, "*** Update File")
+}
+
+// parseHunks parses all hunks for an update operation.
+func (p *Parser) parseHunks(update *UpdateFile) error {
 	for {
 		line, ok := p.peek()
 		if !ok {
@@ -227,27 +278,21 @@ func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 		}
 
 		line = strings.TrimSpace(line)
-
-		// Check for next operation or end
-		if strings.HasPrefix(line, "*** End Patch") || strings.HasPrefix(line, "*** Add File") ||
-			strings.HasPrefix(line, "*** Delete File") || strings.HasPrefix(line, "*** Update File") {
+		if isOperationBoundary(line) || !strings.HasPrefix(line, "@@") {
 			break
 		}
 
-		if strings.HasPrefix(line, "@@") {
-			p.nextLine() // consume the peeked line
-			hunk, err := p.parseHunk(line)
-			if err != nil {
-				return nil, err
-			}
-			update.Hunks = append(update.Hunks, *hunk)
-		} else {
-			// Unexpected line
-			break
+		p.nextLine()
+
+		hunk, err := p.parseHunk(line)
+		if err != nil {
+			return err
 		}
+
+		update.Hunks = append(update.Hunks, *hunk)
 	}
 
-	return update, nil
+	return nil
 }
 
 // parseHunk parses a single hunk starting with @@.
@@ -265,7 +310,9 @@ func (p *Parser) parseHunk(firstLine string) (*Hunk, error) {
 		}
 
 		line, _ = p.nextLine()
-		if err := p.parseHunkLine(hunk, line); err != nil {
+
+		err := p.parseHunkLine(hunk, line)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -284,20 +331,23 @@ func (p *Parser) createHunk(firstLine string) *Hunk {
 // isHunkEnd checks if the line indicates the end of a hunk.
 func (p *Parser) isHunkEnd(line string) bool {
 	trimmed := strings.TrimSpace(line)
+
 	return strings.HasPrefix(trimmed, "@@") || strings.HasPrefix(trimmed, "***")
 }
 
 // parseHunkLine parses a single line within a hunk.
 func (p *Parser) parseHunkLine(hunk *Hunk, line string) error {
-	if len(line) == 0 {
+	if line == "" {
 		hunk.Changes = append(hunk.Changes, LineChange{
 			Type: LineContext,
 			Text: "",
 		})
+
 		return nil
 	}
 
 	prefix := line[0]
+
 	text := ""
 	if len(line) > 1 {
 		text = line[1:]
@@ -325,7 +375,8 @@ func (p *Parser) addLineChange(hunk *Hunk, prefix byte, text string) error {
 			Text: text,
 		})
 	default:
-		return fmt.Errorf("invalid line prefix: expected ' ', '-', or '+', got %q", prefix)
+		return fmt.Errorf("invalid line prefix: expected ' ', '-', or '+', got %q: %w", prefix, ErrInvalidLinePrefix)
 	}
+
 	return nil
 }

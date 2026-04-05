@@ -1,17 +1,35 @@
+// Package shell provides shell context management.
 package shell
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/process"
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
+)
+
+var (
+	// ErrShellIntegrationDisabled is a sentinel error.
+	ErrShellIntegrationDisabled = errors.New("shell integration disabled")
+	// ErrNoShellAvailable is a sentinel error.
+	ErrNoShellAvailable = errors.New("no shell available")
+	// ErrShellCommandTimedOutAfter is a sentinel error.
+	ErrShellCommandTimedOutAfter = errors.New("shell command timed out after")
+	// ErrExecutionFailed is a sentinel error.
+	ErrExecutionFailed = errors.New("execution failed")
 )
 
 // Context provides shell-aware functionality for the agent.
@@ -40,14 +58,16 @@ func NewContext(enabled bool, workDir string, logger *slog.Logger, timeout time.
 // Initialize sets up Shell context.
 func (s *Context) Initialize(ctx context.Context) error {
 	if !s.enabled {
-		s.logger.Debug("Shell integration disabled")
+		s.logger.DebugContext(ctx, "Shell integration disabled")
+
 		return nil
 	}
 
-	// Detect shell
+	// Detect shell.
 	shell, shellPath := s.detectShell()
 	if shell == "" {
-		s.logger.Debug("No shell detected")
+		s.logger.DebugContext(ctx, "No shell detected")
+
 		return nil
 	}
 
@@ -56,10 +76,10 @@ func (s *Context) Initialize(ctx context.Context) error {
 	s.shellPath = shellPath
 	s.mu.Unlock()
 
-	// Gather shell environment variables
+	// Gather shell environment variables.
 	s.gatherEnvironmentVars()
 
-	s.logger.Info("Shell integration initialized",
+	s.logger.InfoContext(ctx, "Shell integration initialized",
 		"shell", shell,
 		"path", shellPath,
 		"workDir", s.workDir)
@@ -76,6 +96,7 @@ func (s *Context) IsEnabled() bool {
 func (s *Context) GetShell() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.shell
 }
 
@@ -83,6 +104,7 @@ func (s *Context) GetShell() string {
 func (s *Context) GetShellPath() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.shellPath
 }
 
@@ -91,11 +113,10 @@ func (s *Context) GetEnvironmentVars() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Return a copy to avoid race conditions
+	// Return a copy to avoid race conditions.
 	result := make(map[string]string)
-	for k, v := range s.envVars {
-		result[k] = v
-	}
+	maps.Copy(result, s.envVars)
+
 	return result
 }
 
@@ -138,104 +159,106 @@ func (s *Context) GetContextInfo() ContextInfo {
 // ExecuteShellCommand executes a command using the detected shell.
 func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (string, error) {
 	if !s.IsEnabled() {
-		return "", fmt.Errorf("shell integration disabled")
+		return "", ErrShellIntegrationDisabled
 	}
 
 	shellPath := s.GetShellPath()
 	if shellPath == "" {
-		return "", fmt.Errorf("no shell available")
+		return "", ErrNoShellAvailable
 	}
 
-	// Create a context with timeout for the shell command
-	// Use the shell timeout, but respect parent context deadline if shorter
-	effectiveTimeout := s.timeout
-	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
-		remaining := time.Until(deadline)
-		if remaining < effectiveTimeout && remaining > 0 {
-			effectiveTimeout = remaining
-		}
-	}
-
-	cmdCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
+	cmdCtx, cancel := context.WithTimeout(ctx, execx.EffectiveTimeout(ctx, s.timeout))
 	defer cancel()
 
-	// Determine shell arguments based on shell type
-	var args []string
-	switch s.GetShell() {
-	case "bash":
-		args = []string{"-c", command}
-	case "zsh":
-		args = []string{"-c", command}
-	case "fish":
-		args = []string{"-c", command}
-	case "sh":
-		args = []string{"-c", command}
-	case "cmd":
-		args = []string{"/c", command}
-	case "powershell":
-		args = []string{"-Command", command}
-	default:
-		args = []string{"-c", command}
-	}
+	args := s.shellArgs(command)
 
 	cmd := exec.CommandContext(cmdCtx, shellPath, args...)
 	cmd.Dir = s.workDir
-
-	// Set environment variables
 	cmd.Env = s.buildEnvironment()
 
-	// Capture stdout and stderr separately to detect duplicates
+	process.SetGroup(cmd)
+
+	cmd.Cancel = func() error {
+		return process.KillGroup(cmd)
+	}
+
 	var stdout, stderr bytes.Buffer
+
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
 	if err != nil {
-		// Check if it's a timeout error
-		if cmdCtx.Err() == context.DeadlineExceeded {
-			// Report the timeout that was configured (not remaining time which is negative)
-			return "", fmt.Errorf("shell command timed out after %v: %s", s.timeout, command)
-		}
-		// Check if it's an ExitError to get exit code and stderr
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode := exitErr.ExitCode()
-
-			// Get stdout and stderr as strings
-			stdoutStr := strings.TrimSpace(stdout.String())
-			stderrStr := strings.TrimSpace(stderr.String())
-
-			// If stdout and stderr are identical, only show it once
-			if stdoutStr == stderrStr && stderrStr != "" {
-				return "", fmt.Errorf("execution failed: exit status %d\n%s", exitCode, stderrStr)
-			}
-
-			// If they're different, show both
-			var output string
-			if stderrStr != "" && stdoutStr != "" {
-				// Both have content and are different
-				output = fmt.Sprintf("Error: %s\nOutput: %s", stderrStr, stdoutStr)
-			} else if stderrStr != "" {
-				// Only stderr has content
-				output = stderrStr
-			} else if stdoutStr != "" {
-				// Only stdout has content
-				output = stdoutStr
-			}
-
-			if output != "" {
-				return "", fmt.Errorf("execution failed: exit status %d\n%s", exitCode, output)
-			}
-			return "", fmt.Errorf("execution failed: exit status %d", exitCode)
-		}
-		return "", fmt.Errorf("shell command failed: %w", err)
+		return "", s.handleRunError(cmdCtx, err, command, &stdout, &stderr)
 	}
 
-	// For successful commands, combine stdout and stderr
 	output := stdout.String()
 	if stderr.String() != "" {
 		output += stderr.String()
 	}
+
 	return output, nil
+}
+
+// shellArgs returns the appropriate command-line arguments for the detected shell.
+func (s *Context) shellArgs(command string) []string {
+	switch s.GetShell() {
+	case "cmd":
+		return []string{"/c", command}
+	case "powershell":
+		return []string{"-Command", command}
+	default:
+		return []string{"-c", command}
+	}
+}
+
+// handleRunError processes errors from cmd.Run and returns an appropriate error.
+func (s *Context) handleRunError(
+	cmdCtx context.Context, err error, command string,
+	stdout, stderr *bytes.Buffer,
+) error {
+	if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("shell command timed out after %v: %s: %w", s.timeout, command, ErrShellCommandTimedOutAfter)
+	}
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return fmt.Errorf("shell command failed: %w", err)
+	}
+
+	return s.formatExitError(exitErr, stdout, stderr)
+}
+
+// formatExitError builds the error message for a non-zero exit code.
+func (s *Context) formatExitError(exitErr *exec.ExitError, stdout, stderr *bytes.Buffer) error {
+	exitCode := exitErr.ExitCode()
+	stdoutStr := strings.TrimSpace(stdout.String())
+	stderrStr := strings.TrimSpace(stderr.String())
+
+	output := mergeOutputs(stdoutStr, stderrStr)
+
+	if output != "" {
+		return fmt.Errorf("execution failed: exit status %d\n%s: %w", exitCode, output, ErrExecutionFailed)
+	}
+
+	return fmt.Errorf("execution failed: exit status %d: %w", exitCode, ErrExecutionFailed)
+}
+
+// mergeOutputs combines stdout and stderr, deduplicating when identical.
+func mergeOutputs(stdoutStr, stderrStr string) string {
+	if stdoutStr == stderrStr {
+		return stderrStr
+	}
+
+	if stderrStr != "" && stdoutStr != "" {
+		return fmt.Sprintf("Error: %s\nOutput: %s", stderrStr, stdoutStr)
+	}
+
+	if stderrStr != "" {
+		return stderrStr
+	}
+
+	return stdoutStr
 }
 
 // IsShellCommand checks if a command should be executed through the shell.
@@ -244,14 +267,14 @@ func (s *Context) IsShellCommand(command string) bool {
 		return false
 	}
 
-	// Commands that typically need shell interpretation
+	// Commands that typically need shell interpretation.
 	shellCommands := []string{
 		"cd", "pwd", "export", "unset", "alias", "unalias",
 		"source", ".", "eval", "exec", "history", "jobs",
 		"fg", "bg", "kill", "wait", "trap", "exit",
 	}
 
-	// Check if command starts with shell operators
+	// Check if command starts with shell operators.
 	shellOperators := []string{
 		"&&", "||", "|", ">", ">>", "<", "<<", "&", ";",
 		"$(", "$", "`", "~", "*", "?", "[", "]", "{", "}",
@@ -259,30 +282,28 @@ func (s *Context) IsShellCommand(command string) bool {
 
 	cmd := strings.TrimSpace(command)
 
-	// Check for shell operators
+	// Check for shell operators.
 	for _, op := range shellOperators {
 		if strings.Contains(cmd, op) {
 			return true
 		}
 	}
 
-	// Check for shell commands
+	// Check for shell commands.
 	parts := strings.Fields(cmd)
 	if len(parts) > 0 {
 		cmdName := parts[0]
-		for _, shellCmd := range shellCommands {
-			if cmdName == shellCmd {
-				return true
-			}
+		if slices.Contains(shellCommands, cmdName) {
+			return true
 		}
 	}
 
-	// Check for environment variable expansion
+	// Check for environment variable expansion.
 	if strings.Contains(cmd, "$") || strings.Contains(cmd, "${") {
 		return true
 	}
 
-	// Check for wildcards
+	// Check for wildcards.
 	if strings.Contains(cmd, "*") || strings.Contains(cmd, "?") {
 		return true
 	}
@@ -304,20 +325,21 @@ func (s *Context) SetWorkingDirectory(workDir string) {
 
 // Close cleans up shell context resources.
 func (s *Context) Close() error {
-	// No resources to clean up
+	// No resources to clean up.
 	return nil
 }
 
 // detectShell detects the current shell.
-func (s *Context) detectShell() (string, string) {
-	// Check SHELL environment variable first
+func (s *Context) detectShell() (shellName, shellPath string) {
+	// Check SHELL environment variable first.
 	if shell := os.Getenv("SHELL"); shell != "" {
-		if _, err := exec.LookPath(shell); err == nil {
+		_, err := exec.LookPath(shell)
+		if err == nil {
 			return s.extractShellName(shell), shell
 		}
 	}
 
-	// Check common shell paths
+	// Check common shell paths.
 	commonShells := map[string][]string{
 		"bash": {"/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash"},
 		"zsh":  {"/bin/zsh", "/usr/bin/zsh", "/usr/local/bin/zsh"},
@@ -327,18 +349,22 @@ func (s *Context) detectShell() (string, string) {
 
 	for shellName, paths := range commonShells {
 		for _, path := range paths {
-			if _, err := exec.LookPath(path); err == nil {
+			_, err := exec.LookPath(path)
+			if err == nil {
 				return shellName, path
 			}
 		}
 	}
 
-	// Windows-specific shells
+	// Windows-specific shells.
 	if runtime.GOOS == "windows" {
-		if cmdPath, err := exec.LookPath("cmd.exe"); err == nil {
+		cmdPath, err := exec.LookPath("cmd.exe")
+		if err == nil {
 			return "cmd", cmdPath
 		}
-		if psPath, err := exec.LookPath("powershell.exe"); err == nil {
+
+		psPath, err := exec.LookPath("powershell.exe")
+		if err == nil {
 			return "powershell", psPath
 		}
 	}
@@ -350,7 +376,7 @@ func (s *Context) detectShell() (string, string) {
 func (s *Context) extractShellName(shellPath string) string {
 	baseName := filepath.Base(shellPath)
 
-	// Remove .exe extension on Windows
+	// Remove .exe extension on Windows.
 	if runtime.GOOS == "windows" && strings.HasSuffix(baseName, ".exe") {
 		baseName = strings.TrimSuffix(baseName, ".exe")
 	}
@@ -358,47 +384,36 @@ func (s *Context) extractShellName(shellPath string) string {
 	return baseName
 }
 
+// shellSpecificVars maps shell names to their specific environment variables.
+var shellSpecificVars = map[string][]string{
+	"bash": {"BASH_VERSION", "BASHOPTS", "BASHPID", "BASH_SOURCE"},
+	"zsh":  {"ZSH_VERSION", "ZDOTDIR", "ZSH_CACHE_DIR"},
+	"fish": {"FISH_VERSION", "XDG_CONFIG_HOME"},
+}
+
 // gatherEnvironmentVars gathers shell-specific environment variables.
 func (s *Context) gatherEnvironmentVars() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Common shell environment variables
-	shellVars := []string{
+	// Common shell environment variables.
+	commonVars := []string{
 		"SHELL", "TERM", "COLUMNS", "LINES", "PS1", "PS2", "PS3", "PS4",
 		"HISTSIZE", "HISTFILESIZE", "HISTFILE", "HISTCONTROL", "HISTIGNORE",
 		"PATH", "HOME", "USER", "LOGNAME", "HOSTNAME", "PWD", "OLDPWD",
 		"EDITOR", "VISUAL", "PAGER", "MANPAGER", "LANG", "LC_ALL", "LC_CTYPE",
 	}
 
-	for _, varName := range shellVars {
+	s.collectEnvVars(commonVars)
+	s.collectEnvVars(shellSpecificVars[s.shell])
+}
+
+// collectEnvVars reads the given environment variable names and stores non-empty values.
+// Must be called with s.mu held.
+func (s *Context) collectEnvVars(varNames []string) {
+	for _, varName := range varNames {
 		if value := os.Getenv(varName); value != "" {
 			s.envVars[varName] = value
-		}
-	}
-
-	// Shell-specific variables
-	switch s.shell {
-	case "bash":
-		bashVars := []string{"BASH_VERSION", "BASHOPTS", "BASHPID", "BASH_SOURCE"}
-		for _, varName := range bashVars {
-			if value := os.Getenv(varName); value != "" {
-				s.envVars[varName] = value
-			}
-		}
-	case "zsh":
-		zshVars := []string{"ZSH_VERSION", "ZDOTDIR", "ZSH_CACHE_DIR"}
-		for _, varName := range zshVars {
-			if value := os.Getenv(varName); value != "" {
-				s.envVars[varName] = value
-			}
-		}
-	case "fish":
-		fishVars := []string{"FISH_VERSION", "XDG_CONFIG_HOME"}
-		for _, varName := range fishVars {
-			if value := os.Getenv(varName); value != "" {
-				s.envVars[varName] = value
-			}
 		}
 	}
 }
@@ -408,10 +423,10 @@ func (s *Context) buildEnvironment() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Start with current environment
+	// Start with current environment.
 	env := os.Environ()
 
-	// Add shell-specific variables
+	// Add shell-specific variables.
 	for key, value := range s.envVars {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
 	}

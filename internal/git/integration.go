@@ -2,14 +2,27 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 )
 
-// GitIntegration provides Git-aware functionality for the agent.
-type GitIntegration struct {
+const minDiffContextLines = 5
+
+var (
+	// ErrNoGitStatusAvailable is a sentinel error.
+	ErrNoGitStatusAvailable = errors.New("no Git status available")
+	// ErrNotAGitRepository is a sentinel error.
+	ErrNotAGitRepository = errors.New("not a Git repository")
+)
+
+// Integration provides Git-aware functionality for the agent.
+type Integration struct {
 	enabled    bool
 	workDir    string
 	logger     *slog.Logger
@@ -18,9 +31,9 @@ type GitIntegration struct {
 	lastStatus *Status
 }
 
-// NewGitIntegration creates a new Git integration.
-func NewGitIntegration(enabled bool, workDir string, logger *slog.Logger) *GitIntegration {
-	return &GitIntegration{
+// NewIntegration creates a new Git integration.
+func NewIntegration(enabled bool, workDir string, logger *slog.Logger) *Integration {
+	return &Integration{
 		enabled: enabled,
 		workDir: workDir,
 		logger:  logger,
@@ -28,68 +41,74 @@ func NewGitIntegration(enabled bool, workDir string, logger *slog.Logger) *GitIn
 }
 
 // Initialize sets up Git integration.
-func (g *GitIntegration) Initialize(ctx context.Context) error {
+func (g *Integration) Initialize(ctx context.Context) error {
 	if !g.enabled {
-		g.logger.Debug("Git integration disabled")
+		g.logger.DebugContext(ctx, "Git integration disabled")
+
 		return nil
 	}
 
-	// Check if workDir is a Git repository
+	// Check if workDir is a Git repository.
 	repo, err := Discover(ctx, g.workDir)
 	if err != nil {
-		g.logger.Debug("Not a Git repository", "workDir", g.workDir, "error", err)
-		return nil // Not an error, just not a Git repo
+		g.logger.DebugContext(ctx, "Not a Git repository", "workDir", g.workDir, "error", err)
+
+		return nil // Not an error, just not a Git repo.
 	}
 
 	g.mu.Lock()
 	g.repo = repo
 	g.mu.Unlock()
 
-	g.logger.Info("Git integration initialized",
+	g.logger.InfoContext(ctx, "Git integration initialized",
 		"repo", repo.Root(),
 		"workDir", g.workDir)
 
-	// Get initial status
-	if err := g.refreshStatus(ctx); err != nil {
-		g.logger.Warn("Failed to get initial Git status", "error", err)
+	// Get initial status.
+	err = g.updateStatus(ctx)
+	if err != nil {
+		g.logger.WarnContext(ctx, "Failed to get initial Git status", "error", err)
 	}
 
 	return nil
 }
 
 // IsEnabled returns true if Git integration is enabled.
-func (g *GitIntegration) IsEnabled() bool {
+func (g *Integration) IsEnabled() bool {
 	return g.enabled
 }
 
 // IsRepository returns true if the working directory is a Git repository.
-func (g *GitIntegration) IsRepository() bool {
+func (g *Integration) IsRepository() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
+
 	return g.repo != nil
 }
 
 // GetRepository returns the Git repository if available.
-func (g *GitIntegration) GetRepository() *Repository {
+func (g *Integration) GetRepository() *Repository {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
+
 	return g.repo
 }
 
 // GetStatus returns the current Git status.
-func (g *GitIntegration) GetStatus() *Status {
+func (g *Integration) GetStatus() *Status {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
+
 	return g.lastStatus
 }
 
 // RefreshStatus updates the Git status.
-func (g *GitIntegration) RefreshStatus(ctx context.Context) error {
-	return g.refreshStatus(ctx)
+func (g *Integration) RefreshStatus(ctx context.Context) error {
+	return g.updateStatus(ctx)
 }
 
-// refreshStatus updates the Git status.
-func (g *GitIntegration) refreshStatus(ctx context.Context) error {
+// updateStatus updates the Git status.
+func (g *Integration) updateStatus(ctx context.Context) error {
 	if !g.IsRepository() {
 		return nil
 	}
@@ -107,43 +126,44 @@ func (g *GitIntegration) refreshStatus(ctx context.Context) error {
 }
 
 // GetBranch returns the current branch name.
-func (g *GitIntegration) GetBranch() (string, error) {
+func (g *Integration) GetBranch() (string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return "", fmt.Errorf("no Git status available")
+		return "", ErrNoGitStatusAvailable
 	}
 
 	return status.Branch, nil
 }
 
 // GetRemoteURL returns the remote URL for the current branch.
-func (g *GitIntegration) GetRemoteURL() (string, error) {
+func (g *Integration) GetRemoteURL() (string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return "", fmt.Errorf("no Git status available")
+		return "", ErrNoGitStatusAvailable
 	}
 
 	return status.RemoteBranch, nil
 }
 
 // GetCommitHash returns the current commit hash.
-func (g *GitIntegration) GetCommitHash() (string, error) {
+func (g *Integration) GetCommitHash() (string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return "", fmt.Errorf("no Git status available")
+		return "", ErrNoGitStatusAvailable
 	}
 
 	return status.Hash, nil
 }
 
 // GetModifiedFiles returns the list of modified files.
-func (g *GitIntegration) GetModifiedFiles() ([]string, error) {
+func (g *Integration) GetModifiedFiles() ([]string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return nil, fmt.Errorf("no Git status available")
+		return nil, ErrNoGitStatusAvailable
 	}
 
 	var files []string
+
 	for _, file := range status.ModifiedFiles {
 		if file.Worktree == Modified || file.Worktree == Added ||
 			file.Worktree == Deleted || file.Worktree == Renamed {
@@ -155,13 +175,14 @@ func (g *GitIntegration) GetModifiedFiles() ([]string, error) {
 }
 
 // GetStagedFiles returns the list of staged files.
-func (g *GitIntegration) GetStagedFiles() ([]string, error) {
+func (g *Integration) GetStagedFiles() ([]string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return nil, fmt.Errorf("no Git status available")
+		return nil, ErrNoGitStatusAvailable
 	}
 
 	var files []string
+
 	for _, file := range status.ModifiedFiles {
 		if file.Staging == Added || file.Staging == Modified ||
 			file.Staging == Deleted || file.Staging == Renamed {
@@ -173,27 +194,27 @@ func (g *GitIntegration) GetStagedFiles() ([]string, error) {
 }
 
 // GetUntrackedFiles returns the list of untracked files.
-func (g *GitIntegration) GetUntrackedFiles() ([]string, error) {
+func (g *Integration) GetUntrackedFiles() ([]string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return nil, fmt.Errorf("no Git status available")
+		return nil, ErrNoGitStatusAvailable
 	}
 
 	return status.UntrackedFiles, nil
 }
 
 // IsClean returns true if the working directory is clean.
-func (g *GitIntegration) IsClean() bool {
+func (g *Integration) IsClean() bool {
 	status := g.GetStatus()
 	if status == nil {
-		return true // Assume clean if no status
+		return true // Assume clean if no status.
 	}
 
 	return len(status.ModifiedFiles) == 0 && len(status.UntrackedFiles) == 0
 }
 
-// GitContextInfo holds git context information for the agent.
-type GitContextInfo struct {
+// ContextInfo holds git context information for the agent.
+type ContextInfo struct {
 	GitEnabled     bool   `json:"git_enabled"`
 	IsRepo         bool   `json:"is_repo"`
 	Branch         string `json:"branch,omitempty"`
@@ -208,28 +229,31 @@ type GitContextInfo struct {
 }
 
 // GetContextInfo returns Git context information for the agent.
-func (g *GitIntegration) GetContextInfo() GitContextInfo {
+func (g *Integration) GetContextInfo() ContextInfo {
 	if !g.IsRepository() {
-		return GitContextInfo{
+		return ContextInfo{
 			GitEnabled: false,
 			IsRepo:     false,
 		}
 	}
 
-	info := GitContextInfo{
+	info := ContextInfo{
 		GitEnabled: true,
 		IsRepo:     true,
 	}
 
-	if branch, err := g.GetBranch(); err == nil {
+	branch, err := g.GetBranch()
+	if err == nil {
 		info.Branch = branch
 	}
 
-	if remote, err := g.GetRemoteURL(); err == nil {
+	remote, err := g.GetRemoteURL()
+	if err == nil {
 		info.Remote = remote
 	}
 
-	if commit, err := g.GetCommitHash(); err == nil {
+	commit, err := g.GetCommitHash()
+	if err == nil {
 		info.Commit = commit
 	}
 
@@ -246,20 +270,23 @@ func (g *GitIntegration) GetContextInfo() GitContextInfo {
 }
 
 // GetDiff returns the diff for a specific file or all changes.
-func (g *GitIntegration) GetDiff(filePath string) (string, error) {
+func (g *Integration) GetDiff(ctx context.Context, filePath string) (string, error) {
 	if !g.IsRepository() {
-		return "", fmt.Errorf("not a Git repository")
+		return "", ErrNotAGitRepository
 	}
 
+	// Use "git diff HEAD" to show both staged and unstaged changes.
+	// Plain "git diff" only shows unstaged, missing anything after "git add".
 	var args []string
 	if filePath != "" {
-		args = []string{"diff", filePath}
+		args = []string{"diff", "HEAD", "--", filePath}
 	} else {
-		args = []string{"diff"}
+		args = []string{"diff", "HEAD"}
 	}
 
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = g.workDir
+
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get diff: %w", err)
@@ -269,126 +296,208 @@ func (g *GitIntegration) GetDiff(filePath string) (string, error) {
 }
 
 // GetLog returns recent commit history.
-func (g *GitIntegration) GetLog(limit int) ([]CommitInfo, error) {
+func (g *Integration) GetLog(ctx context.Context, limit int) ([]CommitInfo, error) {
 	if !g.IsRepository() {
-		return nil, fmt.Errorf("not a Git repository")
+		return nil, ErrNotAGitRepository
 	}
 
-	// For now, return empty list - would need to implement log functionality
+	if limit <= 0 {
+		limit = 10 // Default limit.
+	}
+
+	// Use git log with format to get commit info.
+	cmd := exec.CommandContext(ctx, "git", "log",
+		fmt.Sprintf("-%d", limit),
+		"--format=%H%n%an%n%ae%n%at%n%s%n%b%n---END---")
+	cmd.Dir = g.workDir
+
+	output, logErr := cmd.Output()
+	if logErr == nil {
+		return parseGitLog(string(output)), nil
+	}
+
+	// Empty repo or no commits is not an error.
 	return []CommitInfo{}, nil
 }
 
-// StageFile stages a file for commit.
-func (g *GitIntegration) StageFile(filePath string) error {
+// runGitCmd executes a git command in the working directory, guarding on IsRepository.
+func (g *Integration) runGitCmd(ctx context.Context, errPrefix string, args ...string) error {
 	if !g.IsRepository() {
-		return fmt.Errorf("not a Git repository")
+		return ErrNotAGitRepository
 	}
 
-	cmd := exec.Command("git", "add", filePath)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = g.workDir
-	return cmd.Run()
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %w", errPrefix, err)
+	}
+
+	return nil
+}
+
+// StageFile stages a file for commit.
+func (g *Integration) StageFile(ctx context.Context, filePath string) error {
+	return g.runGitCmd(ctx, "git add", "add", filePath)
 }
 
 // UnstageFile unstages a file.
-func (g *GitIntegration) UnstageFile(filePath string) error {
-	if !g.IsRepository() {
-		return fmt.Errorf("not a Git repository")
-	}
-
-	cmd := exec.Command("git", "reset", "HEAD", filePath)
-	cmd.Dir = g.workDir
-	return cmd.Run()
+func (g *Integration) UnstageFile(ctx context.Context, filePath string) error {
+	return g.runGitCmd(ctx, "git reset", "reset", "HEAD", filePath)
 }
 
 // Commit creates a commit with the given message.
-func (g *GitIntegration) Commit(message string) error {
-	if !g.IsRepository() {
-		return fmt.Errorf("not a Git repository")
-	}
-
-	cmd := exec.Command("git", "commit", "-m", message)
-	cmd.Dir = g.workDir
-	return cmd.Run()
+func (g *Integration) Commit(ctx context.Context, message string) error {
+	return g.runGitCmd(ctx, "git commit", "commit", "-m", message)
 }
 
 // Push pushes changes to the remote repository.
-func (g *GitIntegration) Push() error {
-	if !g.IsRepository() {
-		return fmt.Errorf("not a Git repository")
-	}
-
-	cmd := exec.Command("git", "push")
-	cmd.Dir = g.workDir
-	return cmd.Run()
+func (g *Integration) Push(ctx context.Context) error {
+	return g.runGitCmd(ctx, "git push", "push")
 }
 
 // Pull pulls changes from the remote repository.
-func (g *GitIntegration) Pull() error {
-	if !g.IsRepository() {
-		return fmt.Errorf("not a Git repository")
-	}
-
-	cmd := exec.Command("git", "pull")
-	cmd.Dir = g.workDir
-	return cmd.Run()
+func (g *Integration) Pull(ctx context.Context) error {
+	return g.runGitCmd(ctx, "git pull", "pull")
 }
 
 // CreateBranch creates a new branch.
-func (g *GitIntegration) CreateBranch(branchName string) error {
-	if !g.IsRepository() {
-		return fmt.Errorf("not a Git repository")
-	}
-
-	cmd := exec.Command("git", "checkout", "-b", branchName)
-	cmd.Dir = g.workDir
-	return cmd.Run()
+func (g *Integration) CreateBranch(ctx context.Context, branchName string) error {
+	return g.runGitCmd(ctx, "git checkout -b", "checkout", "-b", branchName)
 }
 
 // SwitchBranch switches to an existing branch.
-func (g *GitIntegration) SwitchBranch(branchName string) error {
-	if !g.IsRepository() {
-		return fmt.Errorf("not a Git repository")
-	}
-
-	cmd := exec.Command("git", "checkout", branchName)
-	cmd.Dir = g.workDir
-	return cmd.Run()
+func (g *Integration) SwitchBranch(ctx context.Context, branchName string) error {
+	return g.runGitCmd(ctx, "git checkout", "checkout", branchName)
 }
 
 // ListBranches returns the list of local and remote branches.
-func (g *GitIntegration) ListBranches() ([]string, error) {
+func (g *Integration) ListBranches(ctx context.Context) ([]string, error) {
 	if !g.IsRepository() {
-		return nil, fmt.Errorf("not a Git repository")
+		return nil, ErrNotAGitRepository
 	}
 
-	// For now, return empty list - would need to implement branch listing
+	cmd := exec.CommandContext(ctx, "git", "branch", "--format=%(refname:short)")
+	cmd.Dir = g.workDir
+
+	output, branchErr := cmd.Output()
+	if branchErr == nil {
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+		branches := make([]string, 0, len(lines))
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				branches = append(branches, line)
+			}
+		}
+
+		return branches, nil
+	}
+
+	// No branches is not an error.
 	return []string{}, nil
 }
 
 // ListRemotes returns the list of remote repositories.
-func (g *GitIntegration) ListRemotes() ([]string, error) {
+func (g *Integration) ListRemotes(ctx context.Context) ([]string, error) {
 	if !g.IsRepository() {
-		return nil, fmt.Errorf("not a Git repository")
+		return nil, ErrNotAGitRepository
 	}
 
-	// For now, return empty list - would need to implement remote listing
+	cmd := exec.CommandContext(ctx, "git", "remote")
+	cmd.Dir = g.workDir
+
+	output, remoteErr := cmd.Output()
+	if remoteErr == nil {
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+		remotes := make([]string, 0, len(lines))
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				remotes = append(remotes, line)
+			}
+		}
+
+		return remotes, nil
+	}
+
+	// No remotes or error is not an error.
 	return []string{}, nil
 }
 
 // GetWorkingDirectory returns the working directory.
-func (g *GitIntegration) GetWorkingDirectory() string {
+func (g *Integration) GetWorkingDirectory() string {
 	return g.workDir
 }
 
 // SetWorkingDirectory sets the working directory.
-func (g *GitIntegration) SetWorkingDirectory(workDir string) {
+func (g *Integration) SetWorkingDirectory(workDir string) {
 	g.mu.Lock()
 	g.workDir = workDir
 	g.mu.Unlock()
 }
 
 // Close cleans up Git integration resources.
-func (g *GitIntegration) Close() error {
-	// No resources to clean up
+func (g *Integration) Close() error {
+	// No resources to clean up.
 	return nil
+}
+
+// parseGitLog parses git log output into CommitInfo structs.
+func parseGitLog(output string) []CommitInfo {
+	commits := make([]CommitInfo, 0)
+
+	// Split by commit delimiter.
+	commitBlocks := strings.SplitSeq(output, "---END---")
+
+	for block := range commitBlocks {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			continue
+		}
+
+		lines := strings.Split(block, "\n")
+		if len(lines) < minDiffContextLines {
+			continue // Invalid commit block.
+		}
+
+		commit := CommitInfo{
+			Hash:   strings.TrimSpace(lines[0]),
+			Author: strings.TrimSpace(lines[1]),
+			Email:  strings.TrimSpace(lines[2]),
+		}
+
+		// Parse timestamp.
+		timestamp := strings.TrimSpace(lines[3])
+
+		ts, err := strconv.ParseInt(timestamp, 10, 64)
+		if err == nil {
+			commit.Timestamp = time.Unix(ts, 0).Format(time.RFC3339)
+		} else {
+			commit.Timestamp = timestamp
+		}
+
+		// Subject and body.
+		subject := strings.TrimSpace(lines[4])
+
+		var body string
+
+		if len(lines) > minDiffContextLines {
+			bodyLines := lines[5:]
+			body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+		}
+
+		// Combine subject and body into Message.
+		if body != "" {
+			commit.Message = subject + "\n\n" + body
+		} else {
+			commit.Message = subject
+		}
+
+		commits = append(commits, commit)
+	}
+
+	return commits
 }

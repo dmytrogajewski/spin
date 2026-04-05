@@ -1,43 +1,44 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/dmytrogajewski/spin/internal/version"
 	"github.com/spf13/cobra"
+
+	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
-// Global flags
-var (
-	flagModel      string
-	flagProvider   string
-	flagSandbox    string
-	flagWorkDir    string
-	flagConfigFile string
-	flagConfig     []string
-	flagTaskMode   string
-)
+// flagModel returns the --model flag value from a cobra command.
+func flagModel(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("model")
 
-// validTaskModes lists all valid task mode names.
-var validTaskModes = map[string]bool{
-	"regular":  true,
-	"review":   true,
-	"compact":  true,
-	"planning": true,
+	return v
 }
 
-// validateTaskMode validates the task mode flag value.
-// Returns error if the mode is invalid.
-func validateTaskMode(mode string) error {
-	if mode == "" {
-		return fmt.Errorf("task mode cannot be empty")
-	}
+// flagProvider returns the --provider flag value from a cobra command.
+func flagProvider(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("provider")
 
-	if !validTaskModes[mode] {
-		return fmt.Errorf("invalid task mode: %s (valid modes: regular, review, compact, planning)", mode)
-	}
+	return v
+}
 
-	return nil
+// flagWorkDir returns the --cd flag value from a cobra command.
+func flagWorkDir(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("cd")
+
+	return v
+}
+
+// flagConfigFile returns the --config-file flag value from a cobra command.
+func flagConfigFile(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("config-file")
+
+	return v
+}
+
+// flagAgentsMD returns the --agents-md flag value from a cobra command.
+func flagAgentsMD(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("agents-md")
+
+	return v
 }
 
 // newRootCmd creates the root command for spin CLI.
@@ -51,38 +52,42 @@ It provides an interactive terminal UI, non-interactive execution mode,
 and integrates with IDEs via JSON-RPC.
 
 Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible API.`,
-		Version: version.ShortVersion(),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Default behavior: launch TUI when no subcommand is provided
-			return runTUI(cmd, args)
-		},
-		SilenceUsage: true,
+		Version:       appinfo.ShortVersion(),
+		RunE:          runTUI,
+		SilenceUsage:  true,
+		SilenceErrors: true, // Errors are handled in main().
 	}
 
-	// Set custom version template
-	cmd.SetVersionTemplate(version.String() + "\n")
+	// Set custom version template.
+	cmd.SetVersionTemplate(appinfo.String() + "\n")
 
-	// Global flags
-	cmd.PersistentFlags().StringVar(&flagModel, "model", "", "Model to use (e.g., llama3.1, mixtral, gpt-4o)")
-	cmd.PersistentFlags().StringVar(&flagProvider, "provider", "", "Provider (ollama, lmstudio, openai, anthropic)")
-	cmd.PersistentFlags().StringVar(&flagSandbox, "sandbox", "", "Sandbox mode (read-only, workspace-write, full-access)")
-	cmd.PersistentFlags().StringVar(&flagWorkDir, "cd", "", "Working directory")
-	cmd.PersistentFlags().StringVar(&flagConfigFile, "config-file", "", "Path to configuration file")
-	cmd.PersistentFlags().StringSliceVarP(&flagConfig, "config", "c", nil, "Config overrides (key=value)")
-	cmd.PersistentFlags().StringVarP(&flagTaskMode, "mode", "m", "regular", "Task mode: regular (full-featured, 16K tokens), review (read-only, 12K tokens), compact (minimal, 4K tokens), planning (context-only, 4K tokens)")
+	// Global flags (command-local, no package-level variables).
+	cmd.PersistentFlags().String("model", "", "Model to use (e.g., llama3.1, mixtral, gpt-4o)")
+	cmd.PersistentFlags().String("provider", "", "Provider (ollama, lmstudio, openai, anthropic)")
+	cmd.PersistentFlags().String("sandbox", "", "Sandbox mode (read-only, workspace-write, full-access)")
+	cmd.PersistentFlags().String("cd", "", "Working directory")
+	cmd.PersistentFlags().String("config-file", "", "Path to configuration file")
+	cmd.PersistentFlags().StringSliceP("config", "c", nil, "Config overrides (key=value)")
 
-	// Add commands
+	modeHelp := "Task mode: regular (full-featured, 16K tokens), " +
+		"review (read-only, 12K tokens), compact (minimal, 4K tokens), " +
+		"planning (context-only, 4K tokens)"
+	cmd.PersistentFlags().StringP("mode", "m", "regular", modeHelp)
+	cmd.PersistentFlags().String("agents-md", "", "Path to AGENTS.md file (overrides auto-discovery)")
+
+	// Add commands.
 	cmd.AddCommand(newTUICmd()) // TUI mode (Phase 7.4 complete!)
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newCompletionCmd())
 	cmd.AddCommand(newExecCmd())
-	cmd.AddCommand(newServeCmd())
+	cmd.AddCommand(newACPCmd()) // ACP server mode.
 	cmd.AddCommand(newConfigCmd())
-	cmd.AddCommand(newAuthCmd()) // Auth management
+	cmd.AddCommand(newAuthCmd()) // Auth management.
 	cmd.AddCommand(newMCPCmd())
 	cmd.AddCommand(newDebugCmd())
-	cmd.AddCommand(newApplyPatchCmd()) // Apply patch CLI (Feature 2.4)
-	cmd.AddCommand(newModeCmd())       // Mode management (P3.3)
+	cmd.AddCommand(newApplyPatchCmd()) // Apply patch CLI (Feature 2.4).
+	cmd.AddCommand(newModeCmd())       // Mode management (P3.3).
+	cmd.AddCommand(newApprovalCmd())   // Approval policy management (CLI, ACP-compliant).
 
 	return cmd
 }

@@ -6,24 +6,28 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
+	"github.com/dmytrogajewski/spin/pkg/alg/similarity"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 func TestNewMergeEngine(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(384)
 
-	// Valid threshold
+	// Valid threshold.
 	engine := NewMergeEngine(embedder, 0.85)
 	if engine.similarity != 0.85 {
 		t.Errorf("expected similarity 0.85, got %f", engine.similarity)
 	}
 
-	// Invalid threshold (too high)
+	// Invalid threshold (too high).
 	engine = NewMergeEngine(embedder, 1.5)
 	if engine.similarity != 0.90 {
 		t.Errorf("expected default similarity 0.90 for invalid threshold, got %f", engine.similarity)
 	}
 
-	// Invalid threshold (negative)
+	// Invalid threshold (negative).
 	engine = NewMergeEngine(embedder, -0.1)
 	if engine.similarity != 0.90 {
 		t.Errorf("expected default similarity 0.90 for invalid threshold, got %f", engine.similarity)
@@ -31,6 +35,8 @@ func TestNewMergeEngine(t *testing.T) {
 }
 
 func TestMergeEngine_MergeBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -44,7 +50,7 @@ func TestMergeEngine_MergeBullets(t *testing.T) {
 	b2.IncrementHelpful()
 	b2.Tags = map[string]string{"source": "test2", "extra": "value"}
 
-	// Merge b2 into b1 (b1 has higher utility)
+	// Merge b2 into b1 (b1 has higher utility).
 	result, err := engine.MergeBullets(ctx, b2, b1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -58,13 +64,15 @@ func TestMergeEngine_MergeBullets(t *testing.T) {
 		t.Errorf("expected removed ID %s, got %s", b2.ID, result.RemovedID)
 	}
 
-	// Original bullets should be unchanged
+	// Original bullets should be unchanged.
 	if b1.HelpfulCount != 2 {
 		t.Errorf("expected original b1 helpful count 2, got %d", b1.HelpfulCount)
 	}
 }
 
 func TestMergeEngine_MergeBullets_UtilityTransfer(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -82,32 +90,34 @@ func TestMergeEngine_MergeBullets_UtilityTransfer(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// b1 should be kept (higher utility: 3 vs 1)
+	// b1 should be kept (higher utility: 3 vs 1).
 	if result.KeptID != b1.ID {
 		t.Errorf("expected b1 to be kept (higher utility)")
 	}
 }
 
 func TestMergeEngine_MergeBullets_NilBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
 
 	b, _ := bullet.New("Test")
 
-	// Nil source
+	// Nil source.
 	_, err := engine.MergeBullets(ctx, nil, b)
 	if err == nil {
 		t.Error("expected error for nil source bullet")
 	}
 
-	// Nil target
+	// Nil target.
 	_, err = engine.MergeBullets(ctx, b, nil)
 	if err == nil {
 		t.Error("expected error for nil target bullet")
 	}
 
-	// Both nil
+	// Both nil.
 	_, err = engine.MergeBullets(ctx, nil, nil)
 	if err == nil {
 		t.Error("expected error for both nil bullets")
@@ -115,16 +125,18 @@ func TestMergeEngine_MergeBullets_NilBullets(t *testing.T) {
 }
 
 func TestMergeEngine_FindMergeCandidates_WithEmbeddings(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
 
-	// Create bullets with embeddings
+	// Create bullets with embeddings.
 	b1, _ := bullet.New("Similar content about Go testing")
 	emb1, _ := embedder.Embed(ctx, b1.Content)
 	b1.Embedding = emb1
 
-	b2, _ := bullet.New("Similar content about Go testing") // Exact same
+	b2, _ := bullet.New("Similar content about Go testing") // Exact same.
 	emb2, _ := embedder.Embed(ctx, b2.Content)
 	b2.Embedding = emb2
 
@@ -139,18 +151,20 @@ func TestMergeEngine_FindMergeCandidates_WithEmbeddings(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should find b1 and b2 as similar (same content = high similarity)
+	// Should find b1 and b2 as similar (same content = high similarity).
 	if len(pairs) == 0 {
 		t.Error("expected at least one merge pair for identical content")
 	}
 }
 
 func TestMergeEngine_FindMergeCandidates_WithoutEmbeddings(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	engine := NewMergeEngine(nil, 0.90) // No embedder
+	engine := NewMergeEngine(nil, 0.90) // No embedder.
 
 	b1, _ := bullet.New("Test content")
-	b2, _ := bullet.New("Test content") // Exact match
+	b2, _ := bullet.New("Test content") // Exact match.
 	b3, _ := bullet.New("Different")
 
 	bullets := []*bullet.Bullet{b1, b2, b3}
@@ -160,12 +174,14 @@ func TestMergeEngine_FindMergeCandidates_WithoutEmbeddings(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should find b1 and b2 as exact match (similarity = 1.0)
+	// Should find b1 and b2 as exact match (similarity = 1.0).
 	foundPair := false
+
 	for _, pair := range pairs {
 		if (pair.SourceID == b1.ID && pair.TargetID == b2.ID) ||
 			(pair.SourceID == b2.ID && pair.TargetID == b1.ID) {
 			foundPair = true
+
 			if pair.Similarity != 1.0 {
 				t.Errorf("expected similarity 1.0 for exact match, got %f", pair.Similarity)
 			}
@@ -178,6 +194,8 @@ func TestMergeEngine_FindMergeCandidates_WithoutEmbeddings(t *testing.T) {
 }
 
 func TestMergeEngine_FindMergeCandidates_Empty(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -193,6 +211,8 @@ func TestMergeEngine_FindMergeCandidates_Empty(t *testing.T) {
 }
 
 func TestMergeEngine_FindMergeCandidates_Single(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -211,72 +231,76 @@ func TestMergeEngine_FindMergeCandidates_Single(t *testing.T) {
 }
 
 func TestMergeEngine_CosineSimilarity(t *testing.T) {
-	embedder := embedding.NewMockEmbedder(384)
-	engine := NewMergeEngine(embedder, 0.90)
+	t.Parallel()
 
-	// Identical vectors
+	// Identical vectors.
 	v1 := []float32{1.0, 2.0, 3.0}
 	v2 := []float32{1.0, 2.0, 3.0}
-	sim := engine.cosineSimilarity(v1, v2)
-	if sim < 0.999 { // Allow for floating point error
+
+	sim := vector.CosineSimilarity(v1, v2)
+	if sim < 0.999 { // Allow for floating point error.
 		t.Errorf("expected similarity ~1.0 for identical vectors, got %f", sim)
 	}
 
-	// Orthogonal vectors
+	// Orthogonal vectors.
 	v3 := []float32{1.0, 0.0, 0.0}
 	v4 := []float32{0.0, 1.0, 0.0}
-	sim = engine.cosineSimilarity(v3, v4)
-	if sim > 0.001 { // Should be very close to 0
+
+	sim = vector.CosineSimilarity(v3, v4)
+	if sim > 0.001 { // Should be very close to 0.
 		t.Errorf("expected similarity ~0.0 for orthogonal vectors, got %f", sim)
 	}
 
-	// Different length vectors
+	// Different length vectors.
 	v5 := []float32{1.0, 2.0}
 	v6 := []float32{1.0, 2.0, 3.0}
-	sim = engine.cosineSimilarity(v5, v6)
+
+	sim = vector.CosineSimilarity(v5, v6)
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for different length vectors, got %f", sim)
 	}
 
-	// Zero vectors
+	// Zero vectors.
 	v7 := []float32{0.0, 0.0, 0.0}
 	v8 := []float32{0.0, 0.0, 0.0}
-	sim = engine.cosineSimilarity(v7, v8)
+
+	sim = vector.CosineSimilarity(v7, v8)
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for zero vectors, got %f", sim)
 	}
 }
 
 func TestMergeEngine_SimpleSimilarity(t *testing.T) {
-	embedder := embedding.NewMockEmbedder(384)
-	engine := NewMergeEngine(embedder, 0.90)
+	t.Parallel()
 
-	// Exact match
-	sim := engine.simpleSimilarity("test", "test")
+	// Exact match via Jaccard.
+	sim := similarity.JaccardSimilarity("test content here", "test content here")
 	if sim != 1.0 {
 		t.Errorf("expected similarity 1.0 for exact match, got %f", sim)
 	}
 
-	// Different lengths
-	sim = engine.simpleSimilarity("short", "longer string")
+	// Different content — partial overlap.
+	sim = similarity.JaccardSimilarity("short words here", "longer string with words")
 	if sim <= 0.0 || sim >= 1.0 {
 		t.Errorf("expected similarity between 0 and 1, got %f", sim)
 	}
 
-	// Empty strings
-	sim = engine.simpleSimilarity("", "")
+	// Empty strings.
+	sim = similarity.JaccardSimilarity("", "")
 	if sim != 1.0 {
 		t.Errorf("expected similarity 1.0 for both empty, got %f", sim)
 	}
 
-	// One empty
-	sim = engine.simpleSimilarity("", "non-empty")
+	// One empty.
+	sim = similarity.JaccardSimilarity("", "non-empty content")
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for one empty, got %f", sim)
 	}
 }
 
 func TestMergeEngine_ChooseMergeDirection(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
 
@@ -290,7 +314,7 @@ func TestMergeEngine_ChooseMergeDirection(t *testing.T) {
 
 	sourceID, targetID := engine.chooseMergeDirection(b1, b2)
 
-	// b1 has higher utility, so it should be target (kept)
+	// b1 has higher utility, so it should be target (kept).
 	if targetID != b1.ID {
 		t.Errorf("expected b1 (high utility) to be target, got %s", targetID)
 	}
@@ -299,8 +323,8 @@ func TestMergeEngine_ChooseMergeDirection(t *testing.T) {
 		t.Errorf("expected b2 (low utility) to be source, got %s", sourceID)
 	}
 
-	// Reverse order
-	sourceID, targetID = engine.chooseMergeDirection(b2, b1)
+	// Reverse order.
+	_, targetID = engine.chooseMergeDirection(b2, b1)
 	if targetID != b1.ID {
 		t.Errorf("expected b1 (high utility) to be target regardless of order, got %s", targetID)
 	}

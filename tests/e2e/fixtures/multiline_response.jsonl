@@ -1,0 +1,1 @@
+{"chunks":[{"id":"c1","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"Line one.\nLine two.\nLine three."},"finish_reason":"stop"}]}]}

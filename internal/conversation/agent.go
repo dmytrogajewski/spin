@@ -1,145 +1,189 @@
 package conversation
 
 import (
+	"context"
 	"fmt"
 
+	"path/filepath"
+
+	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/cycle"
-	"github.com/dmytrogajewski/spin/internal/detection"
-	"github.com/dmytrogajewski/spin/internal/orchestration"
-	"github.com/dmytrogajewski/spin/internal/security"
-	"github.com/dmytrogajewski/spin/internal/task"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
+	"github.com/dmytrogajewski/spin/internal/agentsmd"
+	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+// agentBuildResult holds the outputs of buildAgent for downstream consumers.
+type agentBuildResult struct {
+	agent       *agent.Agent
+	toolRuntime *tool.Runtime
+	toolReg     *tools.Registry
+	aceService  *ace.Service
+	aceConfig   *ace.Config
+	hookRunner  *hooks.Runner
+}
+
 // buildAgent constructs a fully configured agent with all services and integrations.
-func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*agent.Agent, error) {
-	validator := security.NewValidator()
+func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *agent.Environment) (*agentBuildResult, error) {
+	agentBuilder := agent.NewBuilder().
+		WithConfig(b.cfg).
+		WithProvider(b.llm).
+		WithWorkingDir(b.workDir).
+		WithEmitter(b.emitter).
+		WithRuntime(b.runtime)
 
-	var approvalSvc *security.ApprovalService
-	if b.approvalHandler != nil {
-		approvalSvc = security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
-			Handler:   b.approvalHandler,
-			Emitter:   b.emitter,
-			Validator: validator,
-		})
-	} else {
-		approvalSvc = security.NewApprovalService(nil, b.emitter, validator)
-	}
-	securitySvc := security.NewSecurityService(validator, approvalSvc)
+	detectionSvc := agentBuilder.BuildDetectionService()
+	securitySvc := agentBuilder.BuildSecurityService(ctx)
 
-	// Detection
-	var (
-		cycleDetector   detection.CycleDetector
-		patternDetector detection.PatternDetector
-	)
-	if cfg := b.cfg; cfg != nil && cfg.CycleDetection.Enabled {
-		c := cycle.Config{
-			WindowSize:       cfg.CycleDetection.WindowSize,
-			SimilarityThresh: cfg.CycleDetection.SimilarityThresh,
-			ToolRepeatLimit:  cfg.CycleDetection.ToolRepeatLimit,
-			ErrorRepeatLimit: cfg.CycleDetection.ErrorRepeatLimit,
-			Enabled:          true,
-		}
-		cycleDetector = cycle.NewDetector(c)
-		patternDetector = cycle.NewPatternDetector(c)
-	} else {
-		cycleDetector = cycle.NewDetector(cycle.Config{Enabled: false})
-	}
-	detectionSvc := detection.NewDetectionService(cycleDetector, patternDetector)
+	toolReg := b.buildOrRegisterTools(exec, securitySvc, env)
 
-	// Orchestration
-	toolReg := b.buildToolRegistry(exec, validator, env)
-	taskReg := b.taskRegistry
-	if taskReg == nil {
-		taskReg = b.buildDefaultTaskRegistry()
+	if err := b.registerMemoryTools(toolReg); err != nil {
+		b.logWarn("memory tools registration failed", "err", err)
 	}
-	toolExec := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
+
+	hookRunner := hooks.NewRunner(hooks.Config{
+		GlobalDir:  filepath.Join("~", ".spin", "hooks"),
+		ProjectDir: filepath.Join(b.workDir, ".spin", "hooks"),
+		Logger:     b.getLogger(),
+	})
+
+	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
 		Registry:        toolReg,
-		Validator:       validator,
-		ApprovalService: approvalSvc,
+		Validator:       securitySvc.Validator(),
+		ApprovalService: securitySvc.ApprovalService(),
 		Emitter:         b.emitter,
 		WorkDir:         env.WorkDir,
+		HookRunner:      hookRunner,
 	})
-	orchestrationSvc := orchestration.NewOrchestrationService(toolExec, toolReg, taskReg)
 
-	// Agent options
-	opts := b.buildAgentOptions()
+	opts := agentBuilder.BuildOptions()
 
-	// ACE (optional)
-	if cfg := b.cfg; cfg != nil && cfg.ACEEnabled {
-		defaultAgentCfg := agent.DefaultConfig()
-		aceCfg := &agent.ACEConfig{
-			Enabled:        true,
-			PlaybookPath:   cfg.ACEPlaybookPath,
-			TrajectoryPath: cfg.ACETrajectoryPath,
-			Retrieval: agent.ACERetrievalConfig{
-				TopK:     cfg.ACETopK,
-				MinScore: cfg.ACEMinScore,
-			},
-			ItemizedLearning: agent.ACEItemizedLearningConfig{
-				Enabled:       true,
-				ParseFeedback: true,
-				UpdateAsync:   false,
-			},
-			Generation: agent.ACEGenerationConfig{
-				Enabled:     true,
-				AutoReflect: true,
-			},
-			Adapter: defaultAgentCfg.ACE.Adapter,
-			Refine:  defaultAgentCfg.ACE.Refine,
-		}
-		aceSvc, err := agent.NewACEService(aceCfg, env.WorkDir, b.llm, cfg.Model)
-		if err != nil {
-			if b.logger != nil {
-				b.logger.Warn("ACE init failed, continuing", "err", err)
-			}
-		} else {
-			opts = append(opts, agent.WithACEService(aceSvc))
-			if b.logger != nil {
-				b.logger.Info("ACE enabled", "playbook", cfg.ACEPlaybookPath, "model", cfg.Model)
-			}
-		}
+	// Build optional services for component wiring.
+	aceSvc, aceConfig := b.buildACEServices(ctx, agentBuilder)
+	if aceSvc != nil {
+		opts = append(opts, agent.WithACEService(aceSvc), agent.WithACEConfig(aceConfig))
 	}
 
-	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, orchestrationSvc, env, b.emitter, opts...)
+	agentsMDSvc := b.buildAgentsMDService(ctx, agentBuilder)
+	if agentsMDSvc != nil {
+		opts = append(opts, agent.WithAgentsMDService(agentsMDSvc))
+	}
+
+	opts = b.appendToolSelectorOptions(toolReg, opts)
+
+	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, toolRuntime, env, b.emitter, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("agent: %w", err)
 	}
-	return ag, nil
+
+	return &agentBuildResult{
+		agent:       ag,
+		toolRuntime: toolRuntime,
+		toolReg:     toolReg,
+		aceService:  aceSvc,
+		aceConfig:   aceConfig,
+		hookRunner:  hookRunner,
+	}, nil
 }
 
-// buildDefaultTaskRegistry creates a task registry with standard task types.
-func (b *Builder) buildDefaultTaskRegistry() *orchestration.Registry {
-	r := orchestration.NewRegistry()
-	_ = r.Register("regular", task.NewRegular())
-	_ = r.Register("review", task.NewReview())
-	_ = r.Register("compact", task.NewCompact())
-	_ = r.Register("planning", task.NewPlanning())
-	_ = r.SetDefault("regular")
-	if b.logger != nil {
-		b.logger.Debug("default task registry created")
+// buildOrRegisterTools creates the tool registry, using runtime registration if available.
+func (b *Builder) buildOrRegisterTools(exec *agent.Executor, securitySvc *safety.Service, env *agent.Environment) *tools.Registry {
+	if b.runtime != nil {
+		toolReg := tools.NewRegistry()
+		b.runtime.RegisterTools(toolReg)
+		_ = b.registerIntegrationTools(toolReg)
+
+		return toolReg
 	}
-	return r
+
+	return b.buildToolRegistry(exec, securitySvc, env)
 }
 
-// buildAgentOptions constructs agent options from configuration.
-func (b *Builder) buildAgentOptions() []agent.AgentOption {
-	opts := []agent.AgentOption{
-		agent.WithRequireApproval(true),
+// buildACEServices creates ACE service and config if ACE is enabled.
+func (b *Builder) buildACEServices(ctx context.Context, agentBuilder *agent.Builder) (*ace.Service, *ace.Config) {
+	if b.cfg == nil || !b.cfg.ACE.Enabled {
+		return nil, nil
 	}
-	if cfg := b.cfg; cfg != nil {
-		if cfg.MaxTurns > 0 {
-			opts = append(opts, agent.WithMaxTurns(cfg.MaxTurns))
-		}
-		if cfg.Timeout > 0 {
-			opts = append(opts, agent.WithAgentTimeout(cfg.Timeout))
-		}
-		if cfg.Temperature > 0 {
-			opts = append(opts, agent.WithTemperature(cfg.Temperature))
-		}
-		if cfg.MaxTokens > 0 {
-			opts = append(opts, agent.WithMaxTokens(cfg.MaxTokens))
-		}
+
+	aceSvc, err := agentBuilder.BuildACEService(ctx)
+	if err != nil {
+		b.logWarn("ACE init failed, continuing", "err", err)
+
+		return nil, nil
 	}
+
+	aceConfig := ace.ConvertConfig(&b.cfg.ACE)
+	b.logInfo("ACE enabled", "playbook", b.cfg.ACE.PlaybookPath, "model", b.cfg.LLM.Model)
+
+	return aceSvc, aceConfig
+}
+
+// buildAgentsMDService creates the AGENTS.md service if enabled.
+func (b *Builder) buildAgentsMDService(ctx context.Context, agentBuilder *agent.Builder) *agentsmd.Service {
+	if b.cfg == nil || !b.cfg.AgentsMD.Enabled {
+		return nil
+	}
+
+	gitRoot := b.resolveGitRoot()
+
+	agentsMDSvc := agentBuilder.BuildAgentsMDService(gitRoot)
+	if agentsMDSvc == nil {
+		return nil
+	}
+
+	if err := agentsMDSvc.Load(ctx); err != nil {
+		b.logWarn("failed to load AGENTS.md", "error", err)
+
+		return nil
+	}
+
+	if agentsMDSvc.IsLoaded() {
+		b.logInfo("AGENTS.md loaded", "path", agentsMDSvc.Path())
+
+		return agentsMDSvc
+	}
+
+	return nil
+}
+
+// resolveGitRoot returns the git repository root, or empty string if unavailable.
+func (b *Builder) resolveGitRoot() string {
+	if b.gitService == nil || !b.gitService.IsRepository() {
+		return ""
+	}
+
+	if repo := b.gitService.GetIntegration().GetRepository(); repo != nil {
+		return repo.Root()
+	}
+
+	return ""
+}
+
+// appendToolSelectorOptions adds dynamic tool selector options if configured.
+func (b *Builder) appendToolSelectorOptions(toolReg *tools.Registry, opts []agent.Option) []agent.Option {
+	if b.toolSelector == nil {
+		return opts
+	}
+
+	b.toolSelector.SetRuntimeRegistry(toolReg)
+	opts = append(opts, agent.WithToolSelector(b.toolSelector))
+	b.logInfo("dynamic tool selection enabled")
+
 	return opts
+}
+
+// logWarn logs a warning message if logger is available.
+func (b *Builder) logWarn(msg string, args ...any) {
+	if b.logger != nil {
+		b.logger.Warn(msg, args...)
+	}
+}
+
+// logInfo logs an info message if logger is available.
+func (b *Builder) logInfo(msg string, args ...any) {
+	if b.logger != nil {
+		b.logger.Info(msg, args...)
+	}
 }

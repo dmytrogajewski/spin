@@ -7,16 +7,23 @@ import (
 
 // TestRenderToolCompletionStatus tests that Tool completed message only appears when tool has output.
 func TestRenderToolCompletionStatus(t *testing.T) {
+	t.Parallel()
+
 	renderer := NewRenderer(80)
 
-	// Helper to create a block with metadata
+	// Helper to create a block with metadata.
 	createToolBlock := func(toolName, body string) *Block {
 		b := NewBlock(BlockTypeTool)
+
 		meta := &ToolMeta{ToolName: toolName}
-		if err := SetToolMeta(b, meta); err != nil {
+
+		err := SetToolMeta(b, meta)
+		if err != nil {
 			t.Fatalf("SetToolMeta failed: %v", err)
 		}
+
 		b.Body = body
+
 		return b
 	}
 
@@ -48,12 +55,15 @@ func TestRenderToolCompletionStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			status := renderer.RenderCompletionStatus(tt.block)
 			hasComplete := strings.Contains(status, "Tool completed")
 
 			if tt.expectComplete && !hasComplete {
 				t.Errorf("%s: expected 'Tool completed' in status, got: %q", tt.description, status)
 			}
+
 			if !tt.expectComplete && hasComplete {
 				t.Errorf("%s: did not expect 'Tool completed' in status, got: %q", tt.description, status)
 			}
@@ -63,40 +73,44 @@ func TestRenderToolCompletionStatus(t *testing.T) {
 
 // TestRenderToolBlock_NoDuplicateOnInitialCreate tests that Tool blocks don't show completion on initial creation.
 func TestRenderToolBlock_NoDuplicateOnInitialCreate(t *testing.T) {
+	t.Parallel()
+
 	renderer := NewRenderer(80)
 
-	// Create a new TOOL block (simulating initial creation)
+	// Create a new TOOL block (simulating initial creation).
 	block := NewBlock(BlockTypeTool)
 	block.Title = "execute_command"
 
 	meta := &ToolMeta{
 		ToolName: "execute_command",
 	}
-	if err := SetToolMeta(block, meta); err != nil {
+
+	err := SetToolMeta(block, meta)
+	if err != nil {
 		t.Fatalf("SetToolMeta failed: %v", err)
 	}
 
-	// Render the block
+	// Render the block.
 	output, err := renderer.Render(block)
 	if err != nil {
 		t.Fatalf("Render failed: %v", err)
 	}
 
-	// Should NOT contain "Tool completed" since there's no body
+	// Should NOT contain "Tool completed" since there's no body.
 	if strings.Contains(output, "Tool completed") {
 		t.Errorf("Initial tool block should not show 'Tool completed', but got:\n%s", output)
 	}
 
-	// Now update with actual output
+	// Now update with actual output.
 	block.Body = "Command executed successfully"
 
-	// Render again
+	// Render again.
 	output, err = renderer.Render(block)
 	if err != nil {
 		t.Fatalf("Render with body failed: %v", err)
 	}
 
-	// Now it SHOULD contain "Tool completed"
+	// Now it SHOULD contain "Tool completed".
 	if !strings.Contains(output, "Tool completed") {
 		t.Errorf("Tool block with output should show 'Tool completed', but got:\n%s", output)
 	}

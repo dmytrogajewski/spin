@@ -1,19 +1,45 @@
+// Package generator provides content generation capabilities.
 package generator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/feedback"
+	"github.com/dmytrogajewski/spin/internal/ace/llmcall"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/prompt"
 	"github.com/dmytrogajewski/spin/internal/ace/retrieval"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/openai/openai-go"
+)
+
+const (
+	generationSimilarityThreshold = 0.7
+	generationTemperature         = 0.7
+	generationMaxTokens           = 2000
+	minBulletLineLength           = 2
+	defaultModel                  = "gpt-4"
+)
+
+var (
+	// ErrLlmProviderIsRequired is a sentinel error.
+	ErrLlmProviderIsRequired = errors.New("LLM provider is required")
+	// ErrPlaybookIsRequired is a sentinel error.
+	ErrPlaybookIsRequired = errors.New("playbook is required")
+	// ErrRetrieverIsRequired is a sentinel error.
+	ErrRetrieverIsRequired = errors.New("retriever is required")
+	// ErrInputIsRequired is a sentinel error.
+	ErrInputIsRequired = errors.New("input is required")
+	// ErrUnknownSourceType is a sentinel error.
+	ErrUnknownSourceType = errors.New("unknown source type")
 )
 
 // Generator produces reasoning trajectories with context bullets.
@@ -28,55 +54,55 @@ type Generator interface {
 
 // ItemizedLearningRequest is input for ItemizedLearning workflow.
 type ItemizedLearningRequest struct {
-	// Query is the task description or question
+	// Query is the task description or question.
 	Query string
 
-	// GroundTruth is the expected answer (optional, for labeled learning)
+	// GroundTruth is the expected answer (optional, for labeled learning).
 	GroundTruth string
 
-	// TopK is number of bullets to retrieve
+	// TopK is number of bullets to retrieve.
 	TopK int
 
-	// Model is the LLM model to use
+	// Model is the LLM model to use.
 	Model string
 
-	// Temperature controls randomness
+	// Temperature controls randomness.
 	Temperature float64
 
-	// MaxTokens limits response length
+	// MaxTokens limits response length.
 	MaxTokens int
 }
 
 // ItemizedLearningResponse is output from ItemizedLearning.
 type ItemizedLearningResponse struct {
-	// Trajectory is the full execution trace
+	// Trajectory is the full execution trace.
 	Trajectory *Trajectory
 
-	// Feedback contains bullet utility annotations
+	// Feedback contains bullet utility annotations.
 	Feedback *feedback.BulletFeedback
 
-	// Output is the final answer
+	// Output is the final answer.
 	Output string
 
-	// Success indicates if task succeeded
+	// Success indicates if task succeeded.
 	Success bool
 }
 
 // BulletGenerationRequest is input for bullet generation.
 type BulletGenerationRequest struct {
-	// Input is the source text (task, trajectory, feedback)
+	// Input is the source text (task, trajectory, feedback).
 	Input string
 
-	// SourceType indicates input type ("task", "trajectory", "feedback", "error")
+	// SourceType indicates input type ("task", "trajectory", "feedback", "error").
 	SourceType string
 
-	// MaxBullets limits number of generated bullets
+	// MaxBullets limits number of generated bullets.
 	MaxBullets int
 
-	// Tags to apply to generated bullets
+	// Tags to apply to generated bullets.
 	Tags map[string]string
 
-	// Model is the LLM model to use (optional, defaults to config)
+	// Model is the LLM model to use (optional, defaults to config).
 	Model string
 }
 
@@ -87,6 +113,7 @@ type generator struct {
 	retriever      retrieval.Retriever
 	promptBuilder  *prompt.Builder
 	feedbackParser feedback.Parser
+	logger         *slog.Logger
 }
 
 // Config configures a generator.
@@ -99,13 +126,15 @@ type Config struct {
 // NewGenerator creates a new generator.
 func NewGenerator(cfg Config) (Generator, error) {
 	if cfg.LLM == nil {
-		return nil, fmt.Errorf("LLM provider is required")
+		return nil, ErrLlmProviderIsRequired
 	}
+
 	if cfg.Playbook == nil {
-		return nil, fmt.Errorf("playbook is required")
+		return nil, ErrPlaybookIsRequired
 	}
+
 	if cfg.Retriever == nil {
-		return nil, fmt.Errorf("retriever is required")
+		return nil, ErrRetrieverIsRequired
 	}
 
 	return &generator{
@@ -114,6 +143,7 @@ func NewGenerator(cfg Config) (Generator, error) {
 		retriever:      cfg.Retriever,
 		promptBuilder:  prompt.NewBuilder(prompt.WithItemizedLearning()),
 		feedbackParser: feedback.NewRegexParser(),
+		logger:         slog.Default(),
 	}, nil
 }
 
@@ -121,25 +151,25 @@ func NewGenerator(cfg Config) (Generator, error) {
 func (g *generator) ItemizedLearning(ctx context.Context, req ItemizedLearningRequest) (*ItemizedLearningResponse, error) {
 	startTime := time.Now()
 
-	// 1. Retrieve relevant bullets
+	// 1. Retrieve relevant bullets.
 	bullets, err := g.retriever.Retrieve(ctx, req.Query, req.TopK)
 	if err != nil {
 		return nil, fmt.Errorf("retrieve bullets: %w", err)
 	}
 
-	// 2. Build system prompt with bullets and IL instructions
+	// 2. Build system prompt with bullets and IL instructions.
 	systemPrompt := g.promptBuilder.BuildSystemPrompt(bullets)
 
-	// 3. Construct messages
+	// 3. Construct messages.
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(systemPrompt),
 		openai.UserMessage(req.Query),
 	}
 
-	// 4. Call LLM
+	// 4. Call LLM.
 	params := openai.ChatCompletionNewParams{
-		Messages:    openai.F(messages),
-		Model:       openai.F(openai.ChatModel(req.Model)),
+		Messages:    messages,
+		Model:       req.Model,
 		Temperature: openai.Float(req.Temperature),
 		MaxTokens:   openai.Int(int64(req.MaxTokens)),
 	}
@@ -149,32 +179,33 @@ func (g *generator) ItemizedLearning(ctx context.Context, req ItemizedLearningRe
 		return nil, fmt.Errorf("llm complete: %w", err)
 	}
 
-	// 5. Extract output
+	// 5. Extract output.
 	output := ""
 	if len(resp.Choices) > 0 {
 		output = resp.Choices[0].Message.Content
 	}
 
-	// 6. Parse feedback
+	// 6. Parse feedback.
 	bulletFeedback, err := g.feedbackParser.Parse(output)
 	if err != nil {
-		// Log error but don't fail - feedback is optional
+		// Log error but don't fail - feedback is optional.
 		bulletFeedback = &feedback.BulletFeedback{
 			HelpfulBullets: []string{},
 			HarmfulBullets: []string{},
 		}
 	}
 
-	// 7. Update playbook with feedback
-	if err := g.updatePlaybook(ctx, bullets, bulletFeedback); err != nil {
+	// 7. Update playbook with feedback.
+	err = g.updatePlaybook(ctx, bullets, bulletFeedback)
+	if err != nil {
 		return nil, fmt.Errorf("update playbook: %w", err)
 	}
 
-	// 8. Build trajectory
+	// 8. Build trajectory.
 	duration := time.Since(startTime)
 	trajectory := g.buildTrajectory(req, bullets, resp, bulletFeedback, output, duration)
 
-	// 9. Determine success (if ground truth provided)
+	// 9. Determine success (if ground truth provided).
 	success := false
 	if req.GroundTruth != "" {
 		success = g.checkSuccess(output, req.GroundTruth)
@@ -190,18 +221,19 @@ func (g *generator) ItemizedLearning(ctx context.Context, req ItemizedLearningRe
 
 // updatePlaybook updates bullet counters based on feedback.
 func (g *generator) updatePlaybook(ctx context.Context, bullets []*bullet.Bullet, fb *feedback.BulletFeedback) error {
-	// Build marker to bullet ID map
+	// Build marker to bullet ID map.
 	markerToID := make(map[string]string)
+
 	for i, b := range bullets {
 		marker := fmt.Sprintf("B%d", i)
 		markerToID[marker] = b.ID
 	}
 
-	// Update helpful bullets
+	// Update helpful bullets.
 	for _, marker := range fb.HelpfulBullets {
 		bulletID, ok := markerToID[marker]
 		if !ok {
-			continue // Skip unknown markers
+			continue // Skip unknown markers.
 		}
 
 		b, found := g.playbook.Get(bulletID)
@@ -210,16 +242,18 @@ func (g *generator) updatePlaybook(ctx context.Context, bullets []*bullet.Bullet
 		}
 
 		b.IncrementHelpful()
-		if err := g.playbook.Update(ctx, b); err != nil {
+
+		err := g.playbook.Update(ctx, b)
+		if err != nil {
 			return fmt.Errorf("update helpful bullet %s: %w", bulletID, err)
 		}
 	}
 
-	// Update harmful bullets
+	// Update harmful bullets.
 	for _, marker := range fb.HarmfulBullets {
 		bulletID, ok := markerToID[marker]
 		if !ok {
-			continue // Skip unknown markers
+			continue // Skip unknown markers.
 		}
 
 		b, found := g.playbook.Get(bulletID)
@@ -228,7 +262,9 @@ func (g *generator) updatePlaybook(ctx context.Context, bullets []*bullet.Bullet
 		}
 
 		b.IncrementHarmful()
-		if err := g.playbook.Update(ctx, b); err != nil {
+
+		err := g.playbook.Update(ctx, b)
+		if err != nil {
 			return fmt.Errorf("update harmful bullet %s: %w", bulletID, err)
 		}
 	}
@@ -245,7 +281,7 @@ func (g *generator) buildTrajectory(
 	output string,
 	duration time.Duration,
 ) *Trajectory {
-	// Create a single reasoning step
+	// Create a single reasoning step.
 	step := TrajectoryStep{
 		StepNumber: 0,
 		Type:       "reasoning",
@@ -253,7 +289,7 @@ func (g *generator) buildTrajectory(
 		Timestamp:  time.Now(),
 	}
 
-	// Extract metadata
+	// Extract metadata.
 	metadata := TrajectoryMetadata{
 		Model:       req.Model,
 		Temperature: req.Temperature,
@@ -280,111 +316,139 @@ func (g *generator) buildTrajectory(
 }
 
 // checkSuccess checks if output matches ground truth.
+// Uses multiple strategies: exact match, normalized match, and substring matching.
 func (g *generator) checkSuccess(output, groundTruth string) bool {
-	// Simple string contains check for now
-	// TODO: Add more sophisticated matching (fuzzy, semantic, etc.)
-	return len(output) > 0 && len(groundTruth) > 0
+	if output == "" || groundTruth == "" {
+		return false
+	}
+
+	// Strategy 1: Exact match.
+	if output == groundTruth {
+		return true
+	}
+
+	// Strategy 2: Normalized match (lowercase, trimmed).
+	normalizedOutput := strings.ToLower(strings.TrimSpace(output))
+	normalizedTruth := strings.ToLower(strings.TrimSpace(groundTruth))
+
+	if normalizedOutput == normalizedTruth {
+		return true
+	}
+
+	// Strategy 3: Contains match (for flexible matching).
+	if strings.Contains(normalizedOutput, normalizedTruth) ||
+		strings.Contains(normalizedTruth, normalizedOutput) {
+		return true
+	}
+
+	// Strategy 4: Word-based similarity (check if key words match).
+	outputWords := strings.Fields(normalizedOutput)
+	truthWords := strings.Fields(normalizedTruth)
+
+	if len(outputWords) == 0 || len(truthWords) == 0 {
+		return false
+	}
+
+	// Count matching words.
+	matchCount := 0
+
+	for _, word := range truthWords {
+		if slices.Contains(outputWords, word) {
+			matchCount++
+		}
+	}
+
+	// Require at least 70% word overlap.
+	similarity := float64(matchCount) / float64(len(truthWords))
+
+	return similarity >= generationSimilarityThreshold
 }
 
 // GenerateBullets implements Generator interface.
 func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationRequest) ([]*bullet.Bullet, error) {
 	if req.Input == "" {
-		return nil, fmt.Errorf("input is required")
+		return nil, ErrInputIsRequired
 	}
-	// Select prompt template based on source type
-	systemPrompt := bulletGenerationSystemPrompt
-	var userPrompt string
 
+	userPrompt, err := selectBulletPrompt(req)
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := g.callLLMForBullets(ctx, userPrompt, req.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	return g.parseBulletsFromOutput(ctx, output, req.Tags)
+}
+
+// selectBulletPrompt selects the prompt template based on source type.
+func selectBulletPrompt(req BulletGenerationRequest) (string, error) {
 	switch req.SourceType {
 	case "task":
-		userPrompt = fmt.Sprintf(taskBulletPrompt, req.Input)
+		return fmt.Sprintf(taskBulletPrompt, req.Input), nil
 	case "trajectory":
-		userPrompt = fmt.Sprintf(trajectoryBulletPrompt, req.Input)
+		return fmt.Sprintf(trajectoryBulletPrompt, req.Input), nil
 	case "feedback":
-		userPrompt = fmt.Sprintf(feedbackBulletPrompt, req.Input)
+		return fmt.Sprintf(feedbackBulletPrompt, req.Input), nil
 	case "error":
-		userPrompt = fmt.Sprintf(errorBulletPrompt, req.Input)
+		return fmt.Sprintf(errorBulletPrompt, req.Input), nil
 	default:
-		return nil, fmt.Errorf("unknown source type: %s", req.SourceType)
+		return "", fmt.Errorf("unknown source type: %s: %w", req.SourceType, ErrUnknownSourceType)
 	}
+}
 
-	// Call LLM
-	messages := []openai.ChatCompletionMessageParamUnion{
-		openai.SystemMessage(systemPrompt),
-		openai.UserMessage(userPrompt),
-	}
-
-	model := req.Model
+// callLLMForBullets calls the LLM with the bullet generation prompt.
+func (g *generator) callLLMForBullets(ctx context.Context, userPrompt, model string) (string, error) {
 	if model == "" {
-		model = "gpt-4" // Default model
+		model = defaultModel
 	}
 
-	slog.Debug("ACE Generator: Calling LLM", "model", model, "system_prompt_len", len(systemPrompt), "user_prompt_len", len(userPrompt))
+	return llmcall.Call(
+		ctx,
+		g.llm,
+		[]openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(bulletGenerationSystemPrompt),
+			openai.UserMessage(userPrompt),
+		},
+		llmcall.TextParser,
+		llmcall.Options{
+			Temperature: generationTemperature,
+			MaxTokens:   int(generationMaxTokens),
+			Model:       model,
+		},
+	)
+}
 
-	params := openai.ChatCompletionNewParams{
-		Messages:    openai.F(messages),
-		Model:       openai.F(openai.ChatModel(model)),
-		Temperature: openai.Float(0.7), // Some creativity for generation
-		MaxTokens:   openai.Int(2000),
-	}
-
-	resp, err := g.llm.Complete(ctx, params)
-	if err != nil {
-		slog.Debug("ACE Generator: LLM call failed", "error", err)
-		return nil, fmt.Errorf("llm complete: %w", err)
-	}
-
-	slog.Debug("ACE Generator: LLM returned successfully", "choices", len(resp.Choices))
-
-	// Extract output
-	output := ""
-	if len(resp.Choices) > 0 {
-		output = resp.Choices[0].Message.Content
-		slog.Debug("ACE Generator: LLM response", "length", len(output))
-		if len(output) > 0 {
-			preview := output
-			if len(preview) > 200 {
-				preview = preview[:200]
-			}
-			slog.Debug("ACE Generator: LLM response preview", "preview", preview)
-		}
-	} else {
-		slog.Warn("ACE Generator: No choices in LLM response!")
-	}
-
-	// Parse bullet candidates from output
+// parseBulletsFromOutput parses LLM output into bullet objects.
+func (g *generator) parseBulletsFromOutput(ctx context.Context, output string, tags map[string]string) ([]*bullet.Bullet, error) {
 	candidates := parseBulletCandidates(output)
-	slog.Debug("ACE Generator: Parsed candidates", "count", len(candidates))
+	g.logger.DebugContext(ctx, "ACE Generator: Parsed candidates", "count", len(candidates))
 
-	// Create bullet objects with tags
 	bullets := make([]*bullet.Bullet, 0, len(candidates))
 	for _, content := range candidates {
-		// Validate content length
-		if len(content) == 0 || len(content) > bullet.MaxContentLength {
-			continue // Skip invalid candidates
+		if content == "" || len(content) > bullet.MaxContentLength {
+			continue
 		}
 
-		opts := []bullet.Option{}
-		if len(req.Tags) > 0 {
-			opts = append(opts, bullet.WithTags(req.Tags))
+		var opts []bullet.Option
+		if len(tags) > 0 {
+			opts = append(opts, bullet.WithTags(tags))
 		}
 
 		b, err := bullet.New(content, opts...)
 		if err != nil {
-			// Log but continue with other bullets
 			continue
 		}
 
 		bullets = append(bullets, b)
 	}
 
-	slog.Debug("ACE Generator: Created bullets", "count", len(bullets))
 	return bullets, nil
 }
 
-// min returns the smaller of two ints
-
-// Prompt templates for bullet generation
+// Prompt templates for bullet generation.
 
 const bulletGenerationSystemPrompt = `You are an expert at distilling insights into concise, actionable strategies.
 
@@ -425,37 +489,38 @@ Output numbered strategies (1., 2., 3., etc.), one per line. Generate as many in
 // parseBulletCandidates extracts bullet content from LLM output.
 func parseBulletCandidates(output string) []string {
 	candidates := []string{}
-	lines := strings.Split(output, "\n")
+	lines := strings.SplitSeq(output, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
 
-		// Try to extract numbered items (1., 2., etc.)
-		// Pattern: "1. Content" or "1) Content" or "- Content"
-		content := line
-
-		// Remove common prefixes
-		if len(line) > 2 {
-			if line[0] >= '0' && line[0] <= '9' {
-				// Starts with digit
-				if line[1] == '.' || line[1] == ')' {
-					content = strings.TrimSpace(line[2:])
-				}
-			} else if strings.HasPrefix(line, "- ") {
-				content = strings.TrimSpace(line[2:])
-			} else if strings.HasPrefix(line, "* ") {
-				content = strings.TrimSpace(line[2:])
-			}
-		}
-
+		content := extractBulletContent(line)
 		if content != "" && content != line {
-			// Successfully extracted content
 			candidates = append(candidates, content)
 		}
 	}
 
 	return candidates
+}
+
+// extractBulletContent strips list prefixes (1., 2., -, *) from a line.
+func extractBulletContent(line string) string {
+	if len(line) <= minBulletLineLength {
+		return line
+	}
+
+	// Numbered items: "1. Content" or "1) Content".
+	if line[0] >= '0' && line[0] <= '9' && (line[1] == '.' || line[1] == ')') {
+		return strings.TrimSpace(line[2:])
+	}
+
+	// Bullet items: "- Content" or "* Content".
+	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+		return strings.TrimSpace(line[2:])
+	}
+
+	return line
 }

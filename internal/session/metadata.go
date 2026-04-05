@@ -1,11 +1,20 @@
 package session
 
+// CostTracking holds cumulative LLM cost metrics for a session.
+type CostTracking struct {
+	InputTokens  int     `json:"input_tokens"`
+	OutputTokens int     `json:"output_tokens"`
+	TotalCostUSD float64 `json:"total_cost_usd"`
+	APICallCount int     `json:"api_call_count"`
+}
+
 // Metadata contains session metadata.
 type Metadata struct {
-	Title       string   // User-friendly session title
-	Description string   // Session description
-	Tags        []string // User-defined tags
-	TotalTurns  int      // Total turn count
-	TokensUsed  int      // Total tokens consumed
-	LastError   string   // Last error message (if any)
+	Title        string       // User-friendly session title.
+	Description  string       // Session description.
+	Tags         []string     // User-defined tags.
+	TotalTurns   int          // Total turn count.
+	TokensUsed   int          // Total tokens consumed (input + output).
+	LastError    string       // Last error message (if any).
+	CostTracking CostTracking `json:"cost_tracking"`
 }

@@ -1,0 +1,2 @@
+{"chunks":[{"id":"c1","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"Calling tool.","tool_calls":[{"index":0,"id":"tc-1","type":"function","function":{"name":"nonexistent_tool","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}]}
+{"chunks":[{"id":"c2","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"Tool not found, moving on."},"finish_reason":"stop"}]}]}

@@ -2,21 +2,28 @@ package reflector
 
 import (
 	"testing"
+	"time"
 
-	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 )
 
-// TestPromptBuilder_New tests creating a new prompt builder
+// TestPromptBuilder_New tests creating a new prompt builder.
 func TestPromptBuilder_New(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	require.NotNil(t, builder)
 }
 
-// TestPromptBuilder_BuildSingleTrajectory tests building prompt for one trajectory
+// TestPromptBuilder_BuildSingleTrajectory tests building prompt for one trajectory.
 func TestPromptBuilder_BuildSingleTrajectory(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	traj := &generator.Trajectory{
@@ -37,8 +44,119 @@ func TestPromptBuilder_BuildSingleTrajectory(t *testing.T) {
 	assert.Contains(t, prompt, "JSON")
 }
 
-// TestPromptBuilder_PromptHasInstructions tests that prompt includes task instructions
+// TestPromptBuilder_BuildSingleTrajectory_WithRetrievalEvents tests prompt includes retrieval events.
+func TestPromptBuilder_BuildSingleTrajectory_WithRetrievalEvents(t *testing.T) {
+	t.Parallel()
+
+	builder := NewPromptBuilder()
+
+	// Create trajectory with retrieval events.
+	traj := &generator.Trajectory{
+		ID:      "test-1",
+		Query:   "install nodejs",
+		Output:  "Failed to install",
+		Success: false,
+		Metadata: generator.TrajectoryMetadata{
+			RetrievalEvents: []trajectory.RetrievalEvent{
+				{
+					Turn:         0,
+					Trigger:      trajectory.TriggerInitial,
+					Query:        "install nodejs",
+					BulletsAdded: []string{"b1", "b2", "b3"},
+					Timestamp:    time.Now(),
+				},
+				{
+					Turn:         5,
+					Trigger:      trajectory.TriggerError,
+					Query:        "install nodejs Error: command not found",
+					BulletsAdded: []string{"b4", "b5"},
+					Timestamp:    time.Now(),
+				},
+			},
+		},
+	}
+
+	prompt := builder.BuildSingleTrajectory(traj)
+
+	require.NotEmpty(t, prompt)
+
+	// Verify retrieval events section exists.
+	assert.Contains(t, prompt, "Retrieval Events:")
+	assert.Contains(t, prompt, "when and why bullets were retrieved")
+
+	// Verify first event details.
+	assert.Contains(t, prompt, "Turn 0")
+	assert.Contains(t, prompt, "[initial]")
+	assert.Contains(t, prompt, "install nodejs")
+	assert.Contains(t, prompt, "Retrieved 3 bullets")
+
+	// Verify second event details.
+	assert.Contains(t, prompt, "Turn 5")
+	assert.Contains(t, prompt, "[error]")
+	assert.Contains(t, prompt, "Error: command not found")
+	assert.Contains(t, prompt, "Retrieved 2 bullets")
+}
+
+// TestPromptBuilder_BuildSingleTrajectory_NoRetrievalEvents tests backward compatibility.
+func TestPromptBuilder_BuildSingleTrajectory_NoRetrievalEvents(t *testing.T) {
+	t.Parallel()
+
+	builder := NewPromptBuilder()
+
+	// Create trajectory without retrieval events (nil).
+	traj := &generator.Trajectory{
+		ID:      "test-1",
+		Query:   "install nodejs",
+		Output:  "Success",
+		Success: true,
+		// No Metadata.RetrievalEvents set (nil).
+	}
+
+	prompt := builder.BuildSingleTrajectory(traj)
+
+	require.NotEmpty(t, prompt)
+
+	// Verify prompt builds successfully.
+	assert.Contains(t, prompt, "install nodejs")
+	assert.Contains(t, prompt, "Success: true")
+
+	// Verify no retrieval events section.
+	assert.NotContains(t, prompt, "Retrieval Events:")
+	assert.NotContains(t, prompt, "when and why bullets were retrieved")
+}
+
+// TestPromptBuilder_BuildSingleTrajectory_EmptyRetrievalEvents tests empty events array.
+func TestPromptBuilder_BuildSingleTrajectory_EmptyRetrievalEvents(t *testing.T) {
+	t.Parallel()
+
+	builder := NewPromptBuilder()
+
+	// Create trajectory with empty retrieval events.
+	traj := &generator.Trajectory{
+		ID:      "test-1",
+		Query:   "test query",
+		Output:  "test output",
+		Success: true,
+		Metadata: generator.TrajectoryMetadata{
+			RetrievalEvents: []trajectory.RetrievalEvent{}, // Empty slice.
+		},
+	}
+
+	prompt := builder.BuildSingleTrajectory(traj)
+
+	require.NotEmpty(t, prompt)
+
+	// Verify prompt builds successfully.
+	assert.Contains(t, prompt, "test query")
+
+	// Verify no retrieval events section (empty array shouldn't show section).
+	assert.NotContains(t, prompt, "Retrieval Events:")
+}
+
+// TestPromptBuilder_PromptHasInstructions tests that prompt includes task instructions.
 func TestPromptBuilder_PromptHasInstructions(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	traj := &generator.Trajectory{
@@ -50,7 +168,7 @@ func TestPromptBuilder_PromptHasInstructions(t *testing.T) {
 
 	prompt := builder.BuildSingleTrajectory(traj)
 
-	// Should include instructions
+	// Should include instructions.
 	assert.Contains(t, prompt, "Task")
 	assert.Contains(t, prompt, "reasoning")
 	assert.Contains(t, prompt, "error_identification")
@@ -61,8 +179,10 @@ func TestPromptBuilder_PromptHasInstructions(t *testing.T) {
 	assert.Contains(t, prompt, "category")
 }
 
-// TestPromptBuilder_BuildRefinementPrompt tests refinement prompt generation
+// TestPromptBuilder_BuildRefinementPrompt tests refinement prompt generation.
 func TestPromptBuilder_BuildRefinementPrompt(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	insights := []*Insight{
@@ -84,8 +204,10 @@ func TestPromptBuilder_BuildRefinementPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "JSON")
 }
 
-// TestPromptBuilder_BuildBatchTrajectory tests batch trajectory prompt generation
+// TestPromptBuilder_BuildBatchTrajectory tests batch trajectory prompt generation.
 func TestPromptBuilder_BuildBatchTrajectory(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	trajs := []*generator.Trajectory{

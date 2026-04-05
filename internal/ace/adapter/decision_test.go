@@ -7,6 +7,8 @@ import (
 )
 
 func TestDecideAction_TestFailure(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeTest,
 		Outcome:    OutcomeFailure,
@@ -20,6 +22,8 @@ func TestDecideAction_TestFailure(t *testing.T) {
 }
 
 func TestDecideAction_BuildFailure(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeBuild,
 		Outcome:    OutcomeFailure,
@@ -33,6 +37,8 @@ func TestDecideAction_BuildFailure(t *testing.T) {
 }
 
 func TestDecideAction_ErrorFailure(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeError,
 		Outcome:    OutcomeFailure,
@@ -46,6 +52,8 @@ func TestDecideAction_ErrorFailure(t *testing.T) {
 }
 
 func TestDecideAction_LintFailure(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeLint,
 		Outcome:    OutcomeFailure,
@@ -59,6 +67,8 @@ func TestDecideAction_LintFailure(t *testing.T) {
 }
 
 func TestDecideAction_UserCorrection(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeUser,
 		Outcome:    OutcomeFailure,
@@ -72,6 +82,8 @@ func TestDecideAction_UserCorrection(t *testing.T) {
 }
 
 func TestDecideAction_ToolUseSuccess(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeToolUse,
 		Outcome:    OutcomeSuccess,
@@ -85,6 +97,8 @@ func TestDecideAction_ToolUseSuccess(t *testing.T) {
 }
 
 func TestDecideAction_TestSuccess(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeTest,
 		Outcome:    OutcomeSuccess,
@@ -98,6 +112,8 @@ func TestDecideAction_TestSuccess(t *testing.T) {
 }
 
 func TestDecideAction_NeutralOutcome(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalTypeTest,
 		Outcome:    OutcomeNeutral,

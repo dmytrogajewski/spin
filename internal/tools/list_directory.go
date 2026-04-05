@@ -5,24 +5,32 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // ListDirectoryTool implements directory listing functionality.
-type ListDirectoryTool struct{}
-
-// NewListDirectoryTool creates a new list directory tool.
-func NewListDirectoryTool() *ListDirectoryTool {
-	return &ListDirectoryTool{}
+type ListDirectoryTool struct {
+	workDir string
 }
 
+// NewListDirectoryTool creates a new list directory tool.
+func NewListDirectoryTool(workDir ...string) *ListDirectoryTool {
+	return &ListDirectoryTool{workDir: collections.FirstNonZero(workDir...)}
+}
+
+// Name implements the Name operation.
 func (t *ListDirectoryTool) Name() string {
 	return "list_directory"
 }
 
+// Description implements the Description operation.
 func (t *ListDirectoryTool) Description() string {
 	return "List the contents of a directory"
 }
 
+// Schema implements the Schema operation.
 func (t *ListDirectoryTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -43,27 +51,33 @@ func (t *ListDirectoryTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	path, err := params.GetString("path")
-	if err != nil || path == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "path parameter must be a non-empty string",
-		}, nil
+	if err := ctx.Err(); err != nil {
+		return NewToolError(err), nil
 	}
+
+	path := params.GetStringOr("path", "")
+	if path == "" {
+		return NewToolError(errPathParameterRequired), nil
+	}
+
+	path = pathx.ResolvePath(t.workDir, path)
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to read directory: %v", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to read directory: %w", err)), nil
+	}
+
+	if len(entries) == 0 {
+		return NewToolResult(fmt.Sprintf("Directory is empty: %s", path)), nil
 	}
 
 	var output strings.Builder
+
 	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
+		info, infoErr := entry.Info()
+		if infoErr != nil {
 			continue
 		}
 
@@ -75,8 +89,5 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) 
 		fmt.Fprintf(&output, "%s\t%s\t%d bytes\n", entry.Name(), typeStr, info.Size())
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return NewToolResult(output.String()), nil
 }

@@ -10,7 +10,9 @@
 // # Basic Usage
 //
 //	provider, err := lmstudio.NewProvider(lmstudio.Config{
-//	    // BaseURL defaults to http://localhost:1234/v1
+//
+// BaseURL defaults to http://localhost:1234/v1
+//
 //	    Model: "llama-2-7b-chat",
 //	})
 //	if err != nil {
@@ -65,7 +67,8 @@
 //	}
 //
 //	resp, err := provider.Complete(context.Background(), req)
-//	// resp.ToolCalls contains the function calls to execute
+//
+// resp.ToolCalls contains the function calls to execute
 //
 // # Installation & Setup
 //

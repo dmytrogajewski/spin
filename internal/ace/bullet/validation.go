@@ -1,26 +1,36 @@
 package bullet
 
 import (
+	"errors"
 	"fmt"
 )
 
+var (
+	// ErrContentLengthExceedsMaximum is a sentinel error.
+	ErrContentLengthExceedsMaximum = errors.New("content length exceeds maximum")
+	// ErrHelpfulCountCannotBeNegative is a sentinel error.
+	ErrHelpfulCountCannotBeNegative = errors.New("helpful count cannot be negative")
+	// ErrHarmfulCountCannotBeNegative is a sentinel error.
+	ErrHarmfulCountCannotBeNegative = errors.New("harmful count cannot be negative")
+)
+
 const (
-	// MaxContentLength is the maximum allowed length for bullet content
+	// MaxContentLength is the maximum allowed length for bullet content.
 	MaxContentLength = 2048
 )
 
 // validate checks if the bullet meets all validation requirements.
 func validate(b *Bullet) error {
 	if len(b.Content) > MaxContentLength {
-		return fmt.Errorf("content length %d exceeds maximum %d", len(b.Content), MaxContentLength)
+		return fmt.Errorf("content length %d exceeds maximum %d: %w", len(b.Content), MaxContentLength, ErrContentLengthExceedsMaximum)
 	}
 
 	if b.HelpfulCount < 0 {
-		return fmt.Errorf("helpful count cannot be negative: %d", b.HelpfulCount)
+		return fmt.Errorf("helpful count cannot be negative: %d: %w", b.HelpfulCount, ErrHelpfulCountCannotBeNegative)
 	}
 
 	if b.HarmfulCount < 0 {
-		return fmt.Errorf("harmful count cannot be negative: %d", b.HarmfulCount)
+		return fmt.Errorf("harmful count cannot be negative: %d: %w", b.HarmfulCount, ErrHarmfulCountCannotBeNegative)
 	}
 
 	return nil

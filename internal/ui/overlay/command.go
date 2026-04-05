@@ -3,6 +3,8 @@ package overlay
 
 import "context"
 
+const initialCommandCapacity = 16
+
 // Command represents an executable action in the palette.
 type Command interface {
 	// Name returns the primary display name (e.g., "Run...").
@@ -29,7 +31,7 @@ type CommandRegistry struct {
 // NewCommandRegistry creates a new command registry.
 func NewCommandRegistry() *CommandRegistry {
 	return &CommandRegistry{
-		commands: make([]Command, 0, 16),
+		commands: make([]Command, 0, initialCommandCapacity),
 	}
 }
 
@@ -63,13 +65,23 @@ func NewSimpleCommand(name, description, category string, icon rune, exec func(c
 	}
 }
 
-func (c *simpleCommand) Name() string        { return c.name }
+// Name implements the Name operation.
+func (c *simpleCommand) Name() string { return c.name }
+
+// Description implements the Description operation.
 func (c *simpleCommand) Description() string { return c.description }
-func (c *simpleCommand) Category() string    { return c.category }
-func (c *simpleCommand) Icon() rune          { return c.icon }
+
+// Category implements the Category operation.
+func (c *simpleCommand) Category() string { return c.category }
+
+// Icon implements the Icon operation.
+func (c *simpleCommand) Icon() rune { return c.icon }
+
+// Execute implements the Execute operation.
 func (c *simpleCommand) Execute(ctx context.Context) error {
 	if c.exec == nil {
 		return nil
 	}
+
 	return c.exec(ctx)
 }

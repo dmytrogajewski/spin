@@ -8,6 +8,8 @@ import (
 )
 
 func TestExecutionSignal_Creation(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	signal := ExecutionSignal{
@@ -32,6 +34,8 @@ func TestExecutionSignal_Creation(t *testing.T) {
 }
 
 func TestSession_Creation(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	session := Session{
@@ -50,6 +54,8 @@ func TestSession_Creation(t *testing.T) {
 }
 
 func TestSession_AddSignal(t *testing.T) {
+	t.Parallel()
+
 	session := Session{
 		ID:            "session-123",
 		StartTime:     time.Now(),
@@ -72,15 +78,17 @@ func TestSession_AddSignal(t *testing.T) {
 }
 
 func TestSession_SlidingWindow(t *testing.T) {
+	t.Parallel()
+
 	session := Session{
 		ID:            "session-123",
 		StartTime:     time.Now(),
 		RecentSignals: []*ExecutionSignal{},
 	}
 
-	// Add 15 signals (more than max of 10)
+	// Add 15 signals (more than max of 10).
 	signals := make([]*ExecutionSignal, 15)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		signals[i] = &ExecutionSignal{
 			SignalType: SignalTypeTest,
 			Context:    "Test signal",
@@ -90,23 +98,25 @@ func TestSession_SlidingWindow(t *testing.T) {
 		session.AddSignal(signals[i])
 	}
 
-	// Should have all 15 signals counted
+	// Should have all 15 signals counted.
 	assert.Equal(t, 15, session.SignalCount)
 
-	// But only last 10 in recent signals
-	assert.Len(t, session.RecentSignals, 10)
+	// 15 is under maxRecentSignals (50), so all are kept.
+	assert.Len(t, session.RecentSignals, 15)
 
-	// Last signal should be the 15th
-	assert.Equal(t, signals[14], session.LastSignal)
+	// Last signal should be the 15th.
+	assert.Same(t, signals[14], session.LastSignal)
 
-	// First signal in recent should be the 6th (index 5)
-	assert.Equal(t, signals[5], session.RecentSignals[0])
+	// First signal in recent should be the 1st (index 0).
+	assert.Same(t, signals[0], session.RecentSignals[0])
 
-	// Last signal in recent should be the 15th (index 14)
-	assert.Equal(t, signals[14], session.RecentSignals[9])
+	// Last signal in recent should be the 15th (index 14).
+	assert.Same(t, signals[14], session.RecentSignals[14])
 }
 
 func TestAdaptationResult_Creation(t *testing.T) {
+	t.Parallel()
+
 	result := AdaptationResult{
 		Action:              ActionReflect,
 		BulletsAdded:        3,
@@ -125,8 +135,10 @@ func TestAdaptationResult_Creation(t *testing.T) {
 }
 
 func TestAdaptationAction_Constants(t *testing.T) {
-	assert.Equal(t, AdaptationAction("skip"), ActionSkip)
-	assert.Equal(t, AdaptationAction("reflect"), ActionReflect)
-	assert.Equal(t, AdaptationAction("quick_add"), ActionQuickAdd)
-	assert.Equal(t, AdaptationAction("update"), ActionUpdate)
+	t.Parallel()
+
+	assert.Equal(t, ActionSkip, AdaptationAction("skip"))
+	assert.Equal(t, ActionReflect, AdaptationAction("reflect"))
+	assert.Equal(t, ActionQuickAdd, AdaptationAction("quick_add"))
+	assert.Equal(t, ActionUpdate, AdaptationAction("update"))
 }

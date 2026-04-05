@@ -2,26 +2,34 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"os"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // ReadFileTool implements file reading functionality.
-type ReadFileTool struct{}
-
-// NewReadFileTool creates a new read file tool.
-func NewReadFileTool() *ReadFileTool {
-	return &ReadFileTool{}
+type ReadFileTool struct {
+	workDir string
+	tracker *pathx.FileTracker
 }
 
+// NewReadFileTool creates a new read file tool.
+func NewReadFileTool(workDir ...string) *ReadFileTool {
+	return &ReadFileTool{workDir: collections.FirstNonZero(workDir...)}
+}
+
+// Name implements the Name operation.
 func (t *ReadFileTool) Name() string {
 	return "read_file"
 }
 
+// Description implements the Description operation.
 func (t *ReadFileTool) Description() string {
 	return "Read the contents of a file"
 }
 
+// Schema implements the Schema operation.
 func (t *ReadFileTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -42,32 +50,34 @@ func (t *ReadFileTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *ReadFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	path, err := params.GetString("path")
-	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   "path parameter must be a non-empty string",
-		}, nil
+	if err := ctx.Err(); err != nil {
+		return NewToolError(err), nil
 	}
 
+	path := params.GetStringOr("path", "")
 	if path == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "path parameter must be a non-empty string",
-		}, nil
+		return NewToolError(errPathParameterRequired), nil
 	}
 
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to read file: %v", err),
-		}, nil
+	path = pathx.ResolvePath(t.workDir, path)
+
+	content, readErr := os.ReadFile(path)
+	if readErr != nil {
+		return ErrToResultf("failed to read file: %v", readErr)
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  string(content),
-	}, nil
+	if t.tracker != nil {
+		if recordErr := t.tracker.RecordRead(path); recordErr != nil {
+			return ErrToResultf("failed to record file read: %v", recordErr)
+		}
+	}
+
+	return NewToolResult(string(content)), nil
+}
+
+// SetTracker sets the file tracker for stale-read detection.
+func (t *ReadFileTool) SetTracker(tracker *pathx.FileTracker) {
+	t.tracker = tracker
 }

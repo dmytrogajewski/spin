@@ -19,10 +19,12 @@
 //
 // # Usage Example
 //
-//	// Create a provider
+// Create a provider
+//
 //	provider := llm.NewMockProvider("test")
 //
-//	// Make a completion request
+// Make a completion request
+//
 //	req := llm.CompletionRequest{
 //	    Messages: []llm.Message{
 //	        {Role: "user", Content: "Hello!"},
@@ -40,7 +42,8 @@
 //
 // # Streaming Example
 //
-//	// Stream a response
+// Stream a response
+//
 //	chunks, err := provider.Stream(ctx, req)
 //	if err != nil {
 //	    log.Fatal(err)

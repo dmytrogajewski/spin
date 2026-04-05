@@ -1,0 +1,413 @@
+package dbg
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"time"
+
+	"github.com/dmytrogajewski/spin/internal/agent"
+	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/auth"
+	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/events"
+	gitpkg "github.com/dmytrogajewski/spin/internal/git"
+	"github.com/dmytrogajewski/spin/internal/llm"
+	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
+	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/internal/session"
+	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+)
+
+const debugEventBufferSize = 100
+
+var (
+	// ErrPromptCannotBeEmpty is a sentinel error.
+	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
+	// ErrTaskFailed is a sentinel error.
+	ErrTaskFailed = errors.New("task failed")
+	// ErrServiceNotEnabled is returned when a service is not enabled.
+	ErrServiceNotEnabled = errors.New("service not enabled")
+)
+
+// EventLogger captures and logs all core events for debugging.
+type EventLogger struct {
+	format string
+	filter map[string]bool
+	writer io.Writer
+}
+
+// NewEventLogger creates a new event logger.
+//
+// format: "text" or "json"
+// filter: list of event types to log (empty = log all)
+func NewEventLogger(format string, filter []string) *EventLogger {
+	filterMap := collections.ToSet(filter)
+
+	return &EventLogger{
+		format: format,
+		filter: filterMap,
+		writer: os.Stderr,
+	}
+}
+
+// debugServices holds the services created during debug setup.
+type debugServices struct {
+	gitSvc   *gitpkg.Service
+	shellSvc *shellpkg.Service
+	mcpSvc   *mcppkg.Service
+}
+
+// createGitService creates a git service if enabled by config.
+func createGitService(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*gitpkg.Service, error) {
+	if !cfg.Protocol.EnableGit {
+		return nil, ErrServiceNotEnabled
+	}
+
+	svc, err := gitpkg.NewService(ctx, true, workDir, logger)
+	if err != nil {
+		return nil, fmt.Errorf("create git service: %w", err)
+	}
+
+	return svc, nil
+}
+
+// createShellService creates a shell service if enabled by config.
+func createShellService(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*shellpkg.Service, error) {
+	if !cfg.Protocol.EnableShell {
+		return nil, ErrServiceNotEnabled
+	}
+
+	svc, err := shellpkg.NewService(ctx, true, workDir, logger, cfg.Protocol.ShellTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("create shell service: %w", err)
+	}
+
+	return svc, nil
+}
+
+// createMCPService creates an MCP service if enabled and configured.
+func createMCPService(ctx context.Context, cfg *config.V2, logger *slog.Logger) *mcppkg.Service {
+	if !cfg.Protocol.EnableMCP || len(cfg.Protocol.MCPServers) == 0 {
+		return nil
+	}
+
+	registryManager := mcppkg.NewDefaultRegistryManager(logger)
+
+	for _, srv := range cfg.Protocol.MCPServers {
+		registry, err := mcppkg.NewLocalRegistry(mcppkg.LocalRegistryConfig{
+			Name:    srv.Name,
+			Command: srv.Command,
+			Args:    srv.Args,
+			Env:     srv.Env,
+			Logger:  logger,
+		})
+		if err != nil {
+			logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
+
+			continue
+		}
+
+		if regErr := registryManager.Register(registry); regErr != nil {
+			logger.WarnContext(ctx, "failed to register MCP registry", "name", srv.Name, "err", regErr)
+
+			continue
+		}
+	}
+
+	for _, reg := range registryManager.All() {
+		if err := reg.Initialize(ctx); err != nil {
+			logger.WarnContext(ctx, "failed to initialize MCP registry", "name", reg.Name(), "err", err)
+		}
+	}
+
+	return mcppkg.NewService(registryManager)
+}
+
+// initServices creates all required services based on configuration.
+func initServices(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*debugServices, error) {
+	gitSvc, err := createGitService(ctx, cfg, workDir, logger)
+	if err != nil && !errors.Is(err, ErrServiceNotEnabled) {
+		return nil, err
+	}
+
+	shellSvc, err := createShellService(ctx, cfg, workDir, logger)
+	if err != nil && !errors.Is(err, ErrServiceNotEnabled) {
+		if gitSvc != nil {
+			gitSvc.Close()
+		}
+
+		return nil, err
+	}
+
+	mcpSvc := createMCPService(ctx, cfg, logger)
+
+	return &debugServices{
+		gitSvc:   gitSvc,
+		shellSvc: shellSvc,
+		mcpSvc:   mcpSvc,
+	}, nil
+}
+
+// close closes all services.
+func (ds *debugServices) close() {
+	if ds.gitSvc != nil {
+		ds.gitSvc.Close()
+	}
+
+	if ds.shellSvc != nil {
+		ds.shellSvc.Close()
+	}
+
+	if ds.mcpSvc != nil {
+		ds.mcpSvc.Close()
+	}
+}
+
+// createBuiltinRuntime builds a minimal runtime for debug mode.
+func createBuiltinRuntime(
+	workDir string,
+	emitter *events.EventEmitter,
+	cfg *config.V2,
+	svcs *debugServices,
+	logger *slog.Logger,
+) (*agentexec.BuiltinRuntime, error) {
+	var sessionStorage session.Storage
+
+	if cfg.Agent.SessionDir != "" {
+		var storageErr error
+
+		sessionStorage, storageErr = session.NewFileStorage(cfg.Agent.SessionDir)
+		if storageErr != nil {
+			logger.WarnContext(context.Background(), "failed to create session storage", "err", storageErr)
+		}
+	}
+
+	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+		return safety.ApprovalResponse{
+			RequestID: req.ID,
+			Approved:  true,
+			Reason:    "debug mode auto-approve",
+		}
+	}
+
+	executor, execErr := agent.NewExecutor(workDir)
+	if execErr != nil {
+		return nil, fmt.Errorf("create executor: %w", execErr)
+	}
+
+	validator := safety.NewValidator()
+
+	return agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
+		WorkDir:         workDir,
+		Emitter:         emitter,
+		Storage:         sessionStorage,
+		SessionID:       fmt.Sprintf("debug-%d", time.Now().UnixNano()),
+		Executor:        agent.NewExecutorRuntimeAdapter(executor),
+		Validator:       validator,
+		ShellService:    svcs.shellSvc,
+		GitService:      svcs.gitSvc,
+		UI:              nil,
+		ApprovalHandler: approvalHandler,
+		Logger:          logger,
+	})
+}
+
+// buildConversation creates and configures a conversation using the builder pattern.
+func buildConversation(
+	ctx context.Context,
+	cfg *config.V2,
+	workDir string,
+	runtime *agentexec.BuiltinRuntime,
+	emitter *events.EventEmitter,
+	provider llm.Provider,
+	svcs *debugServices,
+) (*conversation.Conversation, error) {
+	// Use a nil-keystore auth manager to avoid D-Bus goroutine leaks from go-keyring.
+	authMgr := auth.NewManager(nil)
+
+	builder := conversation.NewBuilder(cfg, workDir, runtime, emitter, provider).
+		WithAuthManager(authMgr)
+
+	if svcs.gitSvc != nil {
+		builder = builder.WithGit(svcs.gitSvc)
+	}
+
+	if svcs.shellSvc != nil {
+		builder = builder.WithShell(svcs.shellSvc)
+	}
+
+	if svcs.mcpSvc != nil {
+		builder = builder.WithMCP(svcs.mcpSvc)
+	}
+
+	conv, err := builder.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build conversation: %w", err)
+	}
+
+	return conv, nil
+}
+
+// handleEvent processes a single event, returning whether to stop and any error.
+func (el *EventLogger) handleEvent(event events.Event) (bool, error) {
+	if el.shouldLog(event) {
+		el.logEvent(event)
+	}
+
+	if event.Type == events.EventError {
+		return true, fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
+	}
+
+	if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// processEvents reads and logs events from the stream, returning any error.
+// It respects context cancellation to avoid blocking when the turn completes
+// without emitting a terminal event.
+func (el *EventLogger) processEvents(ctx context.Context, eventStream <-chan events.Event) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("process events: %w", ctx.Err())
+		case event, ok := <-eventStream:
+			if !ok {
+				return nil
+			}
+
+			if done, err := el.handleEvent(event); done {
+				return err
+			}
+		}
+	}
+}
+
+// Run executes a task with event logging enabled.
+func (el *EventLogger) Run(ctx context.Context, prompt string) error {
+	if prompt == "" {
+		return ErrPromptCannotBeEmpty
+	}
+
+	cfg := config.DefaultV2()
+	cfg.LLM.Provider = "mock"
+	cfg.LLM.Model = "test-model"
+	cfg.Security.ApprovalPersistenceEnabled = false // Prevent janitor goroutine leak.
+	cfg.Security.PolicyFile = ""                    // No file-backed policies in debug mode.
+	cfg.Protocol.EnableGit = false                  // Disable services that leak goroutines in tests.
+	cfg.Protocol.EnableShell = false
+	cfg.Protocol.EnableMCP = false
+
+	workDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	logger := slog.Default()
+
+	svcs, err := initServices(ctx, cfg, workDir, logger)
+	if err != nil {
+		return err
+	}
+	defer svcs.close()
+
+	emitter := events.NewEventEmitter(debugEventBufferSize)
+	provider := llm.NewMockProvider("debug")
+
+	runtime, err := createBuiltinRuntime(workDir, emitter, cfg, svcs, logger)
+	if err != nil {
+		return fmt.Errorf("create builtin runtime: %w", err)
+	}
+
+	conv, err := buildConversation(ctx, cfg, workDir, runtime, emitter, provider, svcs)
+	if err != nil {
+		return err
+	}
+	defer conv.Close(ctx)
+
+	eventStream := conv.Stream()
+	errChan := make(chan error, 1)
+
+	go func() {
+		errChan <- conv.RunTurn(ctx, prompt)
+	}()
+
+	if evtErr := el.processEvents(ctx, eventStream); evtErr != nil {
+		return evtErr
+	}
+
+	select {
+	case turnErr := <-errChan:
+		if turnErr != nil {
+			return fmt.Errorf("turn execution failed: %w", turnErr)
+		}
+	default:
+	}
+
+	return nil
+}
+
+// shouldLog checks if an event should be logged based on the filter.
+func (el *EventLogger) shouldLog(event events.Event) bool {
+	if len(el.filter) == 0 {
+		return true // No filter = log all.
+	}
+
+	return el.filter[event.Type.String()]
+}
+
+// logEvent prints an event to the configured writer.
+func (el *EventLogger) logEvent(event events.Event) {
+	timestamp := time.Now().Format(time.DateTime)
+
+	if el.format == "json" {
+		el.logEventJSON(timestamp, event)
+	} else {
+		el.logEventText(timestamp, event)
+	}
+}
+
+// EventLogOutput represents a structured event log entry.
+type EventLogOutput struct {
+	Timestamp string           `json:"timestamp"`
+	Type      events.EventType `json:"type"`
+	Data      json.RawMessage  `json:"data"`
+}
+
+// logEventJSON logs event in JSON format.
+func (el *EventLogger) logEventJSON(timestamp string, event events.Event) {
+	data, err := json.Marshal(event.Data)
+	if err != nil {
+		data = []byte("{}")
+	}
+
+	output := EventLogOutput{
+		Timestamp: timestamp,
+		Type:      event.Type,
+		Data:      json.RawMessage(data),
+	}
+
+	encoded, err := json.Marshal(output)
+	if err != nil {
+		fmt.Fprintf(el.writer, `{"error": "failed to encode event"}`+"\n")
+
+		return
+	}
+
+	fmt.Fprintf(el.writer, "%s\n", encoded)
+}
+
+// logEventText logs event in human-readable text format.
+func (el *EventLogger) logEventText(timestamp string, event events.Event) {
+	dataStr := fmt.Sprintf("%v", event.Data)
+	fmt.Fprintf(el.writer, "[%s] %s %s\n", timestamp, event.Type, dataStr)
+}

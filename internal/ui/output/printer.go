@@ -5,6 +5,7 @@ package output
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -16,8 +17,13 @@ const (
 	defaultCoalesceDelay = 50 * time.Millisecond
 
 	// largeChunkThreshold is the size above which chunks are written immediately.
-	largeChunkThreshold = 10 * 1024 // 10KB
+	largeChunkThreshold = 10 * 1024 // 10KB.
 )
+
+// toRawTerminal converts \n to \r\n for raw terminal mode.
+func toRawTerminal(s string) string {
+	return strings.ReplaceAll(s, "\n", "\r\n")
+}
 
 // Printer handles append-only output to stdout for chat transcript.
 // It supports both immediate line printing and streaming chunks with
@@ -37,7 +43,7 @@ type PrinterOption func(*Printer)
 // Setting to 0 disables coalescing and writes chunks immediately.
 
 // NewPrinter creates a new Printer with optional configuration.
-// The printer writes to the provided io.Writer.
+// The printer writes to the provided [io.Writer].
 //
 // Example:
 //
@@ -64,10 +70,15 @@ func (p *Printer) PrintLine(s string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Convert \n to \r\n for raw terminal mode
-	output := strings.ReplaceAll(s+"\n", "\n", "\r\n")
+	// Convert \n to \r\n for raw terminal mode.
+	output := toRawTerminal(s + "\n")
+
 	_, err := io.WriteString(p.out, output)
-	return err
+	if err != nil {
+		return fmt.Errorf("print line: %w", err)
+	}
+
+	return nil
 }
 
 // PrintChunks streams chunks from a channel with optional coalescing.
@@ -77,7 +88,7 @@ func (p *Printer) PrintLine(s string) error {
 // Blocks until the channel closes or context is canceled.
 // Thread-safe. Can be called concurrently.
 //
-// Returns context.Canceled if context is canceled, or any write error.
+// Returns [context.Canceled] if context is canceled, or any write error.
 func (p *Printer) PrintChunks(ctx context.Context, chunks <-chan string) error {
 	if p.coalesceDelay == 0 {
 		return p.printChunksImmediate(ctx, chunks)
@@ -88,8 +99,11 @@ func (p *Printer) PrintChunks(ctx context.Context, chunks <-chan string) error {
 
 // printChunksWithCoalescing prints chunks with coalescing to reduce flicker.
 func (p *Printer) printChunksWithCoalescing(ctx context.Context, chunks <-chan string) error {
-	var buf strings.Builder
-	var wroteContent bool
+	var (
+		buf          strings.Builder
+		wroteContent bool
+	)
+
 	timer := time.NewTimer(p.coalesceDelay)
 	defer timer.Stop()
 
@@ -98,22 +112,26 @@ func (p *Printer) printChunksWithCoalescing(ctx context.Context, chunks <-chan s
 	for {
 		select {
 		case <-ctx.Done():
-			flush()
-			return ctx.Err()
+			_ = flush()
+
+			return fmt.Errorf("print chunks: %w", ctx.Err())
 
 		case chunk, ok := <-chunks:
 			if !ok {
 				return p.handleChannelClosed(flush, wroteContent)
 			}
 
-			if err := p.handleChunk(chunk, &buf, &wroteContent, flush, timer); err != nil {
+			err := p.handleChunk(chunk, &buf, &wroteContent, flush, timer)
+			if err != nil {
 				return err
 			}
 
 		case <-timer.C:
-			if err := flush(); err != nil {
+			err := flush()
+			if err != nil {
 				return err
 			}
+
 			timer.Reset(p.coalesceDelay)
 		}
 	}
@@ -127,31 +145,38 @@ func (p *Printer) createFlushFunc(buf *strings.Builder, wroteContent *bool) func
 		}
 
 		*wroteContent = true
-		output := strings.ReplaceAll(buf.String(), "\n", "\r\n")
+		output := toRawTerminal(buf.String())
 
 		p.mu.Lock()
 		_, err := io.WriteString(p.out, output)
 		p.mu.Unlock()
 
 		buf.Reset()
-		return err
+
+		if err != nil {
+			return fmt.Errorf("flush output: %w", err)
+		}
+
+		return nil
 	}
 }
 
 // handleChannelClosed handles the case when the chunks channel is closed.
 func (p *Printer) handleChannelClosed(flush func() error, wroteContent bool) error {
-	if err := flush(); err != nil {
+	err := flush()
+	if err != nil {
 		return err
 	}
 
 	// Ensure output ends with newline to prevent prompt overlap
 	// This guarantees the prompt will appear on a fresh line
-	// Only add newline if content was actually written
+	// Only add newline if content was actually written.
 	if wroteContent {
 		p.mu.Lock()
-		io.WriteString(p.out, "\r\n")
+		_, _ = io.WriteString(p.out, "\r\n")
 		p.mu.Unlock()
 	}
+
 	return nil
 }
 
@@ -161,15 +186,18 @@ func (p *Printer) handleChunk(chunk string, buf *strings.Builder, wroteContent *
 		return p.handleLargeChunk(chunk, wroteContent, flush)
 	}
 
-	if len(chunk) > 0 {
+	if chunk != "" {
 		*wroteContent = true
 	}
+
 	buf.WriteString(chunk)
 
 	if strings.Contains(chunk, "\n") {
-		if err := flush(); err != nil {
+		err := flush()
+		if err != nil {
 			return err
 		}
+
 		p.resetTimer(timer)
 	}
 
@@ -178,20 +206,26 @@ func (p *Printer) handleChunk(chunk string, buf *strings.Builder, wroteContent *
 
 // handleLargeChunk handles large chunks by writing them immediately.
 func (p *Printer) handleLargeChunk(chunk string, wroteContent *bool, flush func() error) error {
-	if err := flush(); err != nil {
+	err := flush()
+	if err != nil {
 		return err
 	}
 
-	if len(chunk) > 0 {
+	if chunk != "" {
 		*wroteContent = true
 	}
 
-	output := strings.ReplaceAll(chunk, "\n", "\r\n")
+	output := toRawTerminal(chunk)
+
 	p.mu.Lock()
-	_, err := io.WriteString(p.out, output)
+	_, err = io.WriteString(p.out, output)
 	p.mu.Unlock()
 
-	return err
+	if err != nil {
+		return fmt.Errorf("write large chunk: %w", err)
+	}
+
+	return nil
 }
 
 // resetTimer resets the coalescing timer.
@@ -202,6 +236,7 @@ func (p *Printer) resetTimer(timer *time.Timer) {
 		default:
 		}
 	}
+
 	timer.Reset(p.coalesceDelay)
 }
 
@@ -209,47 +244,59 @@ func (p *Printer) resetTimer(timer *time.Timer) {
 // Used when coalesceDelay is 0.
 func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string) error {
 	var buf strings.Builder
-	var wroteContent bool // Track if any content was written
+
+	var wroteContent bool
 
 	for {
 		select {
 		case <-ctx.Done():
-			// Flush remaining buffer
 			if buf.Len() > 0 {
-				str := buf.String()
-				output := strings.ReplaceAll(str, "\n", "\r\n")
-				wroteContent = true
-				p.mu.Lock()
-				io.WriteString(p.out, output)
-				p.mu.Unlock()
+				_ = p.flushBuffer(&buf)
 			}
-			return ctx.Err()
+
+			return fmt.Errorf("print chunks immediate: %w", ctx.Err())
 
 		case chunk, ok := <-chunks:
 			if !ok {
-				// Channel closed, flush and ensure final newline
-				if buf.Len() > 0 {
-					str := buf.String()
-					output := strings.ReplaceAll(str, "\n", "\r\n")
-					wroteContent = true
-					p.mu.Lock()
-					_, err := io.WriteString(p.out, output)
-					p.mu.Unlock()
-					if err != nil {
-						return err
-					}
-				}
-				// Always ensure output ends with newline to prevent prompt overlap
-				// This guarantees the prompt will appear on a fresh line
-				if wroteContent {
-					p.mu.Lock()
-					io.WriteString(p.out, "\r\n")
-					p.mu.Unlock()
-				}
-				return nil
+				return p.finalizeImmediate(&buf, wroteContent)
 			}
 
 			buf.WriteString(chunk)
 		}
 	}
+}
+
+// flushBuffer writes the buffer contents to the output, replacing newlines.
+func (p *Printer) flushBuffer(buf *strings.Builder) error {
+	str := buf.String()
+	output := toRawTerminal(str)
+
+	p.mu.Lock()
+	_, err := io.WriteString(p.out, output)
+	p.mu.Unlock()
+
+	if err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+
+	return nil
+}
+
+// finalizeImmediate flushes remaining buffer and ensures a trailing newline.
+func (p *Printer) finalizeImmediate(buf *strings.Builder, wroteContent bool) error {
+	if buf.Len() > 0 {
+		wroteContent = true
+
+		if err := p.flushBuffer(buf); err != nil {
+			return fmt.Errorf("flush remaining output: %w", err)
+		}
+	}
+
+	if wroteContent {
+		p.mu.Lock()
+		_, _ = io.WriteString(p.out, "\r\n")
+		p.mu.Unlock()
+	}
+
+	return nil
 }

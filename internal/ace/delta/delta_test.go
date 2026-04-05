@@ -5,10 +5,12 @@ import (
 )
 
 func TestDelta_NewContentUpdate(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-123"
 	newContent := "Updated bullet content"
 
-	delta := NewContentUpdate(bulletID, newContent, DeltaMetadata{
+	delta := NewContentUpdate(bulletID, newContent, Metadata{
 		Source: "test",
 		Reason: "testing content update",
 	})
@@ -47,9 +49,11 @@ func TestDelta_NewContentUpdate(t *testing.T) {
 }
 
 func TestDelta_NewIncrementHelpful(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-456"
 
-	delta := NewIncrementHelpful(bulletID, DeltaMetadata{
+	delta := NewIncrementHelpful(bulletID, Metadata{
 		Source: "curator",
 		Reason: "duplicate insight detected",
 	})
@@ -66,7 +70,7 @@ func TestDelta_NewIncrementHelpful(t *testing.T) {
 		t.Errorf("expected Operation %s, got %s", OpIncrementHelpful, delta.Operation)
 	}
 
-	// For increment operations, all fields should be nil
+	// For increment operations, all fields should be nil.
 	if delta.Fields.Content != nil || delta.Fields.TagKey != nil || delta.Fields.TagValue != nil || delta.Fields.Embedding != nil {
 		t.Error("expected all fields to be nil for increment operation")
 	}
@@ -77,9 +81,11 @@ func TestDelta_NewIncrementHelpful(t *testing.T) {
 }
 
 func TestDelta_NewIncrementHarmful(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-789"
 
-	delta := NewIncrementHarmful(bulletID, DeltaMetadata{
+	delta := NewIncrementHarmful(bulletID, Metadata{
 		Source: "feedback",
 		Reason: "bullet was harmful",
 	})
@@ -96,18 +102,20 @@ func TestDelta_NewIncrementHarmful(t *testing.T) {
 		t.Errorf("expected Operation %s, got %s", OpIncrementHarmful, delta.Operation)
 	}
 
-	// For increment operations, all fields should be nil
+	// For increment operations, all fields should be nil.
 	if delta.Fields.Content != nil || delta.Fields.TagKey != nil || delta.Fields.TagValue != nil || delta.Fields.Embedding != nil {
 		t.Error("expected all fields to be nil for increment operation")
 	}
 }
 
 func TestDelta_NewAddTag(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-abc"
 	key := "category"
 	value := "error_handling"
 
-	delta := NewAddTag(bulletID, key, value, DeltaMetadata{
+	delta := NewAddTag(bulletID, key, value, Metadata{
 		Source: "adapter",
 		Reason: "categorizing bullet",
 	})
@@ -127,6 +135,7 @@ func TestDelta_NewAddTag(t *testing.T) {
 	if delta.Fields.TagKey == nil {
 		t.Fatal("expected tag_key field to be set")
 	}
+
 	if *delta.Fields.TagKey != key {
 		t.Errorf("expected key %s, got %s", key, *delta.Fields.TagKey)
 	}
@@ -134,16 +143,19 @@ func TestDelta_NewAddTag(t *testing.T) {
 	if delta.Fields.TagValue == nil {
 		t.Fatal("expected tag_value field to be set")
 	}
+
 	if *delta.Fields.TagValue != value {
 		t.Errorf("expected value %s, got %s", value, *delta.Fields.TagValue)
 	}
 }
 
 func TestDelta_NewRemoveTag(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-def"
 	key := "obsolete"
 
-	delta := NewRemoveTag(bulletID, key, DeltaMetadata{
+	delta := NewRemoveTag(bulletID, key, Metadata{
 		Source: "manual",
 		Reason: "removing obsolete tag",
 	})
@@ -163,16 +175,19 @@ func TestDelta_NewRemoveTag(t *testing.T) {
 	if delta.Fields.TagKey == nil {
 		t.Fatal("expected tag_key field to be set")
 	}
+
 	if *delta.Fields.TagKey != key {
 		t.Errorf("expected key %s, got %s", key, *delta.Fields.TagKey)
 	}
 }
 
 func TestDelta_NewUpdateEmbedding(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-ghi"
 	embedding := []float32{0.1, 0.2, 0.3}
 
-	delta := NewUpdateEmbedding(bulletID, embedding, DeltaMetadata{
+	delta := NewUpdateEmbedding(bulletID, embedding, Metadata{
 		Source: "embedder",
 		Reason: "re-embedding after content update",
 	})

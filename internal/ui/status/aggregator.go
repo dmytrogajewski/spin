@@ -1,9 +1,11 @@
+// Package status provides UI status aggregation.
 package status
 
 import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // Aggregator processes core events and updates the status manager.
@@ -11,8 +13,8 @@ import (
 type Aggregator struct {
 	manager      *Manager
 	startTime    time.Time
-	streamStart  time.Time // When current stream started
-	streamTokens int64     // Tokens in current stream
+	streamStart  time.Time // When current stream started.
+	streamTokens int64     // Tokens in current stream.
 }
 
 // NewAggregator creates a new status aggregator.
@@ -29,86 +31,78 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 		return
 	}
 
-	// Map events to user-friendly agent states
+	// Map events to user-friendly agent states.
 	switch event.Type {
 	case events.EventTurnStart:
-		a.manager.SetAgentState("Starting")
-		a.manager.IncrementTurn()
-
+		a.handleTurnStart()
 	case events.EventContentDelta:
-		a.manager.SetAgentState("Thinking")
-		// Track streaming for TPS calculation
-		if a.streamStart.IsZero() {
-			a.streamStart = time.Now()
-			a.streamTokens = 0
-		}
-		// Estimate tokens from characters (rough: 1 token ≈ 4 chars)
-		if data, ok := event.Data.(events.ContentDeltaData); ok {
-			if data.Content != "" {
-				estimatedTokens := int64(len(data.Content) / 4)
-				if estimatedTokens < 1 {
-					estimatedTokens = 1
-				}
-				a.streamTokens += estimatedTokens
-
-				// Calculate TPS based on stream duration
-				duration := time.Since(a.streamStart)
-				if duration > 0 {
-					a.manager.CalculateTPS(a.streamTokens, duration)
-				}
-			}
-		}
-
+		a.handleContentDelta(event)
 	case events.EventContentComplete:
-		a.manager.SetAgentState("Ready")
-		// Reset TPS and streaming state on content complete
-		a.streamStart = time.Time{}
-		a.streamTokens = 0
-		a.manager.CalculateTPS(0, 1) // Reset TPS to 0
-
+		a.handleContentComplete()
 	case events.EventToolCallStart:
-		// Extract tool name for more specific status
-		if data, ok := event.Data.(events.ToolCallStartData); ok {
-			a.manager.SetAgentState("Calling: " + data.ToolName)
-		} else {
-			a.manager.SetAgentState("Calling tools")
-		}
-
+		a.handleToolCallStart(event)
 	case events.EventToolCallProgress:
 		a.manager.SetAgentState("Executing")
-
 	case events.EventToolCallComplete:
 		a.manager.SetAgentState("Complete")
-
 	case events.EventTurnComplete:
 		a.manager.SetAgentState("Idle")
-		// Extract token usage from turn event
-		if data, ok := event.Data.(events.TurnEventData); ok {
-			if data.TokensUsed > 0 {
-				a.manager.AddTokens(int64(data.TokensUsed), 0)
-			}
-		}
-
-	case events.EventTurnFailed:
+	case events.EventTurnFailed, events.EventError:
 		a.manager.SetAgentState("Error")
-
 	case events.EventCommandApproval:
 		a.manager.SetAgentState("Waiting approval")
-
 	case events.EventCommandApproved:
 		a.manager.SetAgentState("Approved")
-
 	case events.EventCommandDenied:
 		a.manager.SetAgentState("Denied")
-
-	case events.EventError:
-		a.manager.SetAgentState("Error")
-
 	case events.EventWarning:
 		a.manager.SetAgentState("Warning")
-
 	default:
-		// For unknown events, keep current state
+		// For unknown events, keep current state.
+	}
+}
+
+func (a *Aggregator) handleTurnStart() {
+	a.manager.SetAgentState("Starting")
+	a.manager.IncrementTurn()
+}
+
+func (a *Aggregator) handleContentDelta(event *events.Event) {
+	a.manager.SetAgentState("Thinking")
+
+	if a.streamStart.IsZero() {
+		a.streamStart = time.Now()
+		a.streamTokens = 0
+	}
+
+	data, ok := event.Data.(events.ContentDeltaData)
+	if !ok || data.Content == "" {
+		return
+	}
+
+	estimatedTokens := max(int64(len(data.Content)/stringsx.CharsPerToken), 1)
+	a.streamTokens += estimatedTokens
+
+	duration := time.Since(a.streamStart)
+	if duration > 0 {
+		a.manager.CalculateTPS(a.streamTokens, duration)
+	}
+}
+
+func (a *Aggregator) handleContentComplete() {
+	// Don't change agent state here — EventTurnComplete will set "Idle".
+	// Setting "Ready" here causes a redundant status bar render between
+	// ContentComplete and TurnComplete.
+	a.streamStart = time.Time{}
+	a.streamTokens = 0
+	a.manager.CalculateTPS(0, 1)
+}
+
+func (a *Aggregator) handleToolCallStart(event *events.Event) {
+	if data, ok := event.Data.(events.ToolCallStartData); ok {
+		a.manager.SetAgentState("Calling: " + data.ToolName)
+	} else {
+		a.manager.SetAgentState("Calling tools")
 	}
 }
 

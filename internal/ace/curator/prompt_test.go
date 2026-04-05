@@ -3,29 +3,34 @@ package curator
 import (
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 )
 
-// TestNewPromptBuilder tests creating a new prompt builder
+// TestNewPromptBuilder tests creating a new prompt builder.
 func TestNewPromptBuilder(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 	require.NotNil(t, builder)
 }
 
-// TestBuildCurationPrompt tests building a curation prompt
+// TestBuildCurationPrompt tests building a curation prompt.
 func TestBuildCurationPrompt(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
-	
+
 	req := CurationRequest{
 		TaskContext:     "Fix null pointer exception",
 		CurrentPlaybook: "[B001] Always check for nil\n",
 		Reflection:      "The code failed because nil check was missing",
 	}
-	
+
 	prompt := builder.BuildCurationPrompt(req)
-	
+
 	require.NotEmpty(t, prompt)
 	assert.Contains(t, prompt, "Fix null pointer exception")
 	assert.Contains(t, prompt, "Always check for nil")
@@ -34,10 +39,12 @@ func TestBuildCurationPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "operations")
 }
 
-// TestBuildRefinementPrompt tests building a refinement prompt
+// TestBuildRefinementPrompt tests building a refinement prompt.
 func TestBuildRefinementPrompt(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
-	
+
 	stats := PlaybookStats{
 		TotalBullets:     100,
 		AvgHelpfulCount:  5.2,
@@ -45,9 +52,9 @@ func TestBuildRefinementPrompt(t *testing.T) {
 		LowUtilityCount:  10,
 		HighUtilityCount: 20,
 	}
-	
+
 	prompt := builder.BuildRefinementPrompt("[B001] Check nil\n[B002] Validate input\n", stats)
-	
+
 	require.NotEmpty(t, prompt)
 	assert.Contains(t, prompt, "100")
 	assert.Contains(t, prompt, "5.2")
@@ -55,17 +62,19 @@ func TestBuildRefinementPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "operations")
 }
 
-// TestFormatReflectionForCurator tests formatting insights for curator
+// TestFormatReflectionForCurator tests formatting insights for curator.
 func TestFormatReflectionForCurator(t *testing.T) {
+	t.Parallel()
+
 	insight := &reflector.Insight{
 		Content:    "Always validate user input before processing",
 		Confidence: 0.95,
 		Category:   reflector.CategorySuccessPattern,
 		Evidence:   []string{"prevented SQL injection", "caught invalid data"},
 	}
-	
+
 	formatted := FormatReflectionForCurator(insight)
-	
+
 	require.NotEmpty(t, formatted)
 	assert.Contains(t, formatted, "Always validate user input")
 	assert.Contains(t, formatted, "0.95")

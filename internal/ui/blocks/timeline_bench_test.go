@@ -2,6 +2,7 @@ package blocks_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
@@ -9,29 +10,34 @@ import (
 
 // BenchmarkTimelineAppend_10k measures append performance for 10k blocks.
 func BenchmarkTimelineAppend_10k(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		b.StopTimer()
+
 		tl := blocks.NewTimeline()
+
 		b.StartTimer()
 
-		for j := 0; j < 10000; j++ {
+		for j := range 10000 {
 			block := blocks.NewBlock(blocks.BlockTypeExecute)
 			block.Title = fmt.Sprintf("Block %d", j)
-			_ = tl.Append(block)
+
+			if err := tl.Append(block); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }
 
 // BenchmarkTimelineGetVisibleBlocks_10k measures viewport calculation for 10k blocks.
 func BenchmarkTimelineGetVisibleBlocks_10k(b *testing.B) {
-	// Setup: Create timeline with 10k blocks
+	// Setup: Create timeline with 10k blocks.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		block.Body = generateMockTranscript(50) // 50 lines
+		block.Body = generateMockTranscript(50) // 50 lines.
 		meta := &blocks.ExecuteMeta{
 			Command:    "go test ./...",
 			CWD:        "/home/user/project",
@@ -40,67 +46,79 @@ func BenchmarkTimelineGetVisibleBlocks_10k(b *testing.B) {
 			DurationMS: ptr(int64(4200)),
 			LinesOut:   ptr(50),
 		}
-		blocks.SetExecuteMeta(block, meta)
-		_ = tl.Append(block)
+
+		if err := blocks.SetExecuteMeta(block, meta); err != nil {
+			b.Fatal(err)
+		}
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
-	// Scroll to middle to test realistic scenario
+	// Scroll to middle to test realistic scenario.
 	tl.ScrollDown(5000)
 
-	// Reset timer after setup
+	// Reset timer after setup.
 	b.ResetTimer()
 
-	// Benchmark: GetVisibleBlocks
-	for i := 0; i < b.N; i++ {
+	// Benchmark: GetVisibleBlocks.
+	for range b.N {
 		_ = tl.GetVisibleBlocks()
 	}
 }
 
 // BenchmarkTimelineGetVisibleBlocks_100k measures viewport calculation for 100k blocks.
 func BenchmarkTimelineGetVisibleBlocks_100k(b *testing.B) {
-	// Setup: Create timeline with 100k blocks
+	// Setup: Create timeline with 100k blocks.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 100000; i++ {
+	for i := range 100000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
-	// Scroll to middle
+	// Scroll to middle.
 	tl.ScrollDown(50000)
 
-	// Reset timer after setup
+	// Reset timer after setup.
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_ = tl.GetVisibleBlocks()
 	}
 }
 
 // BenchmarkTimelineScrollDown_10k measures scroll performance.
 func BenchmarkTimelineScrollDown_10k(b *testing.B) {
-	// Setup
+	// Setup.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
 
-	// Benchmark: Scroll down operations
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Scroll down operations.
+	for range b.N {
 		b.StopTimer()
 		tl.ScrollToTop()
 		b.StartTimer()
 
-		for j := 0; j < 100; j++ {
+		for range 100 {
 			tl.ScrollDown(10)
 		}
 	}
@@ -108,25 +126,28 @@ func BenchmarkTimelineScrollDown_10k(b *testing.B) {
 
 // BenchmarkTimelineScrollPgDn_10k measures page down performance.
 func BenchmarkTimelineScrollPgDn_10k(b *testing.B) {
-	// Setup
+	// Setup.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
 
-	// Benchmark: Page down operations (40-row viewport)
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Page down operations (40-row viewport).
+	for range b.N {
 		b.StopTimer()
 		tl.ScrollToTop()
 		b.StartTimer()
 
-		for j := 0; j < 250; j++ { // 250 pages * 40 rows = 10k blocks
+		for range 250 { // 250 pages * 40 rows = 10k blocks.
 			tl.ScrollDown(40)
 		}
 	}
@@ -134,20 +155,23 @@ func BenchmarkTimelineScrollPgDn_10k(b *testing.B) {
 
 // BenchmarkTimelineScrollToBottom_10k measures jump to bottom performance.
 func BenchmarkTimelineScrollToBottom_10k(b *testing.B) {
-	// Setup
+	// Setup.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
 
-	// Benchmark: Jump operations
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Jump operations.
+	for range b.N {
 		tl.ScrollToTop()
 		tl.ScrollToBottom()
 	}
@@ -155,11 +179,11 @@ func BenchmarkTimelineScrollToBottom_10k(b *testing.B) {
 
 // BenchmarkTimelineFilter_10k measures filter application performance.
 func BenchmarkTimelineFilter_10k(b *testing.B) {
-	// Setup: Create timeline with mixed block types
+	// Setup: Create timeline with mixed block types.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		var blockType blocks.BlockType
 		if i%2 == 0 {
 			blockType = blocks.BlockTypeExecute
@@ -169,7 +193,10 @@ func BenchmarkTimelineFilter_10k(b *testing.B) {
 
 		block := blocks.NewBlock(blockType)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	filter := &blocks.Filter{
@@ -178,8 +205,8 @@ func BenchmarkTimelineFilter_10k(b *testing.B) {
 
 	b.ResetTimer()
 
-	// Benchmark: Filter application + get visible
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Filter application + get visible.
+	for range b.N {
 		tl.SetFilter(filter)
 		_ = tl.GetVisibleBlocks()
 		tl.ClearFilter()
@@ -189,25 +216,31 @@ func BenchmarkTimelineFilter_10k(b *testing.B) {
 
 // BenchmarkTimelineFilter_ExitCode_10k measures exit code filtering performance.
 func BenchmarkTimelineFilter_ExitCode_10k(b *testing.B) {
-	// Setup: Create timeline with varied exit codes
+	// Setup: Create timeline with varied exit codes.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
 
 		exitCode := 0
 		if i%10 == 0 {
-			exitCode = 1 // 10% failures
+			exitCode = 1 // 10% failures.
 		}
 
 		meta := &blocks.ExecuteMeta{
 			Command:  "test command",
 			ExitCode: ptr(exitCode),
 		}
-		blocks.SetExecuteMeta(block, meta)
-		_ = tl.Append(block)
+
+		if err := blocks.SetExecuteMeta(block, meta); err != nil {
+			b.Fatal(err)
+		}
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	exitCode := 1
@@ -217,8 +250,8 @@ func BenchmarkTimelineFilter_ExitCode_10k(b *testing.B) {
 
 	b.ResetTimer()
 
-	// Benchmark: Filter by exit code
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Filter by exit code.
+	for range b.N {
 		tl.SetFilter(filter)
 		_ = tl.GetVisibleBlocks()
 		tl.ClearFilter()
@@ -227,92 +260,128 @@ func BenchmarkTimelineFilter_ExitCode_10k(b *testing.B) {
 
 // BenchmarkTimelineNextBlock_10k measures focus navigation performance.
 func BenchmarkTimelineNextBlock_10k(b *testing.B) {
-	// Setup
+	// Setup.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
-	// Focus first block
-	firstBlock, _ := tl.GetByIndex(0)
-	tl.FocusBlock(firstBlock.ID)
+	// Focus first block.
+	firstBlock, err := tl.GetByIndex(0)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	err = tl.FocusBlock(firstBlock.ID)
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	b.ResetTimer()
 
-	// Benchmark: Navigation through all blocks
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Navigation through all blocks.
+	for range b.N {
 		b.StopTimer()
-		tl.FocusBlock(firstBlock.ID)
+
+		err = tl.FocusBlock(firstBlock.ID)
+		if err != nil {
+			b.Fatal(err)
+		}
+
 		b.StartTimer()
 
-		for j := 0; j < 10000; j++ {
-			tl.NextBlock()
+		for range 10000 {
+			err = tl.NextBlock()
+			if err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }
 
 // BenchmarkTimelineToggleFold_10k measures collapse/expand performance.
 func BenchmarkTimelineToggleFold_10k(b *testing.B) {
-	// Setup
+	// Setup.
 	tl := blocks.NewTimeline()
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		block.Body = generateMockTranscript(100) // Large body
-		_ = tl.Append(block)
+		block.Body = generateMockTranscript(100) // Large body.
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
-	// Get middle block ID
-	middleBlock, _ := tl.GetByIndex(5000)
+	// Get middle block ID.
+	middleBlock, err := tl.GetByIndex(5000)
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	b.ResetTimer()
 
-	// Benchmark: Toggle fold state
-	for i := 0; i < b.N; i++ {
-		tl.ToggleFold(middleBlock.ID)
+	// Benchmark: Toggle fold state.
+	for range b.N {
+		err = tl.ToggleFold(middleBlock.ID)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
 // BenchmarkTimelineExpandAll_10k measures expand all performance.
 func BenchmarkTimelineExpandAll_10k(b *testing.B) {
-	// Setup
+	// Setup.
 	tl := blocks.NewTimeline()
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
 		block.FoldState = blocks.FoldStateCollapsed
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
 
-	// Benchmark: Expand all
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Expand all.
+	for range b.N {
 		tl.ExpandAll()
 
-		// Reset for next iteration
+		// Reset for next iteration.
 		b.StopTimer()
 		tl.CollapseAll()
 		b.StartTimer()
 	}
 }
 
-// Helper: ptr returns a pointer to the given value
+// Helper: ptr returns a pointer to the given value.
 func ptr[T any](v T) *T {
 	return &v
 }
 
-// Helper: Generate mock transcript
+// Helper: Generate mock transcript.
 func generateMockTranscript(lines int) string {
 	result := ""
-	for i := 0; i < lines; i++ {
-		result += fmt.Sprintf("Line %d: output from command execution\n", i)
+
+	var resultSb316 strings.Builder
+
+	for i := range lines {
+		fmt.Fprintf(&resultSb316, "Line %d: output from command execution\n", i)
 	}
+
+	result += resultSb316.String()
+
 	return result
 }

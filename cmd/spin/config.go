@@ -2,16 +2,39 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
-	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
+)
+
+var (
+	// ErrUnsupportedFormat is a sentinel error.
+	ErrUnsupportedFormat = errors.New("unsupported format")
+	// ErrValidationFailed is a sentinel error.
+	ErrValidationFailed = errors.New("validation failed")
+	// ErrNoConfigFile is a sentinel error.
+	ErrNoConfigFile = errors.New("no config file")
+	// ErrNoEditorFoundSetEditorOr is a sentinel error.
+	ErrNoEditorFoundSetEditorOr = errors.New("no editor found. Set $EDITOR or $VISUAL environment variable")
+	// ErrKeyNotFound is a sentinel error.
+	ErrKeyNotFound = errors.New("key not found")
+)
+
+const (
+	formatJSON       = "json"
+	formatText       = "text"
+	answerYes        = "yes"
+	binaryApplyPatch = "spin-apply-patch"
+	keyValueArgCount = 2
 )
 
 // newConfigCmd creates the config management command.
@@ -39,6 +62,8 @@ Examples:
 	cmd.AddCommand(newConfigValidateCmd())
 	cmd.AddCommand(newConfigEditCmd())
 	cmd.AddCommand(newConfigPathCmd())
+	cmd.AddCommand(newConfigGetCmd())
+	cmd.AddCommand(newConfigSetCmd())
 
 	return cmd
 }
@@ -64,6 +89,7 @@ Examples:
 		RunE: runConfigShow,
 	}
 	cmd.Flags().String("format", "yaml", "Output format (text, json, yaml)")
+
 	return cmd
 }
 
@@ -85,6 +111,7 @@ Examples:
 		RunE: runConfigValidate,
 	}
 	cmd.Flags().String("file", "", "Config file to validate (default: use search paths)")
+
 	return cmd
 }
 
@@ -106,6 +133,7 @@ Examples:
 		RunE: runConfigEdit,
 	}
 	cmd.Flags().Bool("no-validate", false, "Skip validation after editing")
+
 	return cmd
 }
 
@@ -127,91 +155,116 @@ Examples:
 		RunE: runConfigPath,
 	}
 	cmd.Flags().Bool("all", false, "Show all search paths")
+
 	return cmd
 }
 
 // runConfigShow implements the 'config show' command.
-func runConfigShow(cmd *cobra.Command, args []string) error {
+func runConfigShow(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
-	// Load config
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	// Use V2 loader with env override support.
+	loaderV2 := config.NewLoaderV2()
+
+	var (
+		cfgV2 *config.V2
+		errV2 error
+	)
+
+	if cf := flagConfigFile(cmd); cf != "" {
+		cfgV2, errV2 = loaderV2.LoadFromFileWithEnv(cf)
+	} else {
+		cfgV2, errV2 = loaderV2.Load()
 	}
 
-	// Get all settings
-	settings := loader.AllSettings()
-
-	// Redact sensitive values
-	redactSensitiveValues(settings)
-
-	// Show config file source if using text format
-	if format == "text" || format == "yaml" {
-		configPath := loader.ConfigFileUsed()
-		if configPath != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "# Configuration: %s\n\n", configPath)
-		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "# No configuration file (using defaults)\n\n")
-		}
+	if errV2 != nil {
+		return fmt.Errorf("failed to load config: %w", errV2)
 	}
 
-	// Display based on format
+	// Successfully loaded V2 config, show it.
+	if format == formatText || format == "yaml" {
+		fmt.Fprintf(cmd.OutOrStdout(), "# Configuration V2\n\n")
+	}
+
 	switch format {
-	case "json":
-		return printJSON(cmd.OutOrStdout(), settings)
-	case "yaml", "text":
-		return printYAML(cmd.OutOrStdout(), settings)
+	case formatJSON:
+		return printJSON(cmd.OutOrStdout(), cfgV2)
+	case "yaml", formatText:
+		return printYAML(cmd.OutOrStdout(), cfgV2)
 	default:
-		return fmt.Errorf("unsupported format: %s (use: text, json, yaml)", format)
+		return fmt.Errorf("unsupported format: %s (use: text, json, yaml): %w", format, ErrUnsupportedFormat)
 	}
 }
 
 // runConfigValidate implements the 'config validate' command.
-func runConfigValidate(cmd *cobra.Command, args []string) error {
+func runConfigValidate(cmd *cobra.Command, _ []string) error {
 	file, _ := cmd.Flags().GetString("file")
 
-	// Determine which file to load
-	configPath := flagConfigFile
+	// Determine which file to load.
+	configPath := flagConfigFile(cmd)
 	if file != "" {
 		configPath = file
 	}
 
-	// Load config
-	loader := config.NewLoader()
-	var err error
+	// Use V2 loader.
+	loaderV2 := config.NewLoaderV2()
+
+	var (
+		cfgV2 *config.V2
+		errV2 error
+	)
+
 	if configPath != "" {
-		err = loader.LoadFromFile(configPath)
+		cfgV2, errV2 = loaderV2.LoadFromFile(configPath)
 	} else {
-		err = loader.Load("")
+		// Try loading with LoadWithEnv which uses default search paths.
+		cfgV2, errV2 = loaderV2.LoadWithEnv()
+		if errV2 != nil {
+			// Try plain Load() without env.
+			cfgV2, errV2 = loaderV2.Load()
+		}
 	}
 
-	if err != nil {
+	if errV2 != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration is invalid\n\n")
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", errV2)
+
+		return ErrValidationFailed
+	}
+
+	// V2 config loaded successfully (possibly migrated from V1), validate it.
+	err := cfgV2.Validate()
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration V2 is invalid\n\n")
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return fmt.Errorf("validation failed")
+
+		return ErrValidationFailed
 	}
 
-	// Get the actual config file used
-	actualPath := loader.ConfigFileUsed()
-	if actualPath == "" {
-		fmt.Fprintf(cmd.ErrOrStderr(), "✗ No configuration file found\n")
-		return fmt.Errorf("no config file")
-	}
+	fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration V2 is valid (version: %s)\n", cfgV2.Version)
 
-	fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration is valid: %s\n", actualPath)
 	return nil
 }
 
 // runConfigPath implements the 'config path' command.
-func runConfigPath(cmd *cobra.Command, args []string) error {
+func runConfigPath(cmd *cobra.Command, _ []string) error {
 	showAll, _ := cmd.Flags().GetBool("all")
 
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
-		// Config not found - show search paths
+	loaderV2 := config.NewLoaderV2()
+
+	var errV2 error
+
+	if cf := flagConfigFile(cmd); cf != "" {
+		_, errV2 = loaderV2.LoadFromFile(cf)
+	} else {
+		_, errV2 = loaderV2.Load()
+	}
+
+	if errV2 != nil {
+		// Config not found - show search paths.
 		if showAll {
 			fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Search paths:\n")
+
 			for _, path := range getConfigSearchPaths() {
 				fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", path)
 			}
@@ -219,30 +272,33 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Using defaults.\n")
 			fmt.Fprintf(cmd.OutOrStdout(), "Run 'spin config path --all' to see search paths.\n")
 		}
-		return fmt.Errorf("no config file")
+
+		return ErrNoConfigFile
 	}
 
-	configPath := loader.ConfigFileUsed()
+	configPath := loaderV2.ConfigFileUsed()
 	if configPath == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Using defaults.\n")
-		return fmt.Errorf("no config file")
+
+		return ErrNoConfigFile
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", configPath)
+
 	return nil
 }
 
 // runConfigEdit implements the 'config edit' command.
-func runConfigEdit(cmd *cobra.Command, args []string) error {
+func runConfigEdit(cmd *cobra.Command, _ []string) error {
 	noValidate, _ := cmd.Flags().GetBool("no-validate")
 
-	// Load or determine config path
-	loader := config.NewLoader()
-	_ = loader.Load(flagConfigFile)
+	// Load or determine config path.
+	loaderV2 := config.NewLoaderV2()
+	_, _ = loaderV2.Load()
 
-	configPath := loader.ConfigFileUsed()
+	configPath := loaderV2.ConfigFileUsed()
 	if configPath == "" {
-		// Create default config in home directory
+		// Create default config in home directory.
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home directory: %w", err)
@@ -251,40 +307,53 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 		configDir := filepath.Join(homeDir, ".spin")
 		configPath = filepath.Join(configDir, "spin.yaml")
 
-		// Create directory if needed
-		if err := os.MkdirAll(configDir, 0755); err != nil {
+		// Create directory if needed.
+		err = os.MkdirAll(configDir, 0o750)
+		if err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}
 
-		// Create default config
-		if err := createDefaultConfig(configPath); err != nil {
+		// Create default config.
+		err = createDefaultConfig(configPath)
+		if err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Created new configuration file: %s\n", configPath)
 	}
 
-	// Find editor
-	editor := getEditor()
+	// Find editor.
+	editor := execx.FindEditor()
 	if editor == "" {
-		return fmt.Errorf("no editor found. Set $EDITOR or $VISUAL environment variable")
+		return ErrNoEditorFoundSetEditorOr
 	}
 
-	// Open editor
-	editorCmd := exec.Command(editor, configPath)
+	// Open editor.
+	editorCmd := exec.CommandContext(cmd.Context(), editor, configPath)
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
 
-	if err := editorCmd.Run(); err != nil {
+	err := editorCmd.Run()
+	if err != nil {
 		return fmt.Errorf("editor failed: %w", err)
 	}
 
-	// Validate after editing
+	// Validate after editing.
 	if !noValidate {
-		newLoader := config.NewLoader()
-		if err := newLoader.LoadFromFile(configPath); err != nil {
+		newLoaderV2 := config.NewLoaderV2()
+
+		var cfgV2 *config.V2
+
+		cfgV2, err = newLoaderV2.LoadFromFile(configPath)
+		if err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration has errors:\n%v\n", err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "\nRun 'spin config validate' for details.\n")
+		}
+
+		err = cfgV2.Validate()
+		if err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration validation failed:\n%v\n", err)
 			fmt.Fprintf(cmd.ErrOrStderr(), "\nRun 'spin config validate' for details.\n")
 		}
 	}
@@ -292,67 +361,34 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// Helper functions
-
-// redactSensitiveValues redacts sensitive values in the config map.
-func redactSensitiveValues(m map[string]interface{}) {
-	sensitiveKeys := []string{
-		"api_key", "apikey", "api-key",
-		"secret", "password", "token",
-		"credentials", "credential",
-		"key", "private_key", "private-key",
-	}
-
-	for k, v := range m {
-		lowerKey := strings.ToLower(k)
-
-		// Check if key is sensitive
-		for _, sensitive := range sensitiveKeys {
-			if strings.Contains(lowerKey, sensitive) {
-				m[k] = "<redacted>"
-				continue
-			}
-		}
-
-		// Recursively redact nested maps
-		if nested, ok := v.(map[string]interface{}); ok {
-			redactSensitiveValues(nested)
-		}
-	}
-}
+// Helper functions.
 
 // printJSON prints data as JSON.
 func printJSON[T any](out io.Writer, data T) error {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(data)
+
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("encoding JSON: %w", err)
+	}
+
+	return nil
 }
 
 // printYAML prints data as YAML.
+const yamlIndent = 2
+
 func printYAML[T any](out io.Writer, data T) error {
 	encoder := yaml.NewEncoder(out)
-	encoder.SetIndent(2)
+
+	encoder.SetIndent(yamlIndent)
 	defer encoder.Close()
-	return encoder.Encode(data)
-}
 
-// getEditor returns the preferred editor.
-func getEditor() string {
-	if editor := os.Getenv("EDITOR"); editor != "" {
-		return editor
-	}
-	if visual := os.Getenv("VISUAL"); visual != "" {
-		return visual
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("encoding YAML: %w", err)
 	}
 
-	// Try common editors
-	for _, editor := range []string{"vi", "vim", "nano", "emacs"} {
-		if _, err := exec.LookPath(editor); err == nil {
-			return editor
-		}
-	}
-
-	return ""
+	return nil
 }
 
 // getConfigSearchPaths returns the list of config search paths.
@@ -366,55 +402,180 @@ func getConfigSearchPaths() []string {
 	}
 }
 
-// createDefaultConfig creates a default configuration file.
-func createDefaultConfig(path string) error {
-	defaultConfig := `# Spin Configuration File
+func newConfigGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <key>",
+		Short: "Get a configuration value",
+		Long: `Get a specific configuration value by key.
+
+Examples:
+  spin config get llm.model
+  spin config get ace.enabled`,
+		Args: cobra.ExactArgs(1),
+		RunE: runConfigGet,
+	}
+}
+
+func newConfigSetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set <key> <value>",
+		Short: "Set a configuration value",
+		Long: `Set a specific configuration value by key.
+
+Examples:
+  spin config set llm.model gpt-4
+  spin config set ace.enabled true`,
+		Args: cobra.ExactArgs(keyValueArgCount),
+		RunE: runConfigSet,
+	}
+}
+
+// runConfigGet implements the 'config get' command.
+func runConfigGet(cmd *cobra.Command, args []string) error {
+	key := args[0]
+
+	loaderV2 := config.NewLoaderV2()
+
+	_, err := loaderV2.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	value := loaderV2.Get(key)
+	if value == nil {
+		return fmt.Errorf("key not found: %s: %w", key, ErrKeyNotFound)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "%v\n", value)
+
+	return nil
+}
+
+// runConfigSet implements the 'config set' command.
+func runConfigSet(cmd *cobra.Command, args []string) error {
+	key := args[0]
+	value := args[1]
+
+	loaderV2 := config.NewLoaderV2()
+
+	_, err := loaderV2.Load()
+	if err != nil {
+		// If config doesn't exist, that's okay - we'll create it.
+		_ = err
+	}
+
+	loaderV2.Set(key, value)
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Set %s = %s\n", key, value)
+	fmt.Fprintf(cmd.OutOrStdout(), "Note: Changes are in-memory only. Use 'spin config edit' to persist.\n")
+
+	return nil
+}
+
+// defaultConfigTemplate is the default configuration file content.
+const defaultConfigTemplate = `# Spin Configuration File V2
 # See: https://docs.spin.dev/configuration
+
+version: "2.0"
 
 llm:
   # Provider: openai, anthropic, ollama, lmstudio, openai-compatible
-  provider: openai
+  provider: ollama
 
   # Model name
-  model: gpt-4o
+  model: qwen2.5-coder:7b
 
-  # API endpoint (optional, uses provider default)
-  # base_url: https://api.openai.com/v1
+  # Temperature (0.0-2.0)
+  temperature: 0.7
+
+  # Max tokens per request
+  max_tokens: 8192
 
   # Request timeout
-  timeout: 60s
+  timeout: 5m
 
-  # Authentication (recommended: use keystore)
-  # Store key: spin config set-key my-key sk-...
-  # Then reference: key_name: my-key
-  #
-  # Or use environment variable:
-  # export OPENAI_API_KEY=sk-...
+  # API endpoint (optional, uses provider default)
+  # base_url: http://localhost:11434/v1
 
-# Sandbox settings
-sandbox:
-  # Mode: read-only, workspace-only, full-access
-  mode: workspace-only
+  # Authentication (recommended: use keystore or environment variable)
+  # api_key: ""
 
-# Appearance (TUI only)
-appearance:
-  theme: auto  # auto, dark, light, plain
-  no_color: false
+agent:
+  # Maximum conversation turns
+  max_turns: 50
 
-# Logging
-logging:
-  level: info  # debug, info, warn, error
-  format: text  # text, json
+  # Agent execution timeout
+  timeout: 60m
 
-# MCP Servers (Model Context Protocol)
-# mcp_servers:
-#   - name: filesystem
-#     command: npx
-#     args:
-#       - -y
-#       - @modelcontextprotocol/server-filesystem
-#       - /workspace
+  # Working directory
+  work_dir: "."
+
+  # Require approval for dangerous operations
+  require_approval: false
+
+  # Logging
+  log_level: info  # debug, info, warn, error
+  log_format: text  # text, json
+  debug: false
+
+  # Cycle detection
+  cycle_detection:
+    enabled: true
+    window_size: 3
+    similarity_thresh: 0.8
+    tool_repeat_limit: 3
+    error_repeat_limit: 3
+
+ace:
+  # Enable Agentic Context Engineering
+  enabled: false
+
+  # Paths
+  playbook_path: "~/.spin/ace/playbooks/default.json"
+  trajectory_path: "~/.spin/ace/trajectories/"
+
+  # Retrieval settings
+  top_k: 5
+  min_score: 0.3
+
+security:
+  # Sandbox mode: none, workspace-only
+  sandbox_mode: workspace-only
+
+  # Policy file path
+  # policy_file: ""
+
+  # Allowed commands
+  # allowed_commands: []
+
+protocol:
+  # Enable MCP (Model Context Protocol)
+  enable_mcp: false
+
+  # MCP Servers
+  # mcp_servers:
+  #   - name: filesystem
+  #     command: npx
+  #     args:
+  #       - -y
+  #       - @modelcontextprotocol/server-filesystem
+  #       - /workspace
+
+  # Enable Git integration
+  enable_git: true
+
+  # Enable Shell integration
+  enable_shell: true
+
+  # Shell timeout
+  shell_timeout: 5m
 `
 
-	return os.WriteFile(path, []byte(defaultConfig), 0644)
+// createDefaultConfig creates a default configuration file.
+func createDefaultConfig(path string) error {
+	if err := os.WriteFile(path, []byte(defaultConfigTemplate), 0o600); err != nil {
+		return fmt.Errorf("writing default config: %w", err)
+	}
+
+	return nil
 }

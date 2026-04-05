@@ -39,6 +39,7 @@ func (bt BlockType) Valid() bool {
 		BlockTypeNotice, BlockTypeError:
 		return true
 	}
+
 	return false
 }
 

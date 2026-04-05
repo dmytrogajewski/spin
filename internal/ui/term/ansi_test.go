@@ -6,6 +6,8 @@ import (
 
 // TestANSIConstants verifies ANSI escape sequences match specification.
 func TestANSIConstants(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		got  string
@@ -21,6 +23,8 @@ func TestANSIConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tt.got != tt.want {
 				t.Errorf("got %q, want %q", tt.got, tt.want)
 			}
@@ -31,7 +35,8 @@ func TestANSIConstants(t *testing.T) {
 // BenchmarkANSIConstants ensures constants don't allocate.
 func BenchmarkANSIConstants(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = ClearLine
 		_ = HideCursor
 		_ = ShowCursor

@@ -1,3 +1,4 @@
+// Package main provides a TUI blocks rendering example.
 package main
 
 import (
@@ -12,107 +13,178 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 )
 
+const (
+	exampleTimeout    = 600
+	exampleDurationMS = 51
+	exampleLinesOut   = 6
+	exampleTotalSteps = 6
+	examplePending    = 3
+	exampleCompleted  = 2
+	exampleLimit      = 50
+	exampleContext    = 2
+	exampleLinesAdded = 3
+)
+
 func main() {
-	// Create PureTTY adapter with block rendering
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Set up context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle signals
+	startSignalHandler(cancel)
+	startTUI(ctx, ui, cancel)
+	printHeader(ui)
+	createBlocks(ui)
+	printInstructions(ui)
+	runInputLoop(ctx, ui, cancel)
+}
+
+// startSignalHandler listens for interrupt signals and cancels the context.
+func startSignalHandler(cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
 		<-sigChan
 		cancel()
 	}()
+}
 
-	// Start TUI
+// startTUI runs the TUI adapter in a background goroutine.
+func startTUI(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	go func() {
-		if err := ui.Run(ctx); err != nil {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		runErr := ui.Run(ctx)
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "TUI error: %v\n", runErr)
 			cancel()
 		}
 	}()
+}
 
-	// Print header
-	ui.PrintLine("╔══════════════════════════════════════════════════════════╗")
-	ui.PrintLine("║   Spin TUI - Block Types Demo                           ║")
-	ui.PrintLine("╚══════════════════════════════════════════════════════════╝")
-	ui.PrintLine("")
-	ui.PrintLine("This demo shows all 9 block types with realistic examples.")
-	ui.PrintLine("")
+// printHeader prints the application header.
+func printHeader(ui *adapters.PureTTY) {
+	lines := []string{
+		"╔══════════════════════════════════════════════════════════╗",
+		"║   Spin TUI - Block Types Demo                           ║",
+		"╚══════════════════════════════════════════════════════════╝",
+		"",
+		"This demo shows all 9 block types with realistic examples.",
+		"",
+	}
+	printLines(ui, lines)
+}
 
-	// Create blocks and append to timeline
-	createBlocks(ui)
+// printInstructions prints usage instructions.
+func printInstructions(ui *adapters.PureTTY) {
+	lines := []string{
+		"",
+		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+		"",
+		"🎯 Try these actions:",
+		"",
+		"Navigation:",
+		"  PgUp / PgDn     Scroll timeline by page",
+		"  g / G           Jump to top / bottom",
+		"  [ / ]           Previous / next block",
+		"",
+		"Block actions:",
+		"  Enter           Toggle fold/expand block",
+		"  y               Copy block body",
+		"  S               Save block to file",
+		"  r               Rerun EXECUTE block",
+		"",
+		"Advanced:",
+		"  Ctrl-P          Command palette",
+		"  /               Filter timeline",
+		"  zR / zM         Expand / collapse all",
+		"",
+		"Type 'quit' to exit, or press Ctrl-D",
+		"",
+	}
+	printLines(ui, lines)
+}
 
-	// Instructions
-	ui.PrintLine("")
-	ui.PrintLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	ui.PrintLine("")
-	ui.PrintLine("🎯 Try these actions:")
-	ui.PrintLine("")
-	ui.PrintLine("Navigation:")
-	ui.PrintLine("  PgUp / PgDn     Scroll timeline by page")
-	ui.PrintLine("  g / G           Jump to top / bottom")
-	ui.PrintLine("  [ / ]           Previous / next block")
-	ui.PrintLine("")
-	ui.PrintLine("Block actions:")
-	ui.PrintLine("  Enter           Toggle fold/expand block")
-	ui.PrintLine("  y               Copy block body")
-	ui.PrintLine("  S               Save block to file")
-	ui.PrintLine("  r               Rerun EXECUTE block")
-	ui.PrintLine("")
-	ui.PrintLine("Advanced:")
-	ui.PrintLine("  Ctrl-P          Command palette")
-	ui.PrintLine("  /               Filter timeline")
-	ui.PrintLine("  zR / zM         Expand / collapse all")
-	ui.PrintLine("")
-	ui.PrintLine("Type 'quit' to exit, or press Ctrl-D")
-	ui.PrintLine("")
+// check panics if err is non-nil. Used in example/demo programs only.
+func check(err error) {
+	if err != nil {
+		log.Fatalf("TUI error: %v", err)
+	}
+}
 
-	// Main loop
+// printLines prints multiple lines to the TUI.
+func printLines(ui *adapters.PureTTY, lines []string) {
+	for _, line := range lines {
+		check(ui.PrintLine(line))
+	}
+}
+
+// runInputLoop handles user input until the context is canceled.
+func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	for {
 		select {
 		case <-ctx.Done():
-			ui.Stop()
-			fmt.Println("\nGoodbye!")
+			check(ui.Stop())
+
+			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
+
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				ui.Stop()
+				check(ui.Stop())
+
 				return
 			}
 
-			switch line {
-			case "quit", "exit", "q":
-				cancel()
-			case "help", "h", "?":
-				ui.PrintLine("")
-				ui.PrintLine("See navigation and block actions above.")
-				ui.PrintLine("")
-			case "":
-				// Ignore empty lines
-			default:
-				ui.PrintLine(fmt.Sprintf("Echo: %s", line))
-			}
+			handleInput(ui, line, cancel)
 		}
 	}
 }
 
-// createBlocks creates sample blocks of all types
-func createBlocks(ui *adapters.PureTTY) {
-	// Helper to create int pointer
-	intPtr := func(i int) *int { return &i }
-	int64Ptr := func(i int64) *int64 { return &i }
+// handleInput processes a single line of user input.
+func handleInput(ui *adapters.PureTTY, line string, cancel context.CancelFunc) {
+	switch line {
+	case "quit", "exit", "q":
+		cancel()
+	case "help", "h", "?":
+		check(ui.PrintLine(""))
+		check(ui.PrintLine("See navigation and block actions above."))
+		check(ui.PrintLine(""))
+	case "":
+		// Ignore empty lines.
+	default:
+		check(ui.PrintLine(fmt.Sprintf("Echo: %s", line)))
+	}
+}
 
-	// 1. EXECUTE block (success)
+// intPtr returns a pointer to an int.
+func intPtr(i int) *int { return &i }
+
+// int64Ptr returns a pointer to an int64.
+func int64Ptr(i int64) *int64 { return &i }
+
+// createBlocks creates sample blocks of all types.
+func createBlocks(ui *adapters.PureTTY) {
+	createExecuteBlock(ui)
+	createPlanBlock(ui)
+	createReadBlock(ui)
+	createGrepBlock(ui)
+	createPatchBlock(ui)
+	createSummaryBlock(ui)
+	createTestingBlock(ui)
+	createNoticeBlock(ui)
+	createErrorBlock(ui)
+
+	check(ui.PrintLine(""))
+	check(ui.PrintLine("✅ Created 9 blocks (one of each type)"))
+}
+
+// createExecuteBlock creates a sample EXECUTE block.
+func createExecuteBlock(ui *adapters.PureTTY) {
 	execBlock := blocks.NewBlock(blocks.BlockTypeExecute)
 	execBlock.Title = "Run tests"
 	execBlock.Body = `=== RUN   TestCalculate
@@ -125,18 +197,22 @@ ok      github.com/user/project    0.051s`
 	execMeta := &blocks.ExecuteMeta{
 		Command:    "go test -race ./...",
 		CWD:        "./",
-		TimeoutSec: 600,
+		TimeoutSec: exampleTimeout,
 		Impact:     "medium",
 		ExitCode:   intPtr(0),
-		DurationMS: int64Ptr(51),
-		LinesOut:   intPtr(6),
+		DurationMS: int64Ptr(exampleDurationMS),
+		LinesOut:   intPtr(exampleLinesOut),
 	}
+
 	if err := blocks.SetExecuteMeta(execBlock, execMeta); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting execute meta: %v\n", err)
 	}
-	ui.AppendBlock(execBlock)
 
-	// 2. PLAN block
+	check(ui.AppendBlock(execBlock))
+}
+
+// createPlanBlock creates a sample PLAN block.
+func createPlanBlock(ui *adapters.PureTTY) {
 	planBlock := blocks.NewBlock(blocks.BlockTypePlan)
 	planBlock.Title = "Implementation plan"
 	planBlock.Body = `✓ Install dependencies (completed)
@@ -146,19 +222,22 @@ ok      github.com/user/project    0.051s`
 • Write documentation (pending)
 • Deploy to staging (pending)`
 
-	// Set plan metadata
 	planMeta := &blocks.PlanMeta{
-		Total:      6,
-		Pending:    3,
+		Total:      exampleTotalSteps,
+		Pending:    examplePending,
 		InProgress: 1,
-		Completed:  2,
+		Completed:  exampleCompleted,
 	}
+
 	if err := blocks.SetPlanMeta(planBlock, planMeta); err != nil {
 		log.Printf("Failed to set plan metadata: %v", err)
 	}
-	ui.AppendBlock(planBlock)
 
-	// 3. READ block
+	check(ui.AppendBlock(planBlock))
+}
+
+// createReadBlock creates a sample READ block.
+func createReadBlock(ui *adapters.PureTTY) {
 	readBlock := blocks.NewBlock(blocks.BlockTypeRead)
 	readBlock.Title = "internal/tui/input.go"
 	readBlock.Body = `package tui
@@ -186,14 +265,18 @@ func NewInput() *Input {
 	readMeta := &blocks.ReadMeta{
 		File:   "internal/tui/input.go",
 		Offset: 0,
-		Limit:  50,
+		Limit:  exampleLimit,
 	}
+
 	if err := blocks.SetReadMeta(readBlock, readMeta); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting read meta: %v\n", err)
 	}
-	ui.AppendBlock(readBlock)
 
-	// 4. GREP block
+	check(ui.AppendBlock(readBlock))
+}
+
+// createGrepBlock creates a sample GREP block.
+func createGrepBlock(ui *adapters.PureTTY) {
 	grepBlock := blocks.NewBlock(blocks.BlockTypeGrep)
 	grepBlock.Title = "Search results"
 	grepBlock.Body = `main.go:42:
@@ -211,14 +294,18 @@ utils.go:18:
 	grepMeta := &blocks.GrepMeta{
 		Pattern: "TODO",
 		Mode:    "content",
-		Context: 2,
+		Context: exampleContext,
 	}
+
 	if err := blocks.SetGrepMeta(grepBlock, grepMeta); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting grep meta: %v\n", err)
 	}
-	ui.AppendBlock(grepBlock)
 
-	// 5. APPLY_PATCH block (success)
+	check(ui.AppendBlock(grepBlock))
+}
+
+// createPatchBlock creates a sample APPLY_PATCH block.
+func createPatchBlock(ui *adapters.PureTTY) {
 	patchBlock := blocks.NewBlock(blocks.BlockTypeApplyPatch)
 	patchBlock.Title = "Add error handling"
 	patchBlock.Body = `@@ -15,6 +15,9 @@ func main() {
@@ -234,15 +321,19 @@ utils.go:18:
 	patchMeta := &blocks.PatchMeta{
 		File:         "main.go",
 		Succeeded:    true,
-		LinesAdded:   intPtr(3),
+		LinesAdded:   intPtr(exampleLinesAdded),
 		LinesRemoved: intPtr(0),
 	}
+
 	if err := blocks.SetPatchMeta(patchBlock, patchMeta); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting patch meta: %v\n", err)
 	}
-	ui.AppendBlock(patchBlock)
 
-	// 6. SUMMARY block
+	check(ui.AppendBlock(patchBlock))
+}
+
+// createSummaryBlock creates a sample SUMMARY block.
+func createSummaryBlock(ui *adapters.PureTTY) {
 	summaryBlock := blocks.NewBlock(blocks.BlockTypeSummary)
 	summaryBlock.Title = "Changes summary"
 	summaryBlock.Body = `Added error handling to the process() function:
@@ -255,9 +346,11 @@ Files modified:
 • main.go (+3 lines)
 • No breaking changes`
 
-	ui.AppendBlock(summaryBlock)
+	check(ui.AppendBlock(summaryBlock))
+}
 
-	// 7. TESTING block (mixed results)
+// createTestingBlock creates a sample TESTING block.
+func createTestingBlock(ui *adapters.PureTTY) {
 	testingBlock := blocks.NewBlock(blocks.BlockTypeTesting)
 	testingBlock.Title = "Test plan"
 	testingBlock.Body = `✓ go test -race ./internal/... (passed, 0.5s)
@@ -266,11 +359,11 @@ Files modified:
     Error: database connection timeout
     Re-run: make test-integration`
 
-	// TESTING block currently has no specific metadata type
-	// Can use generic Meta map or leave empty
-	ui.AppendBlock(testingBlock)
+	check(ui.AppendBlock(testingBlock))
+}
 
-	// 8. NOTICE block
+// createNoticeBlock creates a sample NOTICE block.
+func createNoticeBlock(ui *adapters.PureTTY) {
 	noticeBlock := blocks.NewBlock(blocks.BlockTypeNotice)
 	noticeBlock.Title = "System notice"
 	noticeBlock.Body = `Conversation history has been compressed to reduce context size.
@@ -279,9 +372,11 @@ Previous messages have been summarized. Full history available in:
 ~/.spin/sessions/20251011-103042.json`
 	noticeBlock.Severity = blocks.SeverityInfo
 
-	ui.AppendBlock(noticeBlock)
+	check(ui.AppendBlock(noticeBlock))
+}
 
-	// 9. ERROR block
+// createErrorBlock creates a sample ERROR block.
+func createErrorBlock(ui *adapters.PureTTY) {
 	errorBlock := blocks.NewBlock(blocks.BlockTypeError)
 	errorBlock.Title = "Command failed"
 	errorBlock.Body = `Error: exit status 1
@@ -298,12 +393,10 @@ Suggestion: Check file permissions and retry with sudo`
 		Command:  "make build",
 		ExitCode: intPtr(1),
 	}
+
 	if err := blocks.SetExecuteMeta(errorBlock, errorMeta); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting error meta: %v\n", err)
 	}
-	ui.AppendBlock(errorBlock)
 
-	// Print separator
-	ui.PrintLine("")
-	ui.PrintLine("✅ Created 9 blocks (one of each type)")
+	check(ui.AppendBlock(errorBlock))
 }

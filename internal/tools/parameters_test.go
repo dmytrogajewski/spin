@@ -6,6 +6,8 @@ import (
 )
 
 func TestFromMap(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		input   map[string]any
@@ -47,11 +49,15 @@ func TestFromMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			params, err := FromMap(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("FromMap() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if !tt.wantErr && len(params.raw) != len(tt.input) {
 				t.Errorf("expected %d parameters, got %d", len(tt.input), len(params.raw))
 			}
@@ -60,6 +66,8 @@ func TestFromMap(t *testing.T) {
 }
 
 func TestHas(t *testing.T) {
+	t.Parallel()
+
 	params, _ := FromMap(map[string]any{
 		"exists": "value",
 	})
@@ -83,6 +91,8 @@ func TestHas(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := params.Has(tt.key); got != tt.want {
 				t.Errorf("Has() = %v, want %v", got, tt.want)
 			}
@@ -91,9 +101,11 @@ func TestHas(t *testing.T) {
 }
 
 func TestToMap(t *testing.T) {
+	t.Parallel()
+
 	input := map[string]any{
 		"string": "hello",
-		"int":    float64(42), // JSON unmarshals numbers as float64
+		"int":    float64(42), // JSON unmarshals numbers as float64.
 		"bool":   true,
 	}
 
@@ -111,8 +123,10 @@ func TestToMap(t *testing.T) {
 		gotValue, exists := output[key]
 		if !exists {
 			t.Errorf("missing key %q in output", key)
+
 			continue
 		}
+
 		if gotValue != expectedValue {
 			t.Errorf("key %q: got %v, want %v", key, gotValue, expectedValue)
 		}
@@ -120,6 +134,8 @@ func TestToMap(t *testing.T) {
 }
 
 func TestKeys(t *testing.T) {
+	t.Parallel()
+
 	params, _ := FromMap(map[string]any{
 		"c": 1,
 		"a": 2,
@@ -131,6 +147,7 @@ func TestKeys(t *testing.T) {
 
 	if len(keys) != len(expected) {
 		t.Errorf("expected %d keys, got %d", len(expected), len(keys))
+
 		return
 	}
 
@@ -142,6 +159,8 @@ func TestKeys(t *testing.T) {
 }
 
 func TestGetString(t *testing.T) {
+	t.Parallel()
+
 	params, _ := FromMap(map[string]any{
 		"valid":   "hello",
 		"number":  42,
@@ -182,11 +201,15 @@ func TestGetString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := params.GetString(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetString() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetString() = %v, want %v", got, tt.want)
 			}
@@ -195,6 +218,8 @@ func TestGetString(t *testing.T) {
 }
 
 func TestGetInt(t *testing.T) {
+	t.Parallel()
+
 	params, _ := FromMap(map[string]any{
 		"valid":   42,
 		"string":  "hello",
@@ -242,11 +267,15 @@ func TestGetInt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := params.GetInt(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetInt() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetInt() = %v, want %v", got, tt.want)
 			}
@@ -255,6 +284,8 @@ func TestGetInt(t *testing.T) {
 }
 
 func TestGetBool(t *testing.T) {
+	t.Parallel()
+
 	params, _ := FromMap(map[string]any{
 		"valid":  true,
 		"string": "hello",
@@ -295,11 +326,15 @@ func TestGetBool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := params.GetBool(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetBool() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetBool() = %v, want %v", got, tt.want)
 			}
@@ -308,6 +343,8 @@ func TestGetBool(t *testing.T) {
 }
 
 func TestGetFloat64(t *testing.T) {
+	t.Parallel()
+
 	params, _ := FromMap(map[string]any{
 		"valid":   3.14,
 		"int":     42,
@@ -355,11 +392,15 @@ func TestGetFloat64(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := params.GetFloat64(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetFloat64() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetFloat64() = %v, want %v", got, tt.want)
 			}
@@ -368,6 +409,8 @@ func TestGetFloat64(t *testing.T) {
 }
 
 func TestGetObject(t *testing.T) {
+	t.Parallel()
+
 	type testStruct struct {
 		Field1 string `json:"field1"`
 		Field2 int    `json:"field2"`
@@ -413,14 +456,19 @@ func TestGetObject(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := params.GetObject(tt.key, tt.dest)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetObject() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if !tt.wantErr {
-				destStruct := tt.dest.(*testStruct)
-				wantStruct := tt.want.(*testStruct)
+				destStruct, _ := tt.dest.(*testStruct)
+
+				wantStruct, _ := tt.want.(*testStruct)
 				if destStruct.Field1 != wantStruct.Field1 || destStruct.Field2 != wantStruct.Field2 {
 					t.Errorf("GetObject() = %+v, want %+v", destStruct, wantStruct)
 				}
@@ -429,175 +477,79 @@ func TestGetObject(t *testing.T) {
 	}
 }
 
-func TestGetStringOr(t *testing.T) {
-	params, _ := FromMap(map[string]any{
-		"valid":  "hello",
-		"number": 42,
-	})
+// getOrCase is a generic test case for GetXxxOr methods.
+type getOrCase[T comparable] struct {
+	name         string
+	key          string
+	defaultValue T
+	want         T
+}
 
-	tests := []struct {
-		name         string
-		key          string
-		defaultValue string
-		want         string
-	}{
-		{
-			name:         "valid string",
-			key:          "valid",
-			defaultValue: "default",
-			want:         "hello",
-		},
-		{
-			name:         "missing key",
-			key:          "missing",
-			defaultValue: "default",
-			want:         "default",
-		},
-		{
-			name:         "wrong type",
-			key:          "number",
-			defaultValue: "default",
-			want:         "default",
-		},
-	}
+func runGetOrTests[T comparable](
+	t *testing.T, params ToolParameters, cases []getOrCase[T],
+	opName string, op func(ToolParameters, string, T) T,
+) {
+	t.Helper()
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got := params.GetStringOr(tt.key, tt.defaultValue)
+			t.Parallel()
+
+			got := op(params, tt.key, tt.defaultValue)
 			if got != tt.want {
-				t.Errorf("GetStringOr() = %v, want %v", got, tt.want)
+				t.Errorf("%s() = %v, want %v", opName, got, tt.want)
 			}
 		})
 	}
+}
+
+func TestGetStringOr(t *testing.T) {
+	t.Parallel()
+
+	params, _ := FromMap(map[string]any{"valid": "hello", "number": 42})
+	runGetOrTests(t, params, []getOrCase[string]{
+		{"valid string", "valid", "default", "hello"},
+		{"missing key", "missing", "default", "default"},
+		{"wrong type", "number", "default", "default"},
+	}, "GetStringOr", ToolParameters.GetStringOr)
 }
 
 func TestGetIntOr(t *testing.T) {
-	params, _ := FromMap(map[string]any{
-		"valid":  42,
-		"string": "hello",
-	})
+	t.Parallel()
 
-	tests := []struct {
-		name         string
-		key          string
-		defaultValue int
-		want         int
-	}{
-		{
-			name:         "valid int",
-			key:          "valid",
-			defaultValue: 10,
-			want:         42,
-		},
-		{
-			name:         "missing key",
-			key:          "missing",
-			defaultValue: 10,
-			want:         10,
-		},
-		{
-			name:         "wrong type",
-			key:          "string",
-			defaultValue: 10,
-			want:         10,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := params.GetIntOr(tt.key, tt.defaultValue)
-			if got != tt.want {
-				t.Errorf("GetIntOr() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	params, _ := FromMap(map[string]any{"valid": 42, "string": "hello"})
+	runGetOrTests(t, params, []getOrCase[int]{
+		{"valid int", "valid", 10, 42},
+		{"missing key", "missing", 10, 10},
+		{"wrong type", "string", 10, 10},
+	}, "GetIntOr", ToolParameters.GetIntOr)
 }
 
 func TestGetBoolOr(t *testing.T) {
-	params, _ := FromMap(map[string]any{
-		"valid":  true,
-		"string": "hello",
-	})
+	t.Parallel()
 
-	tests := []struct {
-		name         string
-		key          string
-		defaultValue bool
-		want         bool
-	}{
-		{
-			name:         "valid bool",
-			key:          "valid",
-			defaultValue: false,
-			want:         true,
-		},
-		{
-			name:         "missing key",
-			key:          "missing",
-			defaultValue: false,
-			want:         false,
-		},
-		{
-			name:         "wrong type",
-			key:          "string",
-			defaultValue: false,
-			want:         false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := params.GetBoolOr(tt.key, tt.defaultValue)
-			if got != tt.want {
-				t.Errorf("GetBoolOr() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	params, _ := FromMap(map[string]any{"valid": true, "string": "hello"})
+	runGetOrTests(t, params, []getOrCase[bool]{
+		{"valid bool", "valid", false, true},
+		{"missing key", "missing", false, false},
+		{"wrong type", "string", false, false},
+	}, "GetBoolOr", ToolParameters.GetBoolOr)
 }
 
 func TestGetFloat64Or(t *testing.T) {
-	params, _ := FromMap(map[string]any{
-		"valid":  3.14,
-		"string": "hello",
-	})
+	t.Parallel()
 
-	tests := []struct {
-		name         string
-		key          string
-		defaultValue float64
-		want         float64
-	}{
-		{
-			name:         "valid float",
-			key:          "valid",
-			defaultValue: 1.0,
-			want:         3.14,
-		},
-		{
-			name:         "missing key",
-			key:          "missing",
-			defaultValue: 1.0,
-			want:         1.0,
-		},
-		{
-			name:         "wrong type",
-			key:          "string",
-			defaultValue: 1.0,
-			want:         1.0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := params.GetFloat64Or(tt.key, tt.defaultValue)
-			if got != tt.want {
-				t.Errorf("GetFloat64Or() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	params, _ := FromMap(map[string]any{"valid": 3.14, "string": "hello"})
+	runGetOrTests(t, params, []getOrCase[float64]{
+		{"valid float", "valid", 1.0, 3.14},
+		{"missing key", "missing", 1.0, 1.0},
+		{"wrong type", "string", 1.0, 1.0},
+	}, "GetFloat64Or", ToolParameters.GetFloat64Or)
 }
 
 func TestMarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	params, _ := FromMap(map[string]any{
 		"string": "hello",
 		"number": 42,
@@ -609,45 +561,59 @@ func TestMarshalJSON(t *testing.T) {
 		t.Fatalf("MarshalJSON() error = %v", err)
 	}
 
-	// Unmarshal to verify structure
+	// Unmarshal to verify structure.
 	var result map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
+
+	err = json.Unmarshal(data, &result)
+	if err != nil {
 		t.Fatalf("Unmarshal error = %v", err)
 	}
 
 	if result["string"] != "hello" {
 		t.Errorf("string = %v, want hello", result["string"])
 	}
+
 	if result["number"] != float64(42) {
 		t.Errorf("number = %v, want 42", result["number"])
 	}
-	if result["bool"] != true {
+
+	boolVal, _ := result["bool"].(bool)
+	if !boolVal {
 		t.Errorf("bool = %v, want true", result["bool"])
 	}
 }
 
 func TestUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	jsonData := []byte(`{"string":"hello","number":42,"bool":true}`)
 
 	var params ToolParameters
-	if err := json.Unmarshal(jsonData, &params); err != nil {
+
+	err := json.Unmarshal(jsonData, &params)
+	if err != nil {
 		t.Fatalf("UnmarshalJSON() error = %v", err)
 	}
 
-	if str, err := params.GetString("string"); err != nil || str != "hello" {
+	str, err := params.GetString("string")
+	if err != nil || str != "hello" {
 		t.Errorf("GetString(string) = %v, %v; want hello, nil", str, err)
 	}
 
-	if num, err := params.GetInt("number"); err != nil || num != 42 {
+	num, err := params.GetInt("number")
+	if err != nil || num != 42 {
 		t.Errorf("GetInt(number) = %v, %v; want 42, nil", num, err)
 	}
 
-	if b, err := params.GetBool("bool"); err != nil || b != true {
+	b, err := params.GetBool("bool")
+	if err != nil || !b {
 		t.Errorf("GetBool(bool) = %v, %v; want true, nil", b, err)
 	}
 }
 
 func TestRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	original := map[string]any{
 		"string": "hello",
 		"number": 42,
@@ -657,16 +623,16 @@ func TestRoundTrip(t *testing.T) {
 		},
 	}
 
-	// Convert to ToolParameters
+	// Convert to ToolParameters.
 	params, err := FromMap(original)
 	if err != nil {
 		t.Fatalf("FromMap() error = %v", err)
 	}
 
-	// Convert back to map
+	// Convert back to map.
 	result := params.ToMap()
 
-	// Verify all keys exist
+	// Verify all keys exist.
 	for key := range original {
 		if _, exists := result[key]; !exists {
 			t.Errorf("missing key %q in result", key)

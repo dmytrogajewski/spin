@@ -1,0 +1,435 @@
+package history
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
+)
+
+func TestFileStorage_SaveAndLoad(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+
+	sessionID := "test-session-123"
+	data := newTestHistoryData(sessionID)
+
+	ctx := t.Context()
+
+	err = storage.Save(ctx, sessionID, data)
+	if err != nil {
+		t.Fatalf("save history: %v", err)
+	}
+
+	assertStorageExists(t, storage, sessionID)
+
+	loaded, err := storage.Load(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("load history: %v", err)
+	}
+
+	assertHistoryDataEqual(t, &loaded, data)
+}
+
+func newTestHistoryData(sessionID string) Data {
+	return Data{
+		Version:   CurrentHistoryVersion,
+		SessionID: sessionID,
+		MaxTokens: 4096,
+		Messages: []message.Message{
+			{ID: "msg-1", Role: message.RoleSystem, Content: "You are a helpful assistant.", Timestamp: time.Now(), Tokens: 10},
+			{ID: "msg-2", Role: message.RoleUser, Content: "Hello!", Timestamp: time.Now(), Tokens: 5},
+			{ID: "msg-3", Role: message.RoleAssistant, Content: "Hi there! How can I help you?", Timestamp: time.Now(), Tokens: 15},
+		},
+	}
+}
+
+func assertStorageExists(t *testing.T, storage Storage, sessionID string) {
+	t.Helper()
+
+	exists, err := storage.Exists(t.Context(), sessionID)
+	if err != nil {
+		t.Fatalf("check exists: %v", err)
+	}
+
+	if !exists {
+		t.Fatal("history should exist after save")
+	}
+}
+
+func assertHistoryDataEqual(t *testing.T, loaded *Data, original Data) {
+	t.Helper()
+
+	if loaded.SessionID != original.SessionID {
+		t.Errorf("session ID mismatch: got %q, want %q", loaded.SessionID, original.SessionID)
+	}
+
+	if loaded.MaxTokens != original.MaxTokens {
+		t.Errorf("max tokens mismatch: got %d, want %d", loaded.MaxTokens, original.MaxTokens)
+	}
+
+	if len(loaded.Messages) != len(original.Messages) {
+		t.Fatalf("message count mismatch: got %d, want %d", len(loaded.Messages), len(original.Messages))
+	}
+
+	for i, msg := range loaded.Messages {
+		assertMessageEqual(t, i, msg, original.Messages[i])
+	}
+
+	if loaded.Version != CurrentHistoryVersion {
+		t.Errorf("version mismatch: got %d, want %d", loaded.Version, CurrentHistoryVersion)
+	}
+}
+
+func assertMessageEqual(t *testing.T, idx int, got, want message.Message) {
+	t.Helper()
+
+	if got.ID != want.ID {
+		t.Errorf("message[%d] ID mismatch: got %q, want %q", idx, got.ID, want.ID)
+	}
+
+	if got.Role != want.Role {
+		t.Errorf("message[%d] role mismatch: got %q, want %q", idx, got.Role, want.Role)
+	}
+
+	if got.Content != want.Content {
+		t.Errorf("message[%d] content mismatch: got %q, want %q", idx, got.Content, want.Content)
+	}
+}
+
+func TestFileStorage_Delete(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+
+	sessionID := "test-session-delete"
+
+	// Save some data.
+	data := Data{
+		SessionID: sessionID,
+		Messages:  []message.Message{},
+	}
+
+	ctx := t.Context()
+
+	err = storage.Save(ctx, sessionID, data)
+	if err != nil {
+		t.Fatalf("save history: %v", err)
+	}
+
+	// Verify exists.
+	exists, _ := storage.Exists(ctx, sessionID)
+	if !exists {
+		t.Fatal("history should exist")
+	}
+
+	// Delete.
+	err = storage.Delete(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("delete history: %v", err)
+	}
+
+	// Verify deleted.
+	exists, _ = storage.Exists(ctx, sessionID)
+	if exists {
+		t.Fatal("history should not exist after delete")
+	}
+
+	// Delete non-existent should not error.
+	err = storage.Delete(ctx, "non-existent")
+	if err != nil {
+		t.Fatalf("delete non-existent should not error: %v", err)
+	}
+}
+
+func TestFileStorage_LoadNotFound(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+
+	_, err = storage.Load(t.Context(), "non-existent-session")
+	if err == nil {
+		t.Fatal("load should fail for non-existent session")
+	}
+}
+
+func TestFileStorage_EmptySessionID(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+
+	ctx := t.Context()
+
+	// All operations should fail with empty session ID.
+	err = storage.Save(ctx, "", Data{})
+	if err == nil {
+		t.Error("save with empty ID should fail")
+	}
+
+	_, err = storage.Load(ctx, "")
+	if err == nil {
+		t.Error("load with empty ID should fail")
+	}
+
+	err = storage.Delete(ctx, "")
+	if err == nil {
+		t.Error("delete with empty ID should fail")
+	}
+
+	_, err = storage.Exists(ctx, "")
+	if err == nil {
+		t.Error("exists with empty ID should fail")
+	}
+}
+
+func TestFileStorage_HomeExpansion(t *testing.T) {
+	t.Parallel()
+
+	// Skip if HOME not set.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot get home directory")
+	}
+
+	// Use a unique subdirectory in temp to avoid conflicts.
+	tmpDir := t.TempDir()
+
+	// Create storage with path relative to tmpDir (not home, to avoid polluting home).
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+
+	ctx := t.Context()
+
+	// Verify storage works by saving and loading.
+	testData := Data{SessionID: "test", MaxTokens: 1000}
+
+	err = storage.Save(ctx, "test", testData)
+	if err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	// Test that ~/ expansion works.
+	homeTestDir := filepath.Join(home, ".spin-test-temp")
+
+	homeStorage, err := NewFileStorage(homeTestDir)
+	if err != nil {
+		t.Fatalf("create home storage: %v", err)
+	}
+	defer os.RemoveAll(homeTestDir)
+
+	// Verify home storage works.
+	err = homeStorage.Save(ctx, "home-test", testData)
+	if err != nil {
+		t.Fatalf("home storage save failed: %v", err)
+	}
+
+	if exists, _ := homeStorage.Exists(ctx, "home-test"); !exists {
+		t.Error("home storage: saved history should exist")
+	}
+}
+
+func TestHistory_SaveAndLoad(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+
+	// Create history and add messages.
+	history := NewHistory(4096, &tokenizer.SimpleTokenizer{})
+	_ = history.AddSystemMessage(context.Background(), "You are helpful.")
+	_ = history.AddUserMessage(context.Background(), "Hello!")
+
+	ctx := t.Context()
+	sessionID := "test-history-save"
+
+	// Save via History method.
+	err = history.Save(ctx, storage, sessionID)
+	if err != nil {
+		t.Fatalf("save history: %v", err)
+	}
+
+	// Create new history and load.
+	history2 := NewHistory(4096, &tokenizer.SimpleTokenizer{})
+
+	err = history2.Load(ctx, storage, sessionID)
+	if err != nil {
+		t.Fatalf("load history: %v", err)
+	}
+
+	// Verify messages match.
+	msgs1 := history.Messages()
+	msgs2 := history2.Messages()
+
+	if len(msgs1) != len(msgs2) {
+		t.Fatalf("message count mismatch: got %d, want %d", len(msgs2), len(msgs1))
+	}
+
+	for i := range msgs1 {
+		if msgs1[i].Role != msgs2[i].Role {
+			t.Errorf("message[%d] role mismatch: got %q, want %q", i, msgs2[i].Role, msgs1[i].Role)
+		}
+
+		if msgs1[i].Content != msgs2[i].Content {
+			t.Errorf("message[%d] content mismatch: got %q, want %q", i, msgs2[i].Content, msgs1[i].Content)
+		}
+	}
+}
+
+func TestHistory_ToFromData(t *testing.T) {
+	t.Parallel()
+
+	history := NewHistory(8192, &tokenizer.SimpleTokenizer{})
+	_ = history.AddSystemMessage(context.Background(), "System prompt")
+	_ = history.AddUserMessage(context.Background(), "User input")
+	_ = history.AddMessage(context.Background(), message.Message{
+		Role:    message.RoleAssistant,
+		Content: "Assistant response",
+		ToolCalls: []message.ToolCall{
+			{
+				ID:   "call-1",
+				Type: "function",
+				Function: message.ToolCallFunction{
+					Name:      "read_file",
+					Arguments: `{"path": "/tmp/test.txt"}`,
+				},
+			},
+		},
+	})
+
+	sessionID := "test-export"
+
+	// Export to Data.
+	data := history.ToData(sessionID)
+
+	if data.SessionID != sessionID {
+		t.Errorf("session ID mismatch: got %q, want %q", data.SessionID, sessionID)
+	}
+
+	if data.MaxTokens != 8192 {
+		t.Errorf("max tokens mismatch: got %d, want %d", data.MaxTokens, 8192)
+	}
+
+	if len(data.Messages) != 3 {
+		t.Fatalf("message count mismatch: got %d, want %d", len(data.Messages), 3)
+	}
+
+	// Import into new history.
+	history2 := NewHistory(4096, &tokenizer.SimpleTokenizer{})
+
+	err := history2.FromData(data)
+	if err != nil {
+		t.Fatalf("import history data: %v", err)
+	}
+
+	// Verify tool calls preserved.
+	msgs := history2.Messages()
+	if len(msgs[2].ToolCalls) != 1 {
+		t.Fatalf("tool calls not preserved: got %d, want 1", len(msgs[2].ToolCalls))
+	}
+
+	if msgs[2].ToolCalls[0].Function.Name != "read_file" {
+		t.Errorf("tool call name mismatch: got %q, want %q", msgs[2].ToolCalls[0].Function.Name, "read_file")
+	}
+}
+
+func TestHistory_FromData_NilError(t *testing.T) {
+	t.Parallel()
+
+	history := NewHistory(4096, &tokenizer.SimpleTokenizer{})
+
+	err := history.FromData(nil)
+	if err == nil {
+		t.Error("FromData(nil) should return error")
+	}
+}
+
+func TestFileStorage_AtomicWrite(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+
+	sessionID := "test-atomic"
+
+	// Save initial data.
+	data1 := Data{
+		SessionID: sessionID,
+		Messages: []message.Message{
+			{Role: message.RoleUser, Content: "First"},
+		},
+	}
+
+	ctx := t.Context()
+
+	err = storage.Save(ctx, sessionID, data1)
+	if err != nil {
+		t.Fatalf("save first: %v", err)
+	}
+
+	// Save updated data.
+	data2 := Data{
+		SessionID: sessionID,
+		Messages: []message.Message{
+			{Role: message.RoleUser, Content: "First"},
+			{Role: message.RoleUser, Content: "Second"},
+		},
+	}
+
+	err = storage.Save(ctx, sessionID, data2)
+	if err != nil {
+		t.Fatalf("save second: %v", err)
+	}
+
+	// Load and verify.
+	loaded, err := storage.Load(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	if len(loaded.Messages) != 2 {
+		t.Errorf("message count mismatch: got %d, want 2", len(loaded.Messages))
+	}
+
+	// Verify no temp files left behind.
+	entries, _ := os.ReadDir(tmpDir)
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == ".tmp" {
+			t.Errorf("temp file left behind: %s", entry.Name())
+		}
+	}
+}

@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-
+.gotmp/
 # Test binary, built with `go test -c`
 *.test
 
@@ -20,6 +20,7 @@ go.work.sum
 vendor/
 
 # Build output
+/spin
 bin/
 dist/
 build/
@@ -46,3 +47,7 @@ tmp/
 temp/
 *.tmp
 *.test
+
+vendordocs/
+.promptkit/
+.gitnexus

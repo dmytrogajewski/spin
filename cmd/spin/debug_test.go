@@ -2,12 +2,16 @@ package main
 
 import (
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestNewDebugCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugCmd()
 	if cmd == nil {
-		t.Errorf("newDebugCmd() returned nil")
+		t.Fatal("newDebugCmd() returned nil")
 	}
 
 	if cmd.Use != "debug" {
@@ -20,9 +24,11 @@ func TestNewDebugCmd(t *testing.T) {
 }
 
 func TestNewDebugEventsCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 	if cmd == nil {
-		t.Errorf("newDebugEventsCmd() returned nil")
+		t.Fatal("newDebugEventsCmd() returned nil")
 	}
 
 	if cmd.Use != "events <prompt>" {
@@ -35,9 +41,11 @@ func TestNewDebugEventsCmd(t *testing.T) {
 }
 
 func TestNewDebugSandboxCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugSandboxCmd()
 	if cmd == nil {
-		t.Errorf("newDebugSandboxCmd() returned nil")
+		t.Fatal("newDebugSandboxCmd() returned nil")
 	}
 
 	if cmd.Use != "sandbox <command>" {
@@ -50,9 +58,11 @@ func TestNewDebugSandboxCmd(t *testing.T) {
 }
 
 func TestNewDebugLandlockCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
 	if cmd == nil {
-		t.Errorf("newDebugLandlockCmd() returned nil")
+		t.Fatal("newDebugLandlockCmd() returned nil")
 	}
 
 	if cmd.Use != "landlock <command>" {
@@ -65,9 +75,11 @@ func TestNewDebugLandlockCmd(t *testing.T) {
 }
 
 func TestDebugCmdSubcommands(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugCmd()
 
-	// Test that all expected subcommands exist
+	// Test that all expected subcommands exist.
 	expectedSubcommands := []string{
 		"events",
 		"sandbox",
@@ -81,12 +93,15 @@ func TestDebugCmdSubcommands(t *testing.T) {
 
 	for _, expected := range expectedSubcommands {
 		found := false
+
 		for _, subcmd := range subcommands {
 			if subcmd.Name() == expected {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("Debug subcommand %s not found", expected)
 		}
@@ -94,9 +109,11 @@ func TestDebugCmdSubcommands(t *testing.T) {
 }
 
 func TestDebugCmdHelp(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugCmd()
 
-	// Test that help text is properly set
+	// Test that help text is properly set.
 	if cmd.Long == "" {
 		t.Errorf("Debug command Long description is empty")
 	}
@@ -107,9 +124,11 @@ func TestDebugCmdHelp(t *testing.T) {
 }
 
 func TestDebugEventsCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 
-	// Test that expected flags exist
+	// Test that expected flags exist.
 	expectedFlags := []string{
 		"format",
 		"filter",
@@ -124,9 +143,11 @@ func TestDebugEventsCmdFlags(t *testing.T) {
 }
 
 func TestDebugEventsCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 
-	// Test default values
+	// Test default values.
 	formatFlag := cmd.Flags().Lookup("format")
 	if formatFlag == nil || formatFlag.DefValue != "text" {
 		t.Errorf("format flag default = %v, want %v", formatFlag.DefValue, "text")
@@ -134,9 +155,11 @@ func TestDebugEventsCmdDefaultValues(t *testing.T) {
 }
 
 func TestDebugEventsCmdExamples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 
-	// Test that examples are included in help text
+	// Test that examples are included in help text.
 	helpText := cmd.Example
 	expectedExamples := []string{
 		"spin debug events \"list files in current directory\"",
@@ -152,9 +175,11 @@ func TestDebugEventsCmdExamples(t *testing.T) {
 }
 
 func TestDebugSandboxCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugSandboxCmd()
 
-	// Test that expected flags exist
+	// Test that expected flags exist.
 	expectedFlags := []string{
 		"read-only",
 		"network",
@@ -169,35 +194,37 @@ func TestDebugSandboxCmdFlags(t *testing.T) {
 	}
 }
 
-func TestDebugSandboxCmdDefaultValues(t *testing.T) {
-	cmd := newDebugSandboxCmd()
+// assertFlagDefaults checks that the given cmd has flags with expected default values.
+func assertFlagDefaults(t *testing.T, cmd *cobra.Command, expectations map[string]string) {
+	t.Helper()
 
-	// Test default values
-	readOnlyFlag := cmd.Flags().Lookup("read-only")
-	if readOnlyFlag == nil || readOnlyFlag.DefValue != "true" {
-		t.Errorf("read-only flag default = %v, want %v", readOnlyFlag.DefValue, "true")
-	}
-
-	networkFlag := cmd.Flags().Lookup("network")
-	if networkFlag == nil || networkFlag.DefValue != "false" {
-		t.Errorf("network flag default = %v, want %v", networkFlag.DefValue, "false")
-	}
-
-	timeoutFlag := cmd.Flags().Lookup("timeout")
-	if timeoutFlag == nil || timeoutFlag.DefValue != "30s" {
-		t.Errorf("timeout flag default = %v, want %v", timeoutFlag.DefValue, "30s")
+	for flagName, wantDefault := range expectations {
+		flag := cmd.Flags().Lookup(flagName)
+		if flag == nil {
+			t.Errorf("Flag %s not found", flagName)
+		} else if flag.DefValue != wantDefault {
+			t.Errorf("%s flag default = %v, want %v", flagName, flag.DefValue, wantDefault)
+		}
 	}
 }
 
+func TestDebugSandboxCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
+	cmd := newDebugSandboxCmd()
+	assertFlagDefaults(t, cmd, map[string]string{
+		"read-only": "true",
+		"network":   "false",
+		"timeout":   "30s",
+	})
+}
+
 func TestDebugLandlockCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
 
-	// Test that expected flags exist
-	expectedFlags := []string{
-		"allow-read",
-		"allow-write",
-		"timeout",
-	}
+	expectedFlags := []string{"allow-read", "allow-write", "timeout"}
 
 	for _, flagName := range expectedFlags {
 		flag := cmd.Flags().Lookup(flagName)
@@ -208,29 +235,22 @@ func TestDebugLandlockCmdFlags(t *testing.T) {
 }
 
 func TestDebugLandlockCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
-
-	// Test default values
-	allowReadFlag := cmd.Flags().Lookup("allow-read")
-	if allowReadFlag == nil || allowReadFlag.DefValue != "true" {
-		t.Errorf("allow-read flag default = %v, want %v", allowReadFlag.DefValue, "true")
-	}
-
-	allowWriteFlag := cmd.Flags().Lookup("allow-write")
-	if allowWriteFlag == nil || allowWriteFlag.DefValue != "false" {
-		t.Errorf("allow-write flag default = %v, want %v", allowWriteFlag.DefValue, "false")
-	}
-
-	timeoutFlag := cmd.Flags().Lookup("timeout")
-	if timeoutFlag == nil || timeoutFlag.DefValue != "30s" {
-		t.Errorf("timeout flag default = %v, want %v", timeoutFlag.DefValue, "30s")
-	}
+	assertFlagDefaults(t, cmd, map[string]string{
+		"allow-read":  "true",
+		"allow-write": "false",
+		"timeout":     "30s",
+	})
 }
 
 func TestDebugSandboxCmdExamples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugSandboxCmd()
 
-	// Test that examples are included in help text
+	// Test that examples are included in help text.
 	helpText := cmd.Example
 	expectedExamples := []string{
 		"spin debug sandbox \"ls -la\"",
@@ -246,9 +266,11 @@ func TestDebugSandboxCmdExamples(t *testing.T) {
 }
 
 func TestDebugLandlockCmdExamples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
 
-	// Test that examples are included in help text
+	// Test that examples are included in help text.
 	helpText := cmd.Example
 	expectedExamples := []string{
 		"spin debug landlock \"ls -la\"",
@@ -263,7 +285,7 @@ func TestDebugLandlockCmdExamples(t *testing.T) {
 	}
 }
 
-// Helper function to check if a string contains a substring
+// Helper function to check if a string contains a substring.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr ||
 		(len(s) > len(substr) &&
@@ -278,5 +300,6 @@ func findSubstring(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }

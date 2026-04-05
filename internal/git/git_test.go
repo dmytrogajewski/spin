@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -15,33 +14,36 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
-// Test helpers
+// Test helpers.
 
-// setupTestRepo creates a test Git repository with initial commit
+// setupTestRepo creates a test Git repository with initial commit.
 func setupTestRepo(t *testing.T) string {
 	t.Helper()
 
 	tmpDir := t.TempDir()
 
-	// Initialize repository
+	// Initialize repository.
 	repo, err := gogit.PlainInit(tmpDir, false)
 	if err != nil {
 		t.Fatalf("failed to init repo: %v", err)
 	}
 
-	// Create initial file
+	// Create initial file.
 	filename := filepath.Join(tmpDir, "README.md")
-	if err := ioutil.WriteFile(filename, []byte("# Test\n"), 0644); err != nil {
+
+	err = os.WriteFile(filename, []byte("# Test\n"), 0o600)
+	if err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	// Add and commit
+	// Add and commit.
 	w, err := repo.Worktree()
 	if err != nil {
 		t.Fatalf("failed to get worktree: %v", err)
 	}
 
-	if _, err := w.Add("README.md"); err != nil {
+	_, err = w.Add("README.md")
+	if err != nil {
 		t.Fatalf("failed to add file: %v", err)
 	}
 
@@ -59,38 +61,45 @@ func setupTestRepo(t *testing.T) string {
 	return tmpDir
 }
 
-// setupTestRepoWithBranches creates a test repo with multiple branches
+// setupTestRepoWithBranches creates a test repo with multiple branches.
 
-// setupTestRepoWithModifications creates a test repo with modified files
+// setupTestRepoWithModifications creates a test repo with modified files.
 func setupTestRepoWithModifications(t *testing.T) string {
 	t.Helper()
 
 	tmpDir := setupTestRepo(t)
 
-	// Modify existing file
+	// Modify existing file.
 	filename := filepath.Join(tmpDir, "README.md")
-	if err := ioutil.WriteFile(filename, []byte("# Test\nModified\n"), 0644); err != nil {
+
+	err := os.WriteFile(filename, []byte("# Test\nModified\n"), 0o600)
+	if err != nil {
 		t.Fatalf("failed to modify file: %v", err)
 	}
 
-	// Create untracked file
+	// Create untracked file.
 	newFile := filepath.Join(tmpDir, "untracked.txt")
-	if err := ioutil.WriteFile(newFile, []byte("untracked\n"), 0644); err != nil {
+
+	err = os.WriteFile(newFile, []byte("untracked\n"), 0o600)
+	if err != nil {
 		t.Fatalf("failed to create untracked file: %v", err)
 	}
 
 	return tmpDir
 }
 
-// setupNonRepo creates a directory that is not a Git repository
+// setupNonRepo creates a directory that is not a Git repository.
 func setupNonRepo(t *testing.T) string {
 	t.Helper()
+
 	return t.TempDir()
 }
 
-// Test Discovery
+// Test Discovery.
 
 func TestDiscover(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		setup   func(t *testing.T) string
@@ -102,15 +111,8 @@ func TestDiscover(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "nested directory",
-			setup: func(t *testing.T) string {
-				tmpDir := setupTestRepo(t)
-				nestedDir := filepath.Join(tmpDir, "subdir", "deep")
-				if err := os.MkdirAll(nestedDir, 0755); err != nil {
-					t.Fatalf("failed to create nested dir: %v", err)
-				}
-				return nestedDir
-			},
+			name:    "nested directory",
+			setup:   setupNestedRepo,
 			wantErr: nil,
 		},
 		{
@@ -122,66 +124,103 @@ func TestDiscover(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			startPath := tt.setup(t)
-			ctx := context.Background()
+			t.Parallel()
 
-			repo, err := Discover(ctx, startPath)
+			startPath := tt.setup(t)
+			repo, err := Discover(context.Background(), startPath)
 
 			if tt.wantErr != nil {
-				if err == nil {
-					t.Errorf("expected error %v, got nil", tt.wantErr)
-					return
-				}
-				// Check if error is or wraps the expected error
-				if !isError(err, tt.wantErr) {
-					t.Errorf("expected error %v, got %v", tt.wantErr, err)
-				}
+				assertDiscoverError(t, err, tt.wantErr)
+
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if repo == nil {
-				t.Fatal("expected repo, got nil")
-			}
-
-			if repo.Root() == "" {
-				t.Error("expected non-empty root path")
-			}
-
-			// Verify root is absolute path
-			if !filepath.IsAbs(repo.Root()) {
-				t.Errorf("expected absolute path, got %s", repo.Root())
-			}
+			assertDiscoverSuccess(t, repo, err)
 		})
 	}
 }
 
+func setupNestedRepo(t *testing.T) string {
+	t.Helper()
+
+	tmpDir := setupTestRepo(t)
+
+	nestedDir := filepath.Join(tmpDir, "subdir", "deep")
+
+	err := os.MkdirAll(nestedDir, 0o750)
+	if err != nil {
+		t.Fatalf("failed to create nested dir: %v", err)
+	}
+
+	return nestedDir
+}
+
+func assertDiscoverError(t *testing.T, err, wantErr error) {
+	t.Helper()
+
+	if err == nil {
+		t.Errorf("expected error %v, got nil", wantErr)
+
+		return
+	}
+
+	if !isError(err, wantErr) {
+		t.Errorf("expected error %v, got %v", wantErr, err)
+	}
+}
+
+func assertDiscoverSuccess(t *testing.T, repo *Repository, err error) {
+	t.Helper()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if repo == nil {
+		t.Fatal("expected repo, got nil")
+	}
+
+	if repo.Root() == "" {
+		t.Error("expected non-empty root path")
+	}
+
+	if !filepath.IsAbs(repo.Root()) {
+		t.Errorf("expected absolute path, got %s", repo.Root())
+	}
+}
+
 func TestDiscoverCancellation(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepo(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
 	_, err := Discover(ctx, tmpDir)
 	if err == nil {
 		t.Error("expected context cancellation error")
 	}
-	if err != context.Canceled {
+
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
 
 func TestRepositoryRoot(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepo(t)
+
 	nestedDir := filepath.Join(tmpDir, "subdir")
-	if err := os.MkdirAll(nestedDir, 0755); err != nil {
+
+	err := os.MkdirAll(nestedDir, 0o750)
+	if err != nil {
 		t.Fatalf("failed to create nested dir: %v", err)
 	}
 
 	ctx := context.Background()
+
 	repo, err := Discover(ctx, nestedDir)
 	if err != nil {
 		t.Fatalf("Discover failed: %v", err)
@@ -192,13 +231,13 @@ func TestRepositoryRoot(t *testing.T) {
 		t.Error("expected non-empty root")
 	}
 
-	// Root should be the original tmpDir, not the nested dir
+	// Root should be the original tmpDir, not the nested dir.
 	if root != tmpDir {
 		t.Errorf("expected root %s, got %s", tmpDir, root)
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 
 func BenchmarkDiscover(b *testing.B) {
 	tmpDir := setupTestRepo(&testing.T{})
@@ -207,7 +246,8 @@ func BenchmarkDiscover(b *testing.B) {
 	ctx := context.Background()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := Discover(ctx, tmpDir)
 		if err != nil {
 			b.Fatal(err)
@@ -219,278 +259,303 @@ func BenchmarkDiscoverNested(b *testing.B) {
 	tmpDir := setupTestRepo(&testing.T{})
 	defer os.RemoveAll(tmpDir)
 
-	// Create deep nesting
+	// Create deep nesting.
 	nestedDir := tmpDir
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		nestedDir = filepath.Join(nestedDir, "subdir")
 	}
-	if err := os.MkdirAll(nestedDir, 0755); err != nil {
+
+	err := os.MkdirAll(nestedDir, 0o750)
+	if err != nil {
 		b.Fatal(err)
 	}
 
 	ctx := context.Background()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := Discover(ctx, nestedDir)
+
+	for range b.N {
+		_, err = Discover(ctx, nestedDir)
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
-// Helper function to check if error is or wraps expected error
+// Helper function to check if error is or wraps expected error.
 func isError(err, target error) bool {
 	return errors.Is(err, target)
 }
 
-// Test GetContextInfo
+// Test GetContextInfo.
 
 func TestGetContextInfo_NotRepository(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, t.TempDir(), logger)
+	t.Parallel()
 
-	// Don't initialize - should not be a repository
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	gi := NewIntegration(true, t.TempDir(), logger)
+
+	// Don't initialize - should not be a repository.
 	info := gi.GetContextInfo()
 
-	// Verify basic fields
-	if info.GitEnabled != false {
+	// Verify basic fields.
+	if info.GitEnabled {
 		t.Errorf("expected GitEnabled=false, got %v", info.GitEnabled)
 	}
-	if info.IsRepo != false {
+
+	if info.IsRepo {
 		t.Errorf("expected IsRepo=false, got %v", info.IsRepo)
 	}
 
-	// Verify optional fields are empty
+	// Verify optional fields are empty.
 	if info.Branch != "" {
 		t.Errorf("expected empty Branch, got %q", info.Branch)
 	}
+
 	if info.Remote != "" {
 		t.Errorf("expected empty Remote, got %q", info.Remote)
 	}
+
 	if info.Commit != "" {
 		t.Errorf("expected empty Commit, got %q", info.Commit)
 	}
 }
 
 func TestGetContextInfo_Repository(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepo(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, tmpDir, logger)
+	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
-	if err := gi.Initialize(ctx); err != nil {
+
+	err := gi.Initialize(ctx)
+	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 
 	info := gi.GetContextInfo()
 
-	// Verify basic fields
-	if info.GitEnabled != true {
+	// Verify basic fields.
+	if !info.GitEnabled {
 		t.Errorf("expected GitEnabled=true, got %v", info.GitEnabled)
 	}
-	if info.IsRepo != true {
+
+	if !info.IsRepo {
 		t.Errorf("expected IsRepo=true, got %v", info.IsRepo)
 	}
 
-	// Verify branch is set (default branch varies, but should not be empty)
+	// Verify branch is set (default branch varies, but should not be empty).
 	if info.Branch == "" {
 		t.Error("expected non-empty Branch")
 	}
 
-	// Verify commit is set
+	// Verify commit is set.
 	if info.Commit == "" {
 		t.Error("expected non-empty Commit")
 	}
 
-	// Verify clean repository
-	if info.IsClean != true {
+	// Verify clean repository.
+	if !info.IsClean {
 		t.Errorf("expected IsClean=true for clean repo, got %v", info.IsClean)
 	}
+
 	if info.ModifiedFiles != 0 {
 		t.Errorf("expected ModifiedFiles=0, got %d", info.ModifiedFiles)
 	}
+
 	if info.UntrackedFiles != 0 {
 		t.Errorf("expected UntrackedFiles=0, got %d", info.UntrackedFiles)
 	}
 }
 
 func TestGetContextInfo_WithModifications(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepoWithModifications(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, tmpDir, logger)
+	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
-	if err := gi.Initialize(ctx); err != nil {
+
+	err := gi.Initialize(ctx)
+	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 
 	info := gi.GetContextInfo()
 
-	// Verify repository fields
-	if info.GitEnabled != true {
+	// Verify repository fields.
+	if !info.GitEnabled {
 		t.Errorf("expected GitEnabled=true, got %v", info.GitEnabled)
 	}
-	if info.IsRepo != true {
+
+	if !info.IsRepo {
 		t.Errorf("expected IsRepo=true, got %v", info.IsRepo)
 	}
 
-	// Verify dirty repository
-	if info.IsClean != false {
+	// Verify dirty repository.
+	if info.IsClean {
 		t.Errorf("expected IsClean=false for dirty repo, got %v", info.IsClean)
 	}
 
-	// Should have at least 1 modified file
+	// Should have at least 1 modified file.
 	if info.ModifiedFiles == 0 {
 		t.Error("expected ModifiedFiles > 0 for dirty repo")
 	}
 
-	// Should have at least 1 untracked file
+	// Should have at least 1 untracked file.
 	if info.UntrackedFiles == 0 {
 		t.Error("expected UntrackedFiles > 0 for dirty repo")
 	}
 }
 
 func TestGetContextInfo_AllFields(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepoWithModifications(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, tmpDir, logger)
+	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
-	if err := gi.Initialize(ctx); err != nil {
+
+	err := gi.Initialize(ctx)
+	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 
 	info := gi.GetContextInfo()
 
-	// Verify all boolean fields are set
-	if info.GitEnabled == false {
+	// Verify all boolean fields are set.
+	if !info.GitEnabled {
 		t.Error("expected GitEnabled=true")
 	}
-	if info.IsRepo == false {
+
+	if !info.IsRepo {
 		t.Error("expected IsRepo=true")
 	}
 
-	// Verify string fields are set (when available)
+	// Verify string fields are set (when available).
 	if info.Branch == "" {
 		t.Error("expected Branch to be set")
 	}
+
 	if info.Commit == "" {
 		t.Error("expected Commit to be set")
 	}
 
-	// Verify int fields make sense
+	// Verify int fields make sense.
 	if info.ModifiedFiles < 0 {
 		t.Errorf("expected ModifiedFiles >= 0, got %d", info.ModifiedFiles)
 	}
+
 	if info.UntrackedFiles < 0 {
 		t.Errorf("expected UntrackedFiles >= 0, got %d", info.UntrackedFiles)
 	}
+
 	if info.Ahead < 0 {
 		t.Errorf("expected Ahead >= 0, got %d", info.Ahead)
 	}
+
 	if info.Behind < 0 {
 		t.Errorf("expected Behind >= 0, got %d", info.Behind)
 	}
 }
 
-func TestGitContextInfo_JSON(t *testing.T) {
+func TestContextInfo_JSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
-		info GitContextInfo
+		info ContextInfo
 	}{
 		{
 			name: "not a repository",
-			info: GitContextInfo{
-				GitEnabled: false,
-				IsRepo:     false,
-			},
+			info: ContextInfo{GitEnabled: false, IsRepo: false},
 		},
 		{
 			name: "clean repository",
-			info: GitContextInfo{
-				GitEnabled: true,
-				IsRepo:     true,
-				Branch:     "main",
-				Commit:     "abc123",
-				IsClean:    true,
-			},
+			info: ContextInfo{GitEnabled: true, IsRepo: true, Branch: "main", Commit: "abc123", IsClean: true},
 		},
 		{
 			name: "dirty repository",
-			info: GitContextInfo{
-				GitEnabled:     true,
-				IsRepo:         true,
-				Branch:         "feature/test",
-				Remote:         "origin/feature/test",
-				Commit:         "def456",
-				IsClean:        false,
-				ModifiedFiles:  3,
-				UntrackedFiles: 2,
-				Ahead:          1,
-				Behind:         0,
-				Detached:       false,
+			info: ContextInfo{
+				GitEnabled: true, IsRepo: true, Branch: "feature/test", Remote: "origin/feature/test",
+				Commit: "def456", ModifiedFiles: 3, UntrackedFiles: 2, Ahead: 1,
 			},
 		},
 		{
 			name: "detached HEAD",
-			info: GitContextInfo{
-				GitEnabled: true,
-				IsRepo:     true,
-				Commit:     "xyz789",
-				Detached:   true,
-			},
+			info: ContextInfo{GitEnabled: true, IsRepo: true, Commit: "xyz789", Detached: true},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Marshal to JSON
+			t.Parallel()
+
 			data, err := json.Marshal(tt.info)
 			if err != nil {
 				t.Fatalf("Marshal failed: %v", err)
 			}
 
-			// Unmarshal back
-			var decoded GitContextInfo
-			if err := json.Unmarshal(data, &decoded); err != nil {
+			var decoded ContextInfo
+
+			err = json.Unmarshal(data, &decoded)
+			if err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)
 			}
 
-			// Verify fields match
-			if decoded.GitEnabled != tt.info.GitEnabled {
-				t.Errorf("GitEnabled mismatch: got %v, want %v", decoded.GitEnabled, tt.info.GitEnabled)
-			}
-			if decoded.IsRepo != tt.info.IsRepo {
-				t.Errorf("IsRepo mismatch: got %v, want %v", decoded.IsRepo, tt.info.IsRepo)
-			}
-			if decoded.Branch != tt.info.Branch {
-				t.Errorf("Branch mismatch: got %q, want %q", decoded.Branch, tt.info.Branch)
-			}
-			if decoded.Remote != tt.info.Remote {
-				t.Errorf("Remote mismatch: got %q, want %q", decoded.Remote, tt.info.Remote)
-			}
-			if decoded.Commit != tt.info.Commit {
-				t.Errorf("Commit mismatch: got %q, want %q", decoded.Commit, tt.info.Commit)
-			}
-			if decoded.IsClean != tt.info.IsClean {
-				t.Errorf("IsClean mismatch: got %v, want %v", decoded.IsClean, tt.info.IsClean)
-			}
-			if decoded.ModifiedFiles != tt.info.ModifiedFiles {
-				t.Errorf("ModifiedFiles mismatch: got %d, want %d", decoded.ModifiedFiles, tt.info.ModifiedFiles)
-			}
-			if decoded.UntrackedFiles != tt.info.UntrackedFiles {
-				t.Errorf("UntrackedFiles mismatch: got %d, want %d", decoded.UntrackedFiles, tt.info.UntrackedFiles)
-			}
-			if decoded.Ahead != tt.info.Ahead {
-				t.Errorf("Ahead mismatch: got %d, want %d", decoded.Ahead, tt.info.Ahead)
-			}
-			if decoded.Behind != tt.info.Behind {
-				t.Errorf("Behind mismatch: got %d, want %d", decoded.Behind, tt.info.Behind)
-			}
-			if decoded.Detached != tt.info.Detached {
-				t.Errorf("Detached mismatch: got %v, want %v", decoded.Detached, tt.info.Detached)
-			}
+			assertContextInfoEqual(t, decoded, tt.info)
 		})
+	}
+}
+
+func assertContextInfoEqual(t *testing.T, got, want ContextInfo) {
+	t.Helper()
+
+	if got.GitEnabled != want.GitEnabled {
+		t.Errorf("GitEnabled mismatch: got %v, want %v", got.GitEnabled, want.GitEnabled)
+	}
+
+	if got.IsRepo != want.IsRepo {
+		t.Errorf("IsRepo mismatch: got %v, want %v", got.IsRepo, want.IsRepo)
+	}
+
+	if got.Branch != want.Branch {
+		t.Errorf("Branch mismatch: got %q, want %q", got.Branch, want.Branch)
+	}
+
+	if got.Remote != want.Remote {
+		t.Errorf("Remote mismatch: got %q, want %q", got.Remote, want.Remote)
+	}
+
+	if got.Commit != want.Commit {
+		t.Errorf("Commit mismatch: got %q, want %q", got.Commit, want.Commit)
+	}
+
+	if got.IsClean != want.IsClean {
+		t.Errorf("IsClean mismatch: got %v, want %v", got.IsClean, want.IsClean)
+	}
+
+	if got.ModifiedFiles != want.ModifiedFiles {
+		t.Errorf("ModifiedFiles mismatch: got %d, want %d", got.ModifiedFiles, want.ModifiedFiles)
+	}
+
+	if got.UntrackedFiles != want.UntrackedFiles {
+		t.Errorf("UntrackedFiles mismatch: got %d, want %d", got.UntrackedFiles, want.UntrackedFiles)
+	}
+
+	if got.Ahead != want.Ahead {
+		t.Errorf("Ahead mismatch: got %d, want %d", got.Ahead, want.Ahead)
+	}
+
+	if got.Behind != want.Behind {
+		t.Errorf("Behind mismatch: got %d, want %d", got.Behind, want.Behind)
+	}
+
+	if got.Detached != want.Detached {
+		t.Errorf("Detached mismatch: got %v, want %v", got.Detached, want.Detached)
 	}
 }

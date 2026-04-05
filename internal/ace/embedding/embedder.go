@@ -1,3 +1,4 @@
+// Package embedding provides text embedding generation.
 package embedding
 
 import "context"

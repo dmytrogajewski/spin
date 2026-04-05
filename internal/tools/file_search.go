@@ -9,6 +9,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/filesearch"
 )
 
+const defaultFileSearchLimit = 10
+
 // FileSearchTool implements file search functionality with fuzzy matching.
 type FileSearchTool struct {
 	workspaceRoot string
@@ -23,14 +25,19 @@ func NewFileSearchTool(workspaceRoot string) *FileSearchTool {
 	}
 }
 
+const fileSearchName = "file_search"
+
+// Name implements the Name operation.
 func (t *FileSearchTool) Name() string {
-	return "file_search"
+	return fileSearchName
 }
 
+// Description implements the Description operation.
 func (t *FileSearchTool) Description() string {
 	return "Search for files in the workspace using fuzzy matching with .gitignore support"
 }
 
+// Schema implements the Schema operation.
 func (t *FileSearchTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -59,62 +66,50 @@ func (t *FileSearchTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	// Extract query parameter
-	query, err := params.GetString("query")
-	if err != nil || query == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "query parameter must be a non-empty string",
-		}, nil
+	// Extract query parameter.
+	query := params.GetStringOr("query", "")
+	if query == "" {
+		return NewToolError(errQueryParameterRequired), nil
 	}
 
-	// Extract workspace_root parameter (optional)
-	workspaceRoot := t.workspaceRoot
-	if customRoot, err := params.GetString("workspace_root"); err == nil && customRoot != "" {
-		workspaceRoot = customRoot
-	}
+	// Extract workspace_root parameter (optional).
+	workspaceRoot := resolveWorkspaceRoot(t.workspaceRoot, params)
 
-	// Extract limit parameter (optional, default 10)
-	limit := params.GetIntOr("limit", 10)
+	// Extract limit parameter (optional, default 10).
+	limit := params.GetIntOr("limit", defaultFileSearchLimit)
 
-	// Get or create searcher for this workspace
+	// Get or create searcher for this workspace.
 	searcher, err := t.getOrCreateSearcher(workspaceRoot)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to create searcher: %v", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to create searcher: %w", err)), nil
 	}
 
-	// Index if not already indexed
+	// Index if not already indexed.
 	if !searcher.IsIndexed() {
-		if err := searcher.IndexAsync(ctx); err != nil {
-			return ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("failed to index workspace: %v", err),
-			}, nil
+		indexErr := searcher.IndexAsync(ctx)
+		if indexErr != nil {
+			return NewToolError(fmt.Errorf("failed to index workspace: %w", indexErr)), nil
 		}
 	}
 
-	// Search
+	// Search.
 	matches := searcher.Search(query, limit)
 
-	// Format output
+	// Format output.
 	var output strings.Builder
 	if len(matches) == 0 {
-		output.WriteString(fmt.Sprintf("No files found matching '%s'\n", query))
+		fmt.Fprintf(&output, "No files found matching '%s'\n", query)
 	} else {
-		output.WriteString(fmt.Sprintf("Found %d file(s) matching '%s':\n\n", len(matches), query))
+		fmt.Fprintf(&output, "Found %d file(s) matching '%s':\n\n", len(matches), query)
+
 		for i, match := range matches {
-			output.WriteString(fmt.Sprintf("%d. %s (score: %d)\n", i+1, match.Path, match.Score))
+			fmt.Fprintf(&output, "%d. %s (score: %d)\n", i+1, match.Path, match.Score)
 		}
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return NewToolResult(output.String()), nil
 }
 
 // getOrCreateSearcher returns the searcher for the given workspace, creating it if needed.
@@ -122,18 +117,18 @@ func (t *FileSearchTool) getOrCreateSearcher(workspaceRoot string) (*filesearch.
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// If searcher exists and matches workspace, return it
+	// If searcher exists and matches workspace, return it.
 	if t.searcher != nil && t.workspaceRoot == workspaceRoot {
 		return t.searcher, nil
 	}
 
-	// Create new searcher
+	// Create new searcher.
 	searcher, err := filesearch.NewSearcher(workspaceRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update state
+	// Update state.
 	t.searcher = searcher
 	t.workspaceRoot = workspaceRoot
 

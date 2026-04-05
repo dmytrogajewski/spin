@@ -4,13 +4,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 )
 
 func TestTrajectory_Creation(t *testing.T) {
-	// Test creating a basic trajectory
+	t.Parallel()
+
+	// Test creating a basic trajectory.
 	now := time.Now()
 
 	traj := &Trajectory{
@@ -26,7 +29,9 @@ func TestTrajectory_Creation(t *testing.T) {
 }
 
 func TestTrajectory_WithRetrievedBullets(t *testing.T) {
-	// Test trajectory can store retrieved bullets
+	t.Parallel()
+
+	// Test trajectory can store retrieved bullets.
 	b1, err := bullet.New("Always validate input")
 	require.NoError(t, err)
 
@@ -47,7 +52,9 @@ func TestTrajectory_WithRetrievedBullets(t *testing.T) {
 }
 
 func TestTrajectory_WithOutputAndSuccess(t *testing.T) {
-	// Test trajectory can store output and success status
+	t.Parallel()
+
+	// Test trajectory can store output and success status.
 	traj := &Trajectory{
 		ID:        "test-id-789",
 		Query:     "Calculate 2+2",
@@ -62,7 +69,9 @@ func TestTrajectory_WithOutputAndSuccess(t *testing.T) {
 }
 
 func TestTrajectory_WithSteps(t *testing.T) {
-	// Test trajectory can store execution steps
+	t.Parallel()
+
+	// Test trajectory can store execution steps.
 	step1 := TrajectoryStep{
 		StepNumber: 0,
 		Type:       "reasoning",
@@ -95,7 +104,9 @@ func TestTrajectory_WithSteps(t *testing.T) {
 }
 
 func TestTrajectory_WithFeedback(t *testing.T) {
-	// Test trajectory can store bullet feedback
+	t.Parallel()
+
+	// Test trajectory can store bullet feedback.
 	fb := &BulletFeedback{
 		HelpfulBullets: []string{"bullet-1", "bullet-2"},
 		HarmfulBullets: []string{"bullet-3"},
@@ -117,7 +128,9 @@ func TestTrajectory_WithFeedback(t *testing.T) {
 }
 
 func TestTrajectory_WithMetadata(t *testing.T) {
-	// Test trajectory can store metadata
+	t.Parallel()
+
+	// Test trajectory can store metadata.
 	metadata := TrajectoryMetadata{
 		Model:       "gpt-4",
 		Temperature: 0.7,
@@ -136,7 +149,7 @@ func TestTrajectory_WithMetadata(t *testing.T) {
 
 	require.NotNil(t, traj)
 	assert.Equal(t, "gpt-4", traj.Metadata.Model)
-	assert.Equal(t, 0.7, traj.Metadata.Temperature)
+	assert.InDelta(t, 0.7, traj.Metadata.Temperature, 1e-9)
 	assert.Equal(t, 1000, traj.Metadata.MaxTokens)
 	assert.Equal(t, 500, traj.Metadata.TotalTokens)
 	assert.Equal(t, 2*time.Second, traj.Metadata.Duration)
@@ -144,7 +157,9 @@ func TestTrajectory_WithMetadata(t *testing.T) {
 }
 
 func TestTrajectory_Complete(t *testing.T) {
-	// Test complete trajectory with all fields
+	t.Parallel()
+
+	// Test complete trajectory with all fields.
 	b1, err := bullet.New("Test bullet")
 	require.NoError(t, err)
 

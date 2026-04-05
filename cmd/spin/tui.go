@@ -2,26 +2,31 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+
+	"github.com/spf13/cobra"
 
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/security"
-	"github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
-	"github.com/spf13/cobra"
 )
 
 // newTUICmd creates the TUI command for interactive terminal mode.
+const (
+	defaultMaxTurns  = 50
+	defaultMaxTokens = 128000
+)
+
 func newTUICmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tui",
@@ -44,119 +49,174 @@ Examples:
 		RunE: runTUI,
 	}
 
-	// TUI-specific flags
-	cmd.Flags().Int("max-turns", 50, "Maximum conversation turns")
+	// TUI-specific flags.
+	cmd.Flags().Int("max-turns", defaultMaxTurns, "Maximum conversation turns")
 	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
 	cmd.Flags().Bool("auto-approve", false, "Automatically approve all operations (DANGEROUS)")
 
 	return cmd
 }
 
-// runTUI executes the TUI mode.
-func runTUI(cmd *cobra.Command, args []string) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// tuiFlags holds parsed TUI command flags.
+type tuiFlags struct {
+	debug       bool
+	autoApprove bool
+	maxTurns    int
+}
 
-	setupSignalHandling(cancel)
-
-	// Configure logging for TUI mode based on debug flag
+// parseTUIFlags extracts TUI-specific flags from the command.
+func parseTUIFlags(cmd *cobra.Command) tuiFlags {
 	debugFlag, _ := cmd.Flags().GetBool("debug")
-	if !debugFlag {
-		// Suppress INFO level logs to prevent stderr interference (only when not in debug mode)
-		setupTUILogging()
+	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
+	maxTurns, _ := cmd.Flags().GetInt("max-turns")
+
+	return tuiFlags{
+		debug:       debugFlag,
+		autoApprove: autoApprove,
+		maxTurns:    maxTurns,
+	}
+}
+
+// configureTUILogging sets up logging based on the debug flag.
+// In TUI mode, logs must never go to stderr as they break the terminal display.
+// Debug mode writes logs to ~/.spin/spin.log; normal mode discards them.
+func configureTUILogging(debug bool) {
+	if debug {
+		logFile := openTUILogFile()
+		handler := slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelDebug})
+		slog.SetDefault(slog.New(handler))
 	} else {
-		// In debug mode, suppress slog to stdout but keep structured logging via events
-		// This prevents duplicate logs while maintaining detailed logging to JSONL file
-		slog.SetLogLoggerLevel(slog.LevelError)
+		slog.SetDefault(slog.New(slog.DiscardHandler))
+	}
+}
+
+// openTUILogFile opens the log file for debug mode, falling back to discard on error.
+func openTUILogFile() io.Writer {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return io.Discard
 	}
 
-	configLoader, err := loadConfig()
+	spinDir := filepath.Join(homeDir, ".spin")
+	if mkdirErr := os.MkdirAll(spinDir, 0o700); mkdirErr != nil {
+		return io.Discard
+	}
+
+	f, err := os.OpenFile(filepath.Join(spinDir, "spin.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return io.Discard
+	}
+
+	return f
+}
+
+// setupTUIProvider creates and configures the TUI provider and UI components.
+// The out writer is used for TUI output; when nil it defaults to
+// [os.Stdout].
+func setupTUIProvider(
+	ctx context.Context, cmd *cobra.Command, flags tuiFlags, out io.Writer,
+) (*config.V2, llm.Provider, *adapters.PureTTY, error) {
+	cfg, err := config.Load(config.Source{
+		File: flagConfigFile(cmd),
+		Flags: config.FlagOverrides{
+			Provider: flagProvider(cmd),
+			Model:    flagModel(cmd),
+			MaxTurns: flags.maxTurns,
+			Debug:    flags.debug,
+		},
+		WorkDir: flagWorkDir(cmd),
+	})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("load config: %w", err)
+	}
+
+	if agentsMD := flagAgentsMD(cmd); agentsMD != "" {
+		cfg.AgentsMD.Path = agentsMD
 	}
 
 	authMgr := createAuthManager()
-	provider, err := buildProvider(ctx, configLoader, authMgr)
+
+	provider, err := buildProvider(ctx, cfg, authMgr)
 	if err != nil {
-		return fmt.Errorf("create provider: %w", err)
+		return nil, nil, nil, fmt.Errorf("create provider: %w", err)
 	}
-	defer provider.Close()
 
-	maxTurns, _ := cmd.Flags().GetInt("max-turns")
-	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
+	if out == nil {
+		out = os.Stdout
+	}
 
-	ui, err := adapters.NewPureTTY(os.Stdout)
+	ui, err := adapters.NewPureTTY(out)
 	if err != nil {
-		return fmt.Errorf("create TUI: %w", err)
+		provider.Close()
+
+		return nil, nil, nil, fmt.Errorf("create TUI: %w", err)
 	}
 
-	// Determine the actual model being used (flag takes precedence over config)
-	currentModel := flagModel
-	if currentModel == "" {
-		currentModel = configLoader.GetString("model")
+	ui.SetApprovalPolicyTTLs(cfg.Security.SessionPolicyTTL, cfg.Security.GlobalPolicyTTL)
+	configureMaxTokens(ui)
+
+	return cfg, provider, ui, nil
+}
+
+// configureMaxTokens sets max tokens on the UI.
+func configureMaxTokens(ui *adapters.PureTTY) {
+	ui.SetMaxTokens(int64(defaultMaxTokens))
+}
+
+// startTUIBackground starts the UI and streaming in the background.
+// The errOut writer receives error messages; when nil it defaults to [os.Stderr].
+func startTUIBackground(ctx context.Context, ui *adapters.PureTTY, errOut io.Writer) context.CancelFunc {
+	if errOut == nil {
+		errOut = os.Stderr
 	}
 
-	// Set max tokens for context percentage display
-	// Try to get actual context window from provider's models
-	maxTokens := int64(128000) // Default fallback for modern models
-	if models, err := provider.Models(ctx); err == nil && len(models) > 0 {
-		// Find the current model
-		for _, m := range models {
-			if m.ID == currentModel {
-				// openai.Model doesn't have ContextSize field
-				// Use a default or fetch from model details if needed
-				// For now, keep the default maxTokens
-				break
-			}
-		}
-	}
-	ui.SetMaxTokens(maxTokens)
-
-	// Start UI in background
 	uiCtx, uiCancel := context.WithCancel(ctx)
-	defer uiCancel()
 
 	go func() {
-		if err := ui.Run(uiCtx); err != nil && err != context.Canceled {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		runErr := ui.Run(uiCtx)
+		if runErr != nil && !errors.Is(runErr, context.Canceled) {
+			fmt.Fprintf(errOut, "TUI error: %v\n", runErr)
 		}
 	}()
-	defer ui.Stop()
 
-	conv, err := createConversationForTUI(ctx, provider, maxTurns, configLoader, ui, debugFlag, autoApprove)
-	if err != nil {
-		return fmt.Errorf("create conversation: %w", err)
+	return uiCancel
+}
+
+// processEvent handles a single event from the conversation stream.
+func processEvent(ctx context.Context, event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
+	mapErr := mapper.MapEvent(ctx, event)
+	if mapErr != nil {
+		_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
 	}
-	defer conv.Close()
 
-	// Initialize UI with conversation metadata
-	initializeUI(ui, conv, provider, currentModel)
+	updateTokensFromEvent(event, ui, conv)
+}
 
-	// Create event mapper
-	mapper := tui.NewTUIMapper(ui)
-	defer mapper.Close()
+// updateTokensFromEvent updates token counts based on event type.
+func updateTokensFromEvent(event events.Event, ui *adapters.PureTTY, conv *conversation.Conversation) {
+	switch event.Type {
+	case events.EventTurnComplete, events.EventContentComplete, events.EventToolCallComplete:
+		ui.SetTokenCount(int64(conv.GetTokenCount()))
+	case events.EventTurnProgress:
+		if data, ok := event.Data.(events.TurnEventData); ok && data.TokensUsed > 0 {
+			ui.SetTokenCount(int64(data.TokensUsed))
+		}
+	default:
+		// Other event types don't require token count updates.
+	}
+}
 
-	// Start streaming channel
-	streamCh := mapper.StartStreaming()
-	streamDone := make(chan struct{})
-	go func() {
-		ui.PrintChunks(ctx, streamCh)
-		close(streamDone)
-	}()
-
-	// Print welcome message
-	ui.PrintLine("")
-	ui.PrintLine(SpinLogo)
-	ui.PrintLine("Type your prompt and press Enter.")
-	ui.PrintLine("Commands: /mode [name], /help, /exit (or press Ctrl-D)\n")
-
-	// Subscribe to conversation events
-	eventStream := conv.Stream()
-
-	// Start event processing loop
+// startEventLoop starts the event processing goroutine.
+func startEventLoop(
+	ctx context.Context, eventStream <-chan events.Event,
+	mapper *tui.Mapper, ui *adapters.PureTTY,
+	conv *conversation.Conversation,
+) <-chan struct{} {
 	eventDone := make(chan struct{})
+
 	go func() {
 		defer close(eventDone)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -165,35 +225,152 @@ func runTUI(cmd *cobra.Command, args []string) error {
 				if !ok {
 					return
 				}
-				if err := mapper.MapEvent(event); err != nil {
-					ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", err))
-				}
 
-				// Update token count from conversation history after each event
-				// This ensures the status bar always shows current cumulative total
-				if event.Type == events.EventTurnComplete ||
-					event.Type == events.EventContentComplete ||
-					event.Type == events.EventToolCallComplete {
-					tokenCount := int64(conv.GetTokenCount())
-					ui.SetTokenCount(tokenCount)
-				}
+				processEvent(ctx, event, mapper, ui, conv)
 			}
 		}
 	}()
 
-	// Main input loop
+	return eventDone
+}
+
+// handleTUIInput processes a single line of TUI input.
+// Returns whether to exit and the new streamDone channel (unchanged if command).
+func handleTUIInput(
+	ctx context.Context, line string, ui *adapters.PureTTY,
+	conv *conversation.Conversation, mapper *tui.Mapper,
+	streamDone chan struct{},
+) (shouldExit bool, newStreamDone chan struct{}) {
+	cmdResult := parseCommand(line)
+	if cmdResult.isCommand {
+		exit := handleTUICommand(ctx, ui, conv, cmdResult)
+
+		return exit, streamDone
+	}
+
+	newDone := executeTurn(ctx, line, conv, mapper, ui, streamDone)
+
+	return false, newDone
+}
+
+// handleTUICommand handles a parsed command input. Returns true if exit is requested.
+func handleTUICommand(ctx context.Context, ui *adapters.PureTTY, conv *conversation.Conversation, cmdResult commandResult) bool {
+	cmdErr := handleCommand(ctx, ui, conv, cmdResult.command, cmdResult.args)
+	if cmdErr == nil {
+		return false
+	}
+
+	if errors.Is(cmdErr, ErrExitRequested) {
+		return true
+	}
+
+	_ = ui.PrintLine(fmt.Sprintf("Command error: %v\n", cmdErr))
+
+	return false
+}
+
+// executeTurn runs a conversation turn and resets streaming.
+// Returns the new streamDone channel for the next turn.
+func executeTurn(
+	ctx context.Context, line string,
+	conv *conversation.Conversation, mapper *tui.Mapper,
+	ui *adapters.PureTTY, streamDone chan struct{},
+) chan struct{} {
+	turnCtx, turnCancel := context.WithCancel(ctx)
+	turnErr := conv.RunTurn(turnCtx, line)
+
+	turnCancel()
+
+	mapper.StopStreaming()
+	<-streamDone
+
+	newDone := make(chan struct{})
+	streamCh := mapper.StartStreaming()
+
+	go func() {
+		_ = ui.PrintChunks(ctx, streamCh)
+
+		close(newDone)
+	}()
+
+	if turnErr != nil {
+		_ = ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", turnErr))
+	}
+
+	return newDone
+}
+
+// runTUI executes the TUI mode.
+const tuiEventBuffer = 100
+
+func runTUI(cmd *cobra.Command, _ []string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	setupSignalHandling(cancel)
+
+	flags := parseTUIFlags(cmd)
+	configureTUILogging(flags.debug)
+
+	cfg, provider, ui, err := setupTUIProvider(ctx, cmd, flags, cmd.OutOrStdout())
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	uiCancel := startTUIBackground(ctx, ui, cmd.ErrOrStderr())
+	defer uiCancel()
+	defer func() { _ = ui.Stop() }()
+
+	var approvalHandler = createTUIApprovalHandler(ui)
+	if flags.autoApprove {
+		approvalHandler = createAutoApproveHandler()
+	}
+
+	conv, err := createConversation(ctx, provider, cfg, conversationConfig{
+		approvalHandler: approvalHandler,
+		ui:              ui,
+		sessionPrefix:   "tui",
+		eventBufferSize: tuiEventBuffer,
+	})
+	if err != nil {
+		return fmt.Errorf("create conversation: %w", err)
+	}
+	defer conv.Close(ctx)
+
+	initializeUI(ui, conv, provider, cfg.LLM.Model)
+
+	mapper := tui.NewMapper(ui)
+	defer mapper.Close()
+
+	streamCh := mapper.StartStreaming()
+	streamDone := make(chan struct{})
+
+	go func() {
+		_ = ui.PrintChunks(ctx, streamCh)
+
+		close(streamDone)
+	}()
+
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine(SpinLogo)
+	_ = ui.PrintLine("Type your prompt and press Enter.")
+	_ = ui.PrintLine("Commands: /mode [name], /help, /exit (or press Ctrl-D)\n")
+
+	eventDone := startEventLoop(ctx, conv.Stream(), mapper, ui, conv)
 	inputCh := ui.RequestInput()
+
 	for {
 		select {
 		case <-ctx.Done():
-			// Wait for event processing to finish
 			<-eventDone
-			return ctx.Err()
+
+			return fmt.Errorf("TUI loop canceled: %w", ctx.Err())
 
 		case line, ok := <-inputCh:
 			if !ok {
-				// UI closed (Ctrl-D)
 				<-eventDone
+
 				return nil
 			}
 
@@ -201,186 +378,33 @@ func runTUI(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			// Check if input is a command
-			cmdResult := parseCommand(line)
+			shouldExit, newDone := handleTUIInput(ctx, line, ui, conv, mapper, streamDone)
+			streamDone = newDone
 
-			if cmdResult.isCommand {
-				// Handle command
-				_, err := handleCommand(ui, conv, cmdResult)
-				if err != nil {
-					if err.Error() == "exit requested" {
-						<-eventDone
-						return nil
-					}
-					ui.PrintLine(fmt.Sprintf("Command error: %v\n", err))
-				}
-				// Skip conversation turn for commands
-				continue
-			}
+			if shouldExit {
+				<-eventDone
 
-			// Submit prompt to conversation
-			turnCtx, turnCancel := context.WithCancel(ctx)
-			defer turnCancel()
-
-			// Send message and handle errors
-			err := conv.RunTurn(turnCtx, line)
-
-			// Stop streaming to close the channel (this triggers final newline in PrintChunks)
-			mapper.StopStreaming()
-
-			// Wait for streaming to complete
-			<-streamDone
-
-			// Reset streamDone for next turn
-			streamDone = make(chan struct{})
-			streamCh = mapper.StartStreaming()
-			go func() {
-				ui.PrintChunks(ctx, streamCh)
-				close(streamDone)
-			}()
-
-			if err != nil {
-				ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
+				return nil
 			}
 		}
 	}
-}
-
-// createConversationForTUI creates a conversation configured for TUI mode using the new builder pattern.
-func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTurns int, configLoader *config.Loader, ui *adapters.PureTTY, debug bool, autoApprove bool) (*conversation.Conversation, error) {
-	workDir := getWorkingDirectory()
-	cfg := buildConfig(configLoader, maxTurns, workDir)
-
-	applyDebugFlag(cfg, debug)
-
-	var approvalHandler security.ApprovalHandler
-	if autoApprove {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  true,
-				Reason:    "auto-approved",
-			}
-		}
-	} else {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			return ui.ShowApprovalDialog(req)
-		}
-	}
-
-	// Create services based on configuration
-	logger := slog.Default()
-
-	var gitSvc *git.Service
-	var shellSvc *shell.Service
-	var mcpSvc *mcp.Service
-
-	if cfg.EnableGit {
-		var err error
-		gitSvc, err = git.NewService(true, workDir, logger)
-		if err != nil {
-			return nil, fmt.Errorf("create git service: %w", err)
-		}
-	}
-
-	if cfg.EnableShell {
-		var err error
-		shellSvc, err = shell.NewService(true, workDir, logger, cfg.ShellTimeout)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			return nil, fmt.Errorf("create shell service: %w", err)
-		}
-	}
-
-	if cfg.EnableMCP && len(cfg.MCPServers) > 0 {
-		mcpCfg := &mcp.Config{
-			EnableMCP:  true,
-			MCPServers: make([]mcp.MCPServerConfig, len(cfg.MCPServers)),
-		}
-		for i, srv := range cfg.MCPServers {
-			mcpCfg.MCPServers[i] = mcp.MCPServerConfig{
-				Name:    srv.Name,
-				Command: srv.Command,
-				Args:    srv.Args,
-				Env:     srv.Env,
-			}
-		}
-		var err error
-		mcpSvc, err = mcp.NewService(mcpCfg, logger)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			if shellSvc != nil {
-				shellSvc.Close()
-			}
-			return nil, fmt.Errorf("create mcp service: %w", err)
-		}
-	}
-
-	// Build conversation with services
-	builder := conversation.NewBuilder(cfg, workDir).
-		WithLLM(provider).
-		WithApprovalHandler(approvalHandler)
-
-	if gitSvc != nil {
-		builder = builder.WithGit(gitSvc)
-	}
-	if shellSvc != nil {
-		builder = builder.WithShell(shellSvc)
-	}
-	if mcpSvc != nil {
-		builder = builder.WithMCP(mcpSvc)
-	}
-
-	conv, err := builder.Build(ctx)
-	if err != nil {
-		// Clean up services on error
-		if gitSvc != nil {
-			gitSvc.Close()
-		}
-		if shellSvc != nil {
-			shellSvc.Close()
-		}
-		if mcpSvc != nil {
-			mcpSvc.Close()
-		}
-		return nil, fmt.Errorf("build conversation: %w", err)
-	}
-
-	return conv, nil
 }
 
 // setupSignalHandling sets up signal handling for graceful shutdown.
-func setupSignalHandling(cancel context.CancelFunc) {
+// An optional shutdownMsg is printed to stderr when a signal is received.
+func setupSignalHandling(cancel context.CancelFunc, shutdownMsg ...string) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
 		<-sigCh
+
+		if len(shutdownMsg) > 0 && shutdownMsg[0] != "" {
+			fmt.Fprintln(os.Stderr, shutdownMsg[0])
+		}
+
 		cancel()
 	}()
-}
-
-// setupTUILogging configures logging for TUI mode to prevent stderr interference.
-func setupTUILogging() {
-	// Set slog level to WARN to suppress INFO level logs that interfere with TUI
-	// This prevents logs like "Shell integration initialized" from appearing in stderr
-	// while the TUI is running, which causes formatting conflicts
-	slog.SetLogLoggerLevel(slog.LevelWarn)
-}
-
-// getWorkingDirectory returns the working directory for the conversation.
-func getWorkingDirectory() string {
-	workDir, err := os.Getwd()
-	if err != nil {
-		workDir = "."
-	}
-	if flagWorkDir != "" {
-		workDir = flagWorkDir
-	}
-	return workDir
 }
 
 // initializeUI initializes the UI with conversation metadata.
@@ -394,65 +418,6 @@ func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provide
 	tokenCount := int64(conv.GetTokenCount())
 	ui.SetTokenCount(tokenCount)
 
-	sessionID := conv.GetSessionID()
+	sessionID := conv.ID()
 	ui.SetConversationID(sessionID)
-}
-
-// buildConfig builds the configuration from multiple sources.
-func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *config.Config {
-	cfg := config.DefaultConfig()
-	cfg.WorkDir = workDir
-
-	// Layer 1: Load from config file
-	var fileCfg config.Config
-	if err := configLoader.Unmarshal(&fileCfg); err == nil {
-		applyFileConfig(cfg, &fileCfg)
-	}
-
-	// Layer 2: Override with CLI flags
-	applyCLIFlags(cfg, maxTurns)
-
-	return cfg
-}
-
-// applyFileConfig applies configuration from file to the main config.
-func applyFileConfig(cfg *config.Config, fileCfg *config.Config) {
-	if fileCfg.Provider != "" {
-		cfg.Provider = fileCfg.Provider
-	}
-	if fileCfg.Model != "" {
-		cfg.Model = fileCfg.Model
-	}
-	if fileCfg.MaxTurns > 0 {
-		cfg.MaxTurns = fileCfg.MaxTurns
-	}
-	if fileCfg.Timeout > 0 {
-		cfg.Timeout = fileCfg.Timeout
-	}
-	if fileCfg.MaxTokens > 0 {
-		cfg.MaxTokens = fileCfg.MaxTokens
-	}
-}
-
-// applyCLIFlags applies CLI flags to the configuration.
-func applyCLIFlags(cfg *config.Config, maxTurns int) {
-	if maxTurns > 0 {
-		cfg.MaxTurns = maxTurns
-	}
-	if flagProvider != "" {
-		cfg.Provider = flagProvider
-	}
-	if flagModel != "" {
-		cfg.Model = flagModel
-	}
-}
-
-// applyDebugFlag applies the debug flag to configuration.
-func applyDebugFlag(cfg *config.Config, debug bool) {
-	if debug {
-		cfg.Debug = true
-		cfg.LogLevel = "debug"
-		// Don't suppress INFO logs when debug is enabled
-		// This allows debug logging to work properly
-	}
 }

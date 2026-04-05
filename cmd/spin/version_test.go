@@ -7,6 +7,8 @@ import (
 )
 
 func TestVersionCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := newVersionCmd()
 
 	if cmd.Use != "version" {
@@ -19,8 +21,9 @@ func TestVersionCommand(t *testing.T) {
 }
 
 func TestVersionCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.SetArgs([]string{"version"})
 
 	var out bytes.Buffer
@@ -38,8 +41,9 @@ func TestVersionCommand_Execute(t *testing.T) {
 }
 
 func TestVersionCommand_WithVerbose(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.SetArgs([]string{"version", "--verbose"})
 
 	var out bytes.Buffer
@@ -54,17 +58,20 @@ func TestVersionCommand_WithVerbose(t *testing.T) {
 	if !strings.Contains(output, "version") {
 		t.Error("Version output should contain 'version'")
 	}
+
 	if !strings.Contains(output, "commit") {
 		t.Error("Verbose version output should contain 'commit'")
 	}
+
 	if !strings.Contains(output, "built") {
 		t.Error("Verbose version output should contain 'built'")
 	}
 }
 
 func TestVersionCommand_Short(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.SetArgs([]string{"version", "--short"})
 
 	var out bytes.Buffer
@@ -76,7 +83,7 @@ func TestVersionCommand_Short(t *testing.T) {
 	}
 
 	output := strings.TrimSpace(out.String())
-	// Should just be the version number
+	// Should just be the version number.
 	if strings.Contains(output, "commit") || strings.Contains(output, "built") {
 		t.Errorf("Short version should not contain commit or build info, got: %s", output)
 	}

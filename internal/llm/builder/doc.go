@@ -40,11 +40,14 @@
 //
 // 3. Environment variable (automatic):
 //
-//	// Set OPENAI_API_KEY environment variable
+// Set OPENAI_API_KEY environment variable
+//
 //	provider, err := builder.Build(ctx, builder.Config{
 //	    Provider: "openai",
 //	    Model:    "gpt-4o",
-//	    // API key resolved from OPENAI_API_KEY env var
+//
+// API key resolved from OPENAI_API_KEY env var
+//
 //	})
 //
 // # Supported Providers
@@ -93,31 +96,40 @@
 //	func main() {
 //	    ctx := context.Background()
 //
-//	    // Load config file
-//	    configLoader := config.NewLoader()
-//	    if err := configLoader.Load(""); err != nil {
-//	        // Config file optional, continue with defaults
-//	    }
+// Load config file
 //
-//	    // Setup auth
-//	    keystore := auth.NewKeystore()
-//	    authMgr := auth.NewManager(keystore)
+//	configLoader := config.NewLoader()
+//	if err := configLoader.Load(""); err != nil {
 //
-//	    // Create builder
-//	    b := builder.NewBuilder(configLoader, authMgr)
+// Config file optional, continue with defaults
 //
-//	    // Build provider with explicit overrides
-//	    provider, err := b.Build(ctx, builder.Config{
-//	        Provider: "ollama",           // Override config file
-//	        Model:    "llama3.1",         // Override config file
-//	        // Other fields from config file or defaults
-//	    })
-//	    if err != nil {
-//	        panic(err)
-//	    }
-//	    defer provider.Close()
+//	}
 //
-//	    // Use provider...
+// Setup auth
+//
+//	keystore := auth.NewKeystore()
+//	authMgr := auth.NewManager(keystore)
+//
+// Create builder
+//
+//	b := builder.NewBuilder(configLoader, authMgr)
+//
+// Build provider with explicit overrides
+//
+//	provider, err := b.Build(ctx, builder.Config{
+//	    Provider: "ollama",           // Override config file
+//	    Model:    "llama3.1",         // Override config file
+//
+// Other fields from config file or defaults
+//
+//	})
+//	if err != nil {
+//	    panic(err)
+//	}
+//	defer provider.Close()
+//
+// Use provider...
+//
 //	}
 //
 // # Error Handling

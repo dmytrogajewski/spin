@@ -1,13 +1,35 @@
+// Package reflector provides reflection and insight generation.
 package reflector
 
 import (
+	"errors"
 	"fmt"
 	"time"
+)
+
+const (
+	defaultInsightConfidence = 0.5
+	minInsightContentLen     = 50
+	maxInsightContentLen     = 500
+)
+
+var (
+	// ErrContentCannotBeEmpty is a sentinel error.
+	ErrContentCannotBeEmpty = errors.New("content cannot be empty")
+	// ErrContentTooShortMin50Chars is a sentinel error.
+	ErrContentTooShortMin50Chars = errors.New("content too short (min 50 chars")
+	// ErrContentTooLongMax500Chars is a sentinel error.
+	ErrContentTooLongMax500Chars = errors.New("content too long (max 500 chars")
+	// ErrConfidenceMustBeBetween00 is a sentinel error.
+	ErrConfidenceMustBeBetween00 = errors.New("confidence must be between 0.0 and 1.0")
+	// ErrInvalidCategory is a sentinel error.
+	ErrInvalidCategory = errors.New("invalid category")
 )
 
 // InsightCategory classifies the type of insight.
 type InsightCategory string
 
+// CategorySuccessPattern defines a CategorySuccessPattern constant.
 const (
 	CategorySuccessPattern InsightCategory = "success_pattern"
 	CategoryErrorMode      InsightCategory = "error_mode"
@@ -17,25 +39,25 @@ const (
 
 // Insight represents an actionable lesson extracted from a trajectory.
 type Insight struct {
-	// Content is the actionable lesson
+	// Content is the actionable lesson.
 	Content string
 
-	// Source is the trajectory ID
+	// Source is the trajectory ID.
 	Source string
 
-	// Confidence is reliability score (0.0 to 1.0)
+	// Confidence is reliability score (0.0 to 1.0).
 	Confidence float64
 
-	// Category classifies the insight type
+	// Category classifies the insight type.
 	Category InsightCategory
 
-	// Evidence are supporting quotes from trajectory
+	// Evidence are supporting quotes from trajectory.
 	Evidence []string
 
-	// Iteration is refinement round when created
+	// Iteration is refinement round when created.
 	Iteration int
 
-	// CreatedAt is timestamp
+	// CreatedAt is timestamp.
 	CreatedAt time.Time
 }
 
@@ -44,7 +66,7 @@ func NewInsight(content string, category InsightCategory) *Insight {
 	return &Insight{
 		Content:    content,
 		Category:   category,
-		Confidence: 0.5,
+		Confidence: defaultInsightConfidence,
 		Evidence:   []string{},
 		Iteration:  0,
 		CreatedAt:  time.Now(),
@@ -54,20 +76,25 @@ func NewInsight(content string, category InsightCategory) *Insight {
 // Validate checks if the insight meets quality requirements.
 func (i *Insight) Validate() error {
 	if i.Content == "" {
-		return fmt.Errorf("content cannot be empty")
+		return ErrContentCannotBeEmpty
 	}
-	if len(i.Content) < 50 {
-		return fmt.Errorf("content too short (min 50 chars, got %d)", len(i.Content))
+
+	if len(i.Content) < minInsightContentLen {
+		return fmt.Errorf("content too short (min 50 chars, got %d): %w", len(i.Content), ErrContentTooShortMin50Chars)
 	}
-	if len(i.Content) > 500 {
-		return fmt.Errorf("content too long (max 500 chars, got %d)", len(i.Content))
+
+	if len(i.Content) > maxInsightContentLen {
+		return fmt.Errorf("content too long (max 500 chars, got %d): %w", len(i.Content), ErrContentTooLongMax500Chars)
 	}
+
 	if i.Confidence < 0.0 || i.Confidence > 1.0 {
-		return fmt.Errorf("confidence must be between 0.0 and 1.0, got %.2f", i.Confidence)
+		return fmt.Errorf("confidence must be between 0.0 and 1.0, got %.2f: %w", i.Confidence, ErrConfidenceMustBeBetween00)
 	}
+
 	if !isValidCategory(i.Category) {
-		return fmt.Errorf("invalid category: %s", i.Category)
+		return fmt.Errorf("invalid category: %s: %w", i.Category, ErrInvalidCategory)
 	}
+
 	return nil
 }
 

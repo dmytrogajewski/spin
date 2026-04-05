@@ -1,0 +1,537 @@
+// Package main provides the spin CLI application entry point.
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/coder/acp-go-sdk"
+	"github.com/spf13/cobra"
+
+	"github.com/dmytrogajewski/spin/internal/ace"
+	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/caller"
+	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/agent/harness/bridge"
+	"github.com/dmytrogajewski/spin/internal/agent/prompt"
+	"github.com/dmytrogajewski/spin/internal/agent/scaffold"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
+	"github.com/dmytrogajewski/spin/internal/auth"
+	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/contexteng/history"
+	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llm/builder"
+	"github.com/dmytrogajewski/spin/internal/mcp"
+	acppkg "github.com/dmytrogajewski/spin/internal/protocol/acp"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
+	"github.com/dmytrogajewski/spin/internal/session"
+	"github.com/dmytrogajewski/spin/internal/tools"
+)
+
+const (
+	acpApprovalTimeout  = 60 * time.Second
+	historyContextRatio = 0.75 // use 75% of context window for history.
+)
+
+// newACPCmd creates the ACP server command.
+func newACPCmd() *cobra.Command {
+	var (
+		workDir string
+		apiKey  string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "acp",
+		Short: "Start ACP (Agent Client Protocol) server",
+		Long: `Start Spin as an ACP (Agent Client Protocol) server.
+
+The server communicates via stdin/stdout using ACP protocol.
+This mode is designed for ACP-compatible clients that want to integrate
+Spin as an agent.
+
+Examples:
+  spin acp
+  spin acp --provider openai --model gpt-4
+  spin acp --workspace /path/to/project`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Only pass flag values if they were explicitly set.
+			providerType, _ := cmd.Flags().GetString("provider")
+			baseURL, _ := cmd.Flags().GetString("base-url")
+			model, _ := cmd.Flags().GetString("model")
+
+			// Check if flags were explicitly set by user.
+			flagOverrides := config.FlagOverrides{}
+			if cmd.Flags().Changed("provider") {
+				flagOverrides.Provider = providerType
+			}
+
+			if cmd.Flags().Changed("model") {
+				flagOverrides.Model = model
+			}
+
+			if cmd.Flags().Changed("base-url") {
+				flagOverrides.BaseURL = baseURL
+			}
+
+			return runACPServer(cmd, workDir, flagOverrides, apiKey)
+		},
+	}
+
+	// Server-specific flags (empty defaults - config file values take precedence).
+	cmd.Flags().StringVar(&workDir, "workspace", ".", "Workspace directory path")
+	cmd.Flags().String("provider", "", "LLM provider type (ollama, openai)")
+	cmd.Flags().String("base-url", "", "Provider base URL")
+	cmd.Flags().String("model", "", "Model name")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key (for cloud providers)")
+
+	return cmd
+}
+
+// acpInfra holds the infrastructure components for the ACP server.
+type acpInfra struct {
+	emitter  *events.EventEmitter
+	storage  session.Storage
+	provider llm.Provider
+	services *ProtocolServices
+	cleanup  func()
+	logger   *slog.Logger
+}
+
+// createACPInfra creates the infrastructure components for the ACP server.
+func createACPInfra(
+	ctx context.Context, cmd *cobra.Command, workDir string,
+	flagOverrides config.FlagOverrides, apiKey string,
+) (*config.V2, *acpInfra, error) {
+	authMgr := createAuthManager()
+
+	cfg, err := config.Load(config.Source{
+		File:    flagConfigFile(cmd),
+		Flags:   flagOverrides,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("load config: %w", err)
+	}
+
+	if agentsMD := flagAgentsMD(cmd); agentsMD != "" {
+		cfg.AgentsMD.Path = agentsMD
+	}
+
+	provider, err := buildProviderForACP(ctx, cfg, authMgr, cfg.LLM.Provider, cfg.LLM.BaseURL, cfg.LLM.Model, apiKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create provider: %w", err)
+	}
+
+	logger := slog.Default()
+
+	services, cleanup, err := createServices(ctx, cfg, workDir, logger)
+	if err != nil {
+		provider.Close()
+
+		return nil, nil, fmt.Errorf("failed to create services: %w", err)
+	}
+
+	bufferSize := 100
+	if cfg.Agent.StreamBuffer > 0 {
+		bufferSize = cfg.Agent.StreamBuffer
+	}
+
+	storage, err := session.NewFileStorage(defaultSessionDir(cfg))
+	if err != nil {
+		cleanup()
+		provider.Close()
+
+		return nil, nil, fmt.Errorf("create session storage: %w", err)
+	}
+
+	return cfg, &acpInfra{
+		emitter:  events.NewEventEmitter(bufferSize),
+		storage:  storage,
+		provider: provider,
+		services: services,
+		cleanup:  cleanup,
+		logger:   logger,
+	}, nil
+}
+
+// wireACPAgent configures all the connections between ACP components.
+func wireACPAgent(
+	acpAgent *acppkg.SpinACPAgent,
+	acpRuntime *agentexec.ACPRuntime,
+	coreAgent *agent.Agent,
+	convManager *conversation.Manager,
+	histStorage history.Storage,
+) *acp.AgentSideConnection {
+	acpAgent.SetConversationManager(convManager)
+	acpAgent.SetHistoryStorage(histStorage)
+
+	acpRuntime.SetACPAgent(acpAgent)
+	acpAgent.SetACPRuntime(acpRuntime)
+
+	acpApprovalHandler := acppkg.NewApprovalHandler(acpAgent, acpApprovalTimeout)
+	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
+	acpAgent.SetApprovalHandler(acpApprovalHandler)
+	acpAgent.SetApprovalService(coreAgent.SecurityService().ApprovalService())
+
+	conn := acp.NewAgentSideConnection(acpAgent, os.Stdout, os.Stdin)
+	acpAgent.SetConnection(conn)
+
+	terminalClient := acppkg.NewTerminalClient(conn)
+	acpRuntime.SetTerminalClient(terminalClient)
+
+	filesystemClient := acppkg.NewFilesystemClient(conn)
+	acpRuntime.SetFilesystemClient(filesystemClient)
+
+	return conn
+}
+
+// createACPConversationManager creates the conversation manager for the ACP server.
+func createACPConversationManager(cfg *config.V2, core *coreAgentResult, infra *acpInfra) (*conversation.Manager, history.Storage, error) {
+	histStorage, err := history.NewFileStorage(defaultSessionDir(cfg))
+	if err != nil {
+		return nil, nil, fmt.Errorf("create history storage: %w", err)
+	}
+
+	maxTokens := getHistoryMaxTokens(cfg, infra.provider)
+
+	convFactory := func(_ context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
+		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
+			Agent:           core.agent,
+			HarnessExecutor: core.harnessExecutor,
+			Emitter:         infra.emitter,
+			WorkDir:         sessWorkDir,
+			ID:              sessionID,
+			MaxTokens:       maxTokens,
+		})
+	}
+
+	convManager, err := conversation.NewManager(conversation.ManagerConfig{
+		Factory:        convFactory,
+		Storage:        infra.storage,
+		HistoryStorage: histStorage,
+		Logger:         infra.logger,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("create conversation manager: %w", err)
+	}
+
+	return convManager, histStorage, nil
+}
+
+// runACPServer starts the ACP server.
+func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
+	var err error
+
+	workDir, err = filepath.Abs(workDir)
+	if err != nil {
+		return fmt.Errorf("resolve workspace path: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg, infra, err := createACPInfra(ctx, cmd, workDir, flagOverrides, apiKey)
+	if err != nil {
+		return err
+	}
+	defer infra.provider.Close()
+	defer infra.cleanup()
+
+	acpRuntime, err := agentexec.NewACP(agentexec.ACPConfig{
+		WorkDir:      workDir,
+		Emitter:      infra.emitter,
+		Storage:      infra.storage,
+		ShellService: infra.services.Shell,
+		GitService:   infra.services.Git,
+		Logger:       infra.logger,
+	})
+	if err != nil {
+		return fmt.Errorf("create ACP runtime: %w", err)
+	}
+
+	coreResult, err := buildCoreAgent(ctx, cfg, infra.provider, workDir, infra.emitter, acpRuntime)
+	if err != nil {
+		return fmt.Errorf("build core agent: %w", err)
+	}
+
+	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(infra.logger))
+
+	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreResult.agent, mcpService, infra.emitter, infra.storage)
+	if err != nil {
+		return fmt.Errorf("create ACP protocol adapter: %w", err)
+	}
+
+	convManager, histStorage, err := createACPConversationManager(cfg, coreResult, infra)
+	if err != nil {
+		return err
+	}
+
+	conn := wireACPAgent(acpAgent, acpRuntime, coreResult.agent, convManager, histStorage)
+
+	setupSignalHandling(cancel, "\nShutting down ACP server...")
+	logACPServerStart(cfg.LLM.Provider, cfg.LLM.Model, workDir)
+
+	select {
+	case <-conn.Done():
+		log.Println("ACP client disconnected")
+	case <-ctx.Done():
+		log.Println("ACP server shutting down")
+	}
+
+	return nil
+}
+
+// getHistoryMaxTokens determines appropriate max tokens for history based on LLM context window.
+// Priority order:
+//  1. Config context_window override (if set - for custom/fine-tuned models)
+//  2. Provider's auto-detected context window (from Capabilities)
+//  3. Default of 8192 tokens
+//
+// Note: LLM.MaxTokens is intentionally NOT used here - it's for generation limit,
+// not context window. Providers should report context window via Capabilities().
+func getHistoryMaxTokens(cfg *config.V2, provider llm.Provider) int {
+	const (
+		defaultTokens = 8192
+		minTokens     = 2048
+		maxTokens     = 128000 // Cap to prevent excessive memory usage.
+	)
+
+	var contextWindow int
+
+	// Priority 1: Config override for custom/fine-tuned models.
+	if cfg != nil && cfg.LLM.ContextWindow > 0 {
+		contextWindow = cfg.LLM.ContextWindow
+	}
+
+	// Priority 2: Provider's auto-detected context window (primary mechanism).
+	if contextWindow == 0 && provider != nil {
+		caps := provider.Capabilities()
+		if caps.ContextWindow > 0 {
+			contextWindow = caps.ContextWindow
+		}
+	}
+
+	// Priority 3: Default.
+	if contextWindow == 0 {
+		return defaultTokens
+	}
+
+	// Use 75% of context window for history (leave room for responses).
+	historyTokens := min(
+		// Apply constraints.
+		int(float64(contextWindow)*historyContextRatio), maxTokens)
+
+	if historyTokens < minTokens {
+		historyTokens = defaultTokens
+	}
+
+	return historyTokens
+}
+
+// buildProviderForACP creates and configures an LLM provider for the ACP server.
+func buildProviderForACP(
+	ctx context.Context, cfg *config.V2, authMgr *auth.Manager,
+	providerType, baseURL, model, apiKey string,
+) (llm.Provider, error) {
+	extra, ok, err := createProviderForACPExtra(providerType, baseURL, model, apiKey)
+	if err != nil {
+		return nil, err
+	} else if ok {
+		return extra, nil
+	}
+
+	b := builder.NewBuilder(cfg, authMgr)
+
+	return b.Build(ctx)
+}
+
+// buildCoreAgent constructs the core agent with all required services and dependencies.
+// coreAgentResult holds the agent and harness executor built together.
+type coreAgentResult struct {
+	agent           *agent.Agent
+	harnessExecutor *bridge.TurnExecutor
+}
+
+func buildCoreAgent(
+	ctx context.Context,
+	cfg *config.V2,
+	provider llm.Provider,
+	workDir string,
+	emitter *events.EventEmitter,
+	rt agentexec.Runtime,
+) (*coreAgentResult, error) {
+	agentBuilder := agent.NewBuilder().
+		WithConfig(cfg).
+		WithProvider(provider).
+		WithWorkingDir(workDir).
+		WithEmitter(emitter).
+		WithRuntime(rt)
+
+	environment := agentBuilder.BuildEnvironment(ctx)
+	securityService := agentBuilder.BuildSecurityService(ctx)
+	detectionService := agentBuilder.BuildDetectionService()
+	executor := agentBuilder.BuildExecutor(ctx)
+	toolExecutor := agent.NewToolExecutorAdapter(executor)
+
+	if acpRT, ok := rt.(*agentexec.ACPRuntime); ok {
+		acpRT.SetExecutor(toolExecutor)
+		acpRT.SetValidator(agentexec.NewValidatorAdapter(securityService.Validator()))
+	}
+
+	toolRegistry := tools.NewRegistry()
+	rt.RegisterTools(toolRegistry)
+
+	// Create hook runner for lifecycle hooks (JOURNEY-1.3).
+	hookRunner := hooks.NewRunner(hooks.Config{
+		GlobalDir:  filepath.Join("~", ".spin", "hooks"),
+		ProjectDir: filepath.Join(workDir, ".spin", "hooks"),
+		Logger:     slog.Default(),
+	})
+
+	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
+		Registry:        toolRegistry,
+		Validator:       securityService.Validator(),
+		ApprovalService: securityService.ApprovalService(),
+		Emitter:         emitter,
+		WorkDir:         workDir,
+		HookRunner:      hookRunner,
+	})
+
+	opts := agentBuilder.BuildOptions()
+	aceSvc, aceConfig := buildACEServices(ctx, cfg, agentBuilder)
+
+	if aceSvc != nil {
+		opts = append(opts, agent.WithACEService(aceSvc), agent.WithACEConfig(aceConfig))
+	}
+
+	agentInstance, err := agent.NewAgent(
+		provider, securityService, detectionService, toolRuntime,
+		environment, emitter, opts...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build agent: %w", err)
+	}
+
+	// Build harness executor for conversation turn execution.
+	harnessExec, err := buildACPHarnessExecutor(cfg, provider, emitter, toolRegistry, toolRuntime, workDir)
+	if err != nil {
+		return nil, fmt.Errorf("build harness executor: %w", err)
+	}
+
+	return &coreAgentResult{
+		agent:           agentInstance,
+		harnessExecutor: harnessExec,
+	}, nil
+}
+
+// buildACPHarnessExecutor creates a harness executor for ACP conversations.
+func buildACPHarnessExecutor(
+	cfg *config.V2,
+	provider llm.Provider,
+	emitter *events.EventEmitter,
+	toolRegistry *tools.Registry,
+	toolRuntime *tool.Runtime,
+	workDir string,
+) (*bridge.TurnExecutor, error) {
+	logger := slog.Default()
+	pb := prompt.New(provider, logger)
+
+	llmCaller := caller.New(caller.Config{
+		Provider:      provider,
+		PromptBuilder: pb,
+		Emitter:       emitter,
+		Logger:        logger,
+		Temperature:   cfg.LLM.Temperature,
+		MaxTokens:     cfg.LLM.MaxTokens,
+	})
+
+	// Compose system prompt from modular sections (same as conversation/builder.go).
+	composer := prompt.NewComposer()
+	for _, section := range prompt.DefaultRegularSections() {
+		composer.AddSection(section)
+	}
+
+	// Inject project instructions from AGENTS.md if available.
+	if agentsMD := resolveAgentsMDForACP(workDir); agentsMD != "" {
+		composer.AddSection(prompt.ProjectInstructionsSection(agentsMD))
+	}
+
+	composer.SetVar("WORK_DIR", workDir)
+
+	systemPrompt := composer.Compose(nil)
+
+	// Compile scaffold.Spec via Factory (replaces manual construction).
+	factory, factoryErr := scaffold.NewFactory(cfg, toolRegistry, nil)
+	if factoryErr != nil {
+		return nil, fmt.Errorf("scaffold factory: %w", factoryErr)
+	}
+
+	spec, compileErr := factory.Compile(scaffold.AgentTypeMain)
+	if compileErr != nil {
+		return nil, fmt.Errorf("compile main spec: %w", compileErr)
+	}
+
+	// Override Factory's default system prompt with Composer output (richer).
+	spec.SystemPrompt = systemPrompt
+
+	harnessExec, err := bridge.BuildExecutor(bridge.Config{
+		Spec:      spec,
+		LLMCaller: llmCaller,
+		Registry:  toolRegistry,
+		Runtime:   toolRuntime,
+		Logger:    logger,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bridge build: %w", err)
+	}
+
+	return bridge.NewTurnExecutor(harnessExec), nil
+}
+
+// resolveAgentsMDForACP reads AGENTS.md from the workspace directory.
+func resolveAgentsMDForACP(workDir string) string {
+	content, err := os.ReadFile(filepath.Join(workDir, "AGENTS.md"))
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(content))
+}
+
+func buildACEServices(ctx context.Context, cfg *config.V2, ab *agent.Builder) (*ace.Service, *ace.Config) {
+	if cfg == nil || !cfg.ACE.Enabled {
+		return nil, nil
+	}
+
+	svc, err := ab.BuildACEService(ctx)
+	if err != nil {
+		return nil, nil
+	}
+
+	return svc, ace.ConvertConfig(&cfg.ACE)
+}
+
+// defaultSessionDir returns the session directory from config,
+// falling back to "~/.spin/sessions" when unset.
+func defaultSessionDir(cfg *config.V2) string {
+	if cfg.Agent.SessionDir != "" {
+		return cfg.Agent.SessionDir
+	}
+
+	return "~/.spin/sessions"
+}
+
+// logACPServerStart logs the ACP server startup information.
+func logACPServerStart(providerType, model, workDir string) {
+	log.Println("Starting ACP server on stdin/stdout...")
+	log.Printf("Provider: %s, Model: %s", providerType, model)
+	log.Printf("Workspace: %s", workDir)
+}

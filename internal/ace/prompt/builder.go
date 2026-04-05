@@ -1,3 +1,4 @@
+// Package prompt provides prompt building and rendering.
 package prompt
 
 import (
@@ -10,7 +11,7 @@ import (
 // Builder constructs prompts with context bullets.
 type Builder struct {
 	systemPrompt string
-	includeIL    bool // Include ItemizedLearning instructions
+	includeIL    bool // Include ItemizedLearning instructions.
 }
 
 // Option configures Builder.
@@ -48,22 +49,24 @@ func NewBuilder(opts ...Option) *Builder {
 func (b *Builder) BuildSystemPrompt(bullets []*bullet.Bullet) string {
 	var sb strings.Builder
 
-	// Start with custom system prompt
+	// Start with custom system prompt.
 	sb.WriteString(b.systemPrompt)
 	sb.WriteString("\n\n")
 
-	// Add context playbook section if bullets provided
+	// Add context playbook section if bullets provided.
 	if len(bullets) > 0 {
 		sb.WriteString("# Context Playbook\n\n")
+
 		for i, bullet := range bullets {
 			formatted := b.FormatBullet(bullet, i)
 			sb.WriteString(formatted)
 			sb.WriteString("\n")
 		}
+
 		sb.WriteString("\n")
 	}
 
-	// Add ItemizedLearning instructions if enabled
+	// Add ItemizedLearning instructions if enabled.
 	if b.includeIL && len(bullets) > 0 {
 		sb.WriteString(itemizedLearningInstructions)
 		sb.WriteString("\n")
@@ -73,8 +76,8 @@ func (b *Builder) BuildSystemPrompt(bullets []*bullet.Bullet) string {
 }
 
 // FormatBullet formats a bullet with marker for IL.
-func (b *Builder) FormatBullet(bullet *bullet.Bullet, index int) string {
-	return fmt.Sprintf("[B%d] %s", index, bullet.Content)
+func (b *Builder) FormatBullet(blt *bullet.Bullet, index int) string {
+	return fmt.Sprintf("[B%d] %s", index, blt.Content)
 }
 
 const itemizedLearningInstructions = `# Instructions for Using the Playbook
@@ -111,6 +114,7 @@ After solving the task, indicate which bullets were helpful or harmful:
 - HARMFUL: [B3] - bullets that misled or were incorrect
 - EXPLANATION: Brief reasoning for your feedback
 
-**NOTE**: Treat the playbook as a tool. Use only the parts that are relevant and applicable to your specific situation and task context. Use your own judgment for aspects not covered by the playbook.
+**NOTE**: Treat the playbook as a tool. Use only the parts that are relevant and applicable to your specific
+situation and task context. Use your own judgment for aspects not covered by the playbook.
 
 Format your response with the feedback markers at the end.`

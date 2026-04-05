@@ -1,0 +1,51 @@
+version: "2.0"
+
+llm:
+  provider: "openai"
+  model: "gpt-4"
+  api_key: "sk-test-key-123"
+  base_url: "https://api.openai.com/v1"
+  timeout: 120s
+  max_tokens: 8192
+  temperature: 0.8
+
+agent:
+  max_turns: 50
+  timeout: 600s
+  work_dir: "/tmp/agent-workspace"
+  require_approval: true
+
+ace:
+  enabled: true
+  playbook_path: "/etc/spin/playbooks/default.yaml"
+  trajectory_path: "/var/lib/spin/trajectories"
+  top_k: 5
+  min_score: 0.7
+
+security:
+  sandbox_mode: "firejail"
+  policy_file: "/etc/spin/security-policy.yaml"
+  allowed_commands:
+    - "ls"
+    - "cat"
+    - "grep"
+    - "find"
+
+protocol:
+  enable_mcp: true
+  mcp_servers:
+    - name: "filesystem"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        ROOT_PATH: "/workspace"
+    - name: "git"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-git"
+  enable_git: true
+  enable_shell: true
+  shell_timeout: 60s

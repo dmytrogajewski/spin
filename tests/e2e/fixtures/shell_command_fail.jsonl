@@ -1,0 +1,2 @@
+{"chunks":[{"id":"c1","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"Running the command.","tool_calls":[{"index":0,"id":"tc-1","type":"function","function":{"name":"shell_command","arguments":"{\"command\":\"exit 1\",\"cwd\":\"\",\"operation\":\"execute\"}"}}]},"finish_reason":"tool_calls"}]}]}
+{"chunks":[{"id":"c2","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"The command failed with exit code 1."},"finish_reason":"stop"}]}]}

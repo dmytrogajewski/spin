@@ -3,9 +3,14 @@ package git
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"strconv"
+	"strings"
 
 	gogit "github.com/go-git/go-git/v5"
 )
+
+const statusFieldParts = 2
 
 // Status returns the current repository status including branch name,
 // modified/staged/untracked files, and tracking information.
@@ -20,10 +25,10 @@ import (
 //	fmt.Printf("Modified: %d files\n", len(status.ModifiedFiles))
 //	fmt.Printf("Untracked: %d files\n", len(status.UntrackedFiles))
 func (r *Repository) Status(ctx context.Context) (*Status, error) {
-	// Check context cancellation
+	// Check context cancellation.
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("get status: %w", ctx.Err())
 	default:
 	}
 
@@ -32,32 +37,33 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 		return nil, fmt.Errorf("get worktree: %w", err)
 	}
 
-	// Get worktree status
+	// Get worktree status.
 	gitStatus, err := worktree.Status()
 	if err != nil {
 		return nil, fmt.Errorf("get status: %w", err)
 	}
 
-	// Get current HEAD
-	head, err := r.repo.Head()
-	if err != nil {
-		// Detached HEAD or no HEAD (empty repo)
-		return &Status{
-			Detached:       true,
-			ModifiedFiles:  make([]FileStatus, 0),
-			UntrackedFiles: make([]string, 0),
-		}, nil
+	// Get current HEAD. A nil head means empty repo or detached HEAD.
+	head, headErr := r.repo.Head()
+	if headErr != nil {
+		head = nil
 	}
 
 	status := &Status{
-		Branch:         head.Name().Short(),
-		Hash:           head.Hash().String(),
 		ModifiedFiles:  make([]FileStatus, 0),
 		UntrackedFiles: make([]string, 0),
-		Detached:       !head.Name().IsBranch(),
 	}
 
-	// Parse file statuses
+	if head == nil {
+		// Detached HEAD or no HEAD (empty repo).
+		status.Detached = true
+	} else {
+		status.Branch = head.Name().Short()
+		status.Hash = head.Hash().String()
+		status.Detached = !head.Name().IsBranch()
+	}
+
+	// Parse file statuses.
 	for path, fileStatus := range gitStatus {
 		if fileStatus.Worktree == gogit.Untracked {
 			status.UntrackedFiles = append(status.UntrackedFiles, path)
@@ -71,9 +77,9 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 	}
 
 	// Get tracking branch and ahead/behind
-	// This is a best-effort operation - if it fails, we continue without tracking info
-	if head.Name().IsBranch() {
-		remoteBranch, ahead, behind := r.getTrackingInfo(head.Name().Short())
+	// This is a best-effort operation - if it fails, we continue without tracking info.
+	if head != nil && head.Name().IsBranch() {
+		remoteBranch, ahead, behind := r.getTrackingInfo(ctx, head.Name().Short())
 		status.RemoteBranch = remoteBranch
 		status.Ahead = ahead
 		status.Behind = behind
@@ -82,7 +88,7 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 	return status, nil
 }
 
-// mapGoGitStatus maps go-git status code to our StatusCode
+// mapGoGitStatus maps go-git status code to our StatusCode.
 func mapGoGitStatus(status gogit.StatusCode) StatusCode {
 	switch status {
 	case gogit.Unmodified:
@@ -105,11 +111,44 @@ func mapGoGitStatus(status gogit.StatusCode) StatusCode {
 }
 
 // getTrackingInfo returns tracking branch name and ahead/behind counts
-// Returns empty string and 0, 0 if no tracking branch
-func (r *Repository) getTrackingInfo(branchName string) (remoteBranch string, ahead, behind int) {
-	// This is a simplified implementation
-	// Full implementation would query git config for branch.{branchName}.remote
-	// and branch.{branchName}.merge, then calculate ahead/behind using log
-	// For now, return empty tracking info
-	return "", 0, 0
+// Returns empty string and 0, 0 if no tracking branch.
+func (r *Repository) getTrackingInfo(ctx context.Context, branchName string) (remoteBranch string, ahead, behind int) {
+	// Get upstream branch.
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", branchName+"@{upstream}")
+	cmd.Dir = r.root
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", 0, 0 // No tracking branch.
+	}
+
+	remoteBranch = strings.TrimSpace(string(output))
+	if remoteBranch == "" {
+		return "", 0, 0
+	}
+
+	// Get ahead/behind counts.
+	cmd = exec.CommandContext(ctx, "git", "rev-list", "--left-right", "--count", branchName+"..."+remoteBranch)
+	cmd.Dir = r.root
+
+	output, err = cmd.Output()
+	if err != nil {
+		return remoteBranch, 0, 0
+	}
+
+	// Parse output: "ahead\tbehind".
+	parts := strings.Fields(strings.TrimSpace(string(output)))
+	if len(parts) == statusFieldParts {
+		parsedAhead, aheadErr := strconv.Atoi(parts[0])
+		if aheadErr == nil {
+			ahead = parsedAhead
+		}
+
+		parsedBehind, behindErr := strconv.Atoi(parts[1])
+		if behindErr == nil {
+			behind = parsedBehind
+		}
+	}
+
+	return remoteBranch, ahead, behind
 }

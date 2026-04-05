@@ -4,12 +4,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 )
 
 func TestNewBuilder_Default(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder()
 
 	require.NotNil(t, builder)
@@ -18,6 +21,8 @@ func TestNewBuilder_Default(t *testing.T) {
 }
 
 func TestNewBuilder_WithOptions(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder(
 		WithSystemPrompt("Custom prompt"),
 		WithItemizedLearning(),
@@ -29,6 +34,8 @@ func TestNewBuilder_WithOptions(t *testing.T) {
 }
 
 func TestBuilder_FormatBullet(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder()
 	b, err := bullet.New("Always validate input")
 	require.NoError(t, err)
@@ -41,6 +48,8 @@ func TestBuilder_FormatBullet(t *testing.T) {
 }
 
 func TestBuilder_BuildSystemPrompt_Empty(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder()
 	prompt := builder.BuildSystemPrompt([]*bullet.Bullet{})
 
@@ -50,6 +59,8 @@ func TestBuilder_BuildSystemPrompt_Empty(t *testing.T) {
 }
 
 func TestBuilder_BuildSystemPrompt_WithBullets(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder()
 
 	b1, err := bullet.New("Validate input")
@@ -67,6 +78,8 @@ func TestBuilder_BuildSystemPrompt_WithBullets(t *testing.T) {
 }
 
 func TestBuilder_BuildSystemPrompt_WithIL(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder(WithItemizedLearning())
 
 	b1, err := bullet.New("Test bullet")
@@ -82,6 +95,8 @@ func TestBuilder_BuildSystemPrompt_WithIL(t *testing.T) {
 }
 
 func TestBuilder_BuildSystemPrompt_CustomSystem(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder(WithSystemPrompt("You are an expert Go developer"))
 
 	b1, err := bullet.New("Use goroutines")
@@ -95,24 +110,28 @@ func TestBuilder_BuildSystemPrompt_CustomSystem(t *testing.T) {
 }
 
 func TestBuilder_BuildSystemPrompt_MultipleBullets(t *testing.T) {
+	t.Parallel()
+
 	builder := NewBuilder(WithItemizedLearning())
 
 	bullets := make([]*bullet.Bullet, 5)
-	for i := 0; i < 5; i++ {
+
+	for i := range 5 {
 		b, err := bullet.New("Bullet " + string(rune('A'+i)))
 		require.NoError(t, err)
+
 		bullets[i] = b
 	}
 
 	prompt := builder.BuildSystemPrompt(bullets)
 
-	// Check all bullets are present with correct indices
-	for i := 0; i < 5; i++ {
+	// Check all bullets are present with correct indices.
+	for i := range 5 {
 		expected := "[B" + string(rune('0'+i)) + "]"
 		assert.Contains(t, prompt, expected)
 	}
 
-	// Check structure
+	// Check structure.
 	lines := strings.Split(prompt, "\n")
 	assert.NotEmpty(t, lines)
 }

@@ -1,31 +1,34 @@
-// Package ollama provides an Ollama LLM provider implementation.
-// Ollama is a tool for running large language models locally with OpenAI-compatible API.
 package ollama
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/llm/vram"
 	"github.com/ollama/ollama/api"
 	openaisdk "github.com/openai/openai-go"
+
+	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
-// vramNewDetector is a test seam for VRAM detector.
-var vramNewDetector = vram.NewDetector
+const maxPreviewLen = 100
 
-// newRequirementsCalculator is a test seam for VRAM calculator.
-var newRequirementsCalculator = vram.NewRequirementsCalculator
+// ErrModelIsRequired is a sentinel error.
+var ErrModelIsRequired = errors.New("model is required")
 
 const (
 	// DefaultBaseURL is the default Ollama API endpoint.
 	DefaultBaseURL = "http://localhost:11434"
+
+	// streamChunkBuffer is the buffer size for streaming chunk channels.
+	streamChunkBuffer = 10
 )
 
 // Config configures the Ollama provider.
@@ -33,35 +36,35 @@ type Config struct {
 	// BaseURL is the API endpoint URL (default: http://localhost:11434)
 	BaseURL string
 
-	// Model is the model name to use (required)
+	// Model is the model name to use (required).
 	Model string
 
-	// Timeout is the request timeout (defaults to 5 minutes)
+	// Timeout is the request timeout (defaults to 5 minutes).
 	Timeout time.Duration
 
-	// StreamTimeout optionally bounds streaming calls (default: 30m)
+	// StreamTimeout optionally bounds streaming calls (default: 30m).
 	StreamTimeout time.Duration
 }
 
 // Provider implements the Ollama LLM provider using the native Ollama API client.
 type Provider struct {
-	// Ollama SDK client
+	// Ollama SDK client.
 	client *api.Client
 
 	model   string
 	baseURL string
 	timeout time.Duration
+	logger  *slog.Logger
 
-	// Auto-tune fields
-	autoTuneCtxLen    int
-	autoTuneGPULayers int
-	autoTuneWarning   string
+	// Context length detected from model metadata (guarded by ctxLenOnce).
+	ctxLenOnce     sync.Once
+	detectedCtxLen int
 }
 
 // NewProvider creates a new Ollama provider.
 func NewProvider(cfg Config) (*Provider, error) {
 	if cfg.Model == "" {
-		return nil, fmt.Errorf("model is required")
+		return nil, ErrModelIsRequired
 	}
 
 	baseURL := cfg.BaseURL
@@ -69,27 +72,23 @@ func NewProvider(cfg Config) (*Provider, error) {
 		baseURL = DefaultBaseURL
 	}
 
-	// Validate base URL early
+	// Validate base URL early.
 	baseURLParsed, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse base URL: %w", err)
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
-	// Create Ollama SDK client
+	// Create Ollama SDK client.
 	ollamaClient := api.NewClient(baseURLParsed, &http.Client{
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	})
 
 	return &Provider{
 		client:  ollamaClient,
 		model:   cfg.Model,
 		baseURL: baseURL,
-		timeout: timeout,
+		timeout: llm.ResolveTimeout(cfg.Timeout),
+		logger:  slog.Default(),
 	}, nil
 }
 
@@ -102,8 +101,9 @@ func (p *Provider) Name() string {
 func (p *Provider) Capabilities() llm.Capabilities {
 	return llm.Capabilities{
 		Streaming:       true,
-		FunctionCalling: true,  // Ollama supports function calling
-		Vision:          false, // Vision not supported yet
+		FunctionCalling: true,  // Ollama supports function calling.
+		Vision:          false, // Vision not supported yet.
+		ContextWindow:   p.detectedCtxLen,
 	}
 }
 
@@ -118,7 +118,7 @@ func (p *Provider) Models(ctx context.Context) ([]openaisdk.Model, error) {
 	for _, m := range resp.Models {
 		models = append(models, openaisdk.Model{
 			ID:      m.Name,
-			Created: 0, // Ollama doesn't provide creation time
+			Created: 0, // Ollama doesn't provide creation time.
 			Object:  "model",
 		})
 	}
@@ -126,196 +126,255 @@ func (p *Provider) Models(ctx context.Context) ([]openaisdk.Model, error) {
 	return models, nil
 }
 
-// AutoTune automatically configures model parameters based on available VRAM.
-// This uses VRAM detection to set optimal num_ctx and num_gpu values.
-func (p *Provider) AutoTune(ctx context.Context, headroomBytes int64) error {
-	// Get model size using Ollama SDK
-	resp, err := p.client.List(ctx)
+// FallbackContextLength is used when the model's actual context length cannot be detected.
+const FallbackContextLength = 32768
+
+// detectContextLength queries Ollama for the model's maximum context length.
+// Falls back to FallbackContextLength if the query fails.
+func (p *Provider) detectContextLength(ctx context.Context) int {
+	resp, err := p.client.Show(ctx, &api.ShowRequest{Model: p.model})
 	if err != nil {
-		return fmt.Errorf("list models for auto-tune: %w", err)
+		p.logger.DebugContext(ctx, "ollama: failed to query model info for context length", "model", p.model, "error", err)
+
+		return FallbackContextLength
 	}
 
-	var modelSize int64
-	for _, m := range resp.Models {
-		if m.Name == p.model {
-			modelSize = int64(m.Size)
-			break
-		}
-	}
+	// Look for context_length in model_info (key format: "<arch>.context_length").
+	for k, v := range resp.ModelInfo {
+		if strings.HasSuffix(k, ".context_length") || k == "context_length" {
+			if val, ok := v.(float64); ok {
+				if int(val) > 0 {
+					p.logger.InfoContext(ctx, "ollama: detected model context length", "model", p.model, "context_length", int(val))
 
-	if modelSize == 0 {
-		// Model not found or size unavailable, skip auto-tune
-		return nil
-	}
-
-	// Use VRAM calculator to determine optimal settings
-	det := vramNewDetector(nil)
-	calc := newRequirementsCalculator(det, headroomBytes)
-
-	// Calculate requirements for 4096 context (reasonable default)
-	reqs, err := calc.Calculate(modelSize, 4096)
-	if err != nil {
-		return fmt.Errorf("calculate VRAM requirements: %w", err)
-	}
-
-	if reqs != nil {
-		if reqs.ContextLength > 0 {
-			p.autoTuneCtxLen = reqs.ContextLength
-		}
-		if reqs.NumGPULayers > 0 {
-			p.autoTuneGPULayers = reqs.NumGPULayers
-		}
-
-		// Set warning for low-VRAM scenarios
-		if reqs.Quantization == "q4_0" && reqs.ContextLength == 2048 && reqs.NumGPULayers == 16 {
-			p.autoTuneWarning = "VRAM low: applied minimal context and partial GPU layers; quality may be reduced"
-		}
-		if reqs.RecommendedVRAM == 0 {
-			if name, _ := det.GPUName(); name == "cpu" {
-				p.autoTuneWarning = "No GPU VRAM detected; CPU-only fallback in effect"
+					return int(val)
+				}
 			}
 		}
 	}
 
-	return nil
+	p.logger.DebugContext(ctx, "ollama: no context_length found in model info, using fallback", "model", p.model)
+
+	return FallbackContextLength
 }
 
-// GetAutoTuneWarning returns the last auto-tune warning message, if any.
-func (p *Provider) GetAutoTuneWarning() string {
-	return p.autoTuneWarning
+// setContextOptions applies num_ctx to the request options.
+// Uses autoTuneCtxLen if set, otherwise detects from the model.
+func (p *Provider) setContextOptions(ctx context.Context, opts map[string]any) map[string]any {
+	if opts == nil {
+		opts = make(map[string]any)
+	}
+
+	// Detect context length on first call (thread-safe via sync.Once).
+	p.ctxLenOnce.Do(func() {
+		p.detectedCtxLen = p.detectContextLength(ctx)
+	})
+
+	opts["num_ctx"] = p.detectedCtxLen
+
+	return opts
 }
 
 // Complete performs a non-streaming completion request using Ollama's native API.
 func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
-	// Convert OpenAI params to Ollama ChatRequest
-	req := &api.ChatRequest{
-		Model: p.model,
-	}
-
-	// Convert messages
-	if params.Messages.Present {
-		req.Messages = make([]api.Message, len(params.Messages.Value))
-		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg)
-		}
-	}
-
-	// Convert tools if present
-	if params.Tools.Present && len(params.Tools.Value) > 0 {
-		req.Tools = make([]api.Tool, len(params.Tools.Value))
-		for i, tool := range params.Tools.Value {
-			req.Tools[i] = convertToolToOllama(tool)
-		}
-	}
-
-	// Set options
-	if params.Temperature.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]interface{})
-		}
-		req.Options["temperature"] = params.Temperature.Value
-	}
-	if params.MaxTokens.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]interface{})
-		}
-		req.Options["num_predict"] = params.MaxTokens.Value
-	}
+	req := p.buildChatRequest(ctx, params, false)
 
 	// Call Ollama API
-	// Note: Ollama sends multiple callbacks even for non-streaming requests
-	// We need to accumulate the content from all callbacks
-	var resp api.ChatResponse
-	var fullContent strings.Builder
+	// Note: Ollama sends multiple callbacks even for non-streaming requests.
+	var (
+		resp         api.ChatResponse
+		fullContent  strings.Builder
+		fullThinking strings.Builder
+	)
+
 	callbackCount := 0
 
 	err := p.client.Chat(ctx, req, func(r api.ChatResponse) error {
 		callbackCount++
-		resp = r // Keep the last response for metadata
-		// Accumulate content from all callbacks
+
+		resp = r // Keep the last response for metadata.
 		if r.Message.Content != "" {
 			fullContent.WriteString(r.Message.Content)
 		}
+
+		if r.Message.Thinking != "" {
+			fullThinking.WriteString(r.Message.Thinking)
+		}
+
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ollama chat: %w", err)
 	}
 
-	// Use accumulated content
-	resp.Message.Content = fullContent.String()
+	// Use accumulated content, merging thinking into <think> tags.
+	resp.Message.Content = mergeThinkingContent(fullThinking.String(), fullContent.String())
+	resp.Message.Thinking = ""
 
-	// Debug: Log the Ollama response
-	slog.Debug("Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
-	if len(resp.Message.Content) > 0 {
-		preview := resp.Message.Content
-		if len(preview) > 100 {
-			preview = preview[:100]
-		}
-		slog.Debug("Ollama Complete response preview", "preview", preview)
+	// Fix tool calls with empty function names.
+	resp.Message.ToolCalls = filterToolCalls(ctx, resp.Message.ToolCalls, req.Tools, p.logger)
+
+	// Debug: Log the Ollama response.
+	p.logger.DebugContext(ctx, "Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
+	logResponsePreview(ctx, p.logger, resp.Message.Content)
+
+	return convertOllamaResponseToOpenAI(ctx, resp, p.model, p.logger), nil
+}
+
+// buildChatRequest converts OpenAI params into an Ollama ChatRequest.
+func (p *Provider) buildChatRequest(ctx context.Context, params openaisdk.ChatCompletionNewParams, streaming bool) *api.ChatRequest {
+	req := &api.ChatRequest{
+		Model: p.model,
 	}
 
-	// Convert response to OpenAI format
-	return convertOllamaResponseToOpenAI(resp, p.model), nil
+	if streaming {
+		req.Stream = new(bool)
+		*req.Stream = true
+	}
+
+	p.convertMessages(ctx, params, req)
+	p.convertTools(ctx, params, req)
+	p.setRequestOptions(ctx, params, req)
+
+	return req
+}
+
+// convertMessages converts OpenAI messages to Ollama format on the request.
+func (p *Provider) convertMessages(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
+	if len(params.Messages) == 0 {
+		return
+	}
+
+	toolCallIDToName := buildToolCallIDToNameMap(ctx, params.Messages, p.logger)
+
+	req.Messages = make([]api.Message, len(params.Messages))
+	for i, msg := range params.Messages {
+		req.Messages[i] = convertMessageToOllama(ctx, msg, toolCallIDToName, p.logger)
+	}
+
+	for i, m := range req.Messages {
+		p.logger.DebugContext(ctx, "ollama stream message",
+			"index", i,
+			"role", m.Role,
+			"content_len", len(m.Content),
+			"tool_calls", len(m.ToolCalls),
+			"tool_name", m.ToolName)
+	}
+}
+
+// convertTools converts OpenAI tools to Ollama format on the request.
+func (p *Provider) convertTools(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
+	if len(params.Tools) == 0 {
+		return
+	}
+
+	req.Tools = make([]api.Tool, len(params.Tools))
+	for i, tool := range params.Tools {
+		req.Tools[i] = convertToolToOllama(tool)
+	}
+
+	p.logger.DebugContext(ctx, "ollama request with tools", "tool_count", len(req.Tools), "model", p.model)
+}
+
+// setRequestOptions sets temperature, max tokens, and context options on the request.
+func (p *Provider) setRequestOptions(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
+	if params.Temperature.Valid() {
+		req.Options = collections.EnsureMap(req.Options)
+		req.Options["temperature"] = params.Temperature.Value
+	}
+
+	if params.MaxTokens.Valid() {
+		req.Options = collections.EnsureMap(req.Options)
+		req.Options["num_predict"] = params.MaxTokens.Value
+	}
+
+	req.Options = p.setContextOptions(ctx, req.Options)
+}
+
+// mergeThinkingContent merges thinking and content strings into a single content string.
+func mergeThinkingContent(thinking, content string) string {
+	if thinking != "" {
+		return "<think>" + thinking + "</think>" + content
+	}
+
+	return content
+}
+
+// filterToolCalls filters tool calls, inferring names for nameless calls and removing phantom ones.
+func filterToolCalls(ctx context.Context, toolCalls []api.ToolCall, tools []api.Tool, logger *slog.Logger) []api.ToolCall {
+	if len(toolCalls) == 0 {
+		return toolCalls
+	}
+
+	filtered := toolCalls[:0]
+
+	for _, tc := range toolCalls {
+		if tc.Function.Name != "" {
+			filtered = append(filtered, tc)
+
+			continue
+		}
+
+		if inferred := inferToolName(ctx, tc.Function.Arguments.ToMap(), tools, logger); inferred != "" {
+			tc.Function.Name = inferred
+			logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
+				"name", inferred, "args", tc.Function.Arguments)
+			filtered = append(filtered, tc)
+		} else if tc.Function.Arguments.Len() > 0 {
+			logger.WarnContext(ctx, "ollama: dropping tool call with empty name (could not infer)",
+				"args", tc.Function.Arguments)
+		} else {
+			logger.DebugContext(ctx, "ollama: filtering phantom tool call (empty name and args)")
+		}
+	}
+
+	return filtered
+}
+
+// logResponsePreview logs a preview of the response content for debugging.
+func logResponsePreview(ctx context.Context, logger *slog.Logger, content string) {
+	if content == "" {
+		return
+	}
+
+	preview := content
+	if len(preview) > maxPreviewLen {
+		preview = preview[:100]
+	}
+
+	logger.DebugContext(ctx, "Ollama Complete response preview", "preview", preview)
 }
 
 // Stream performs a streaming completion request using Ollama's native API.
 func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
-	// Convert OpenAI params to Ollama ChatRequest
-	req := &api.ChatRequest{
-		Model:  p.model,
-		Stream: new(bool),
-	}
-	*req.Stream = true
+	req := p.buildChatRequest(ctx, params, true)
 
-	// Convert messages
-	if params.Messages.Present {
-		req.Messages = make([]api.Message, len(params.Messages.Value))
-		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg)
-		}
-	}
+	chunks := make(chan openaisdk.ChatCompletionChunk, streamChunkBuffer)
 
-	// Convert tools if present
-	if params.Tools.Present && len(params.Tools.Value) > 0 {
-		req.Tools = make([]api.Tool, len(params.Tools.Value))
-		for i, tool := range params.Tools.Value {
-			req.Tools[i] = convertToolToOllama(tool)
-		}
-	}
-
-	// Set options
-	if params.Temperature.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]interface{})
-		}
-		req.Options["temperature"] = params.Temperature.Value
-	}
-	if params.MaxTokens.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]interface{})
-		}
-		req.Options["num_predict"] = params.MaxTokens.Value
-	}
-
-	// Create channel for chunks
-	chunks := make(chan openaisdk.ChatCompletionChunk, 10)
-
-	// Start streaming in background
 	go func() {
 		defer close(chunks)
 
 		chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 		chunkIndex := 0
 
+		var lastDoneReason string
+
 		err := p.client.Chat(ctx, req, func(resp api.ChatResponse) error {
-			// Check context cancellation
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 
-			// Convert to OpenAI chunk and send
-			chunk := convertOllamaChunkToOpenAI(resp, chunkID, p.model)
+			// Merge thinking into content.
+			resp.Message.Content = mergeThinkingContent(resp.Message.Thinking, resp.Message.Content)
+			resp.Message.Thinking = ""
+
+			// Fix tool calls with empty function names.
+			resp.Message.ToolCalls = filterToolCalls(ctx, resp.Message.ToolCalls, req.Tools, p.logger)
+
+			if resp.Done && resp.DoneReason != "" {
+				lastDoneReason = resp.DoneReason
+			}
+
+			chunk := convertOllamaChunkToOpenAI(ctx, resp, chunkID, p.model, p.logger)
 
 			select {
 			case chunks <- chunk:
@@ -327,11 +386,13 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 			return nil
 		})
 
-		// Handle error (but don't send it in chunk since we removed error handling)
 		if err != nil && ctx.Err() == nil {
-			// Log error but can't send it in chunk anymore
-			_ = err
+			p.logger.ErrorContext(ctx, "ollama stream error", "error", err, "chunks_sent", chunkIndex, "done_reason", lastDoneReason)
 		}
+
+		p.logger.DebugContext(ctx, "ollama stream finished",
+			"total_chunks", chunkIndex,
+			"done_reason", lastDoneReason)
 	}()
 
 	return chunks, nil
@@ -339,6 +400,6 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 
 // Close closes the provider and releases resources.
 func (p *Provider) Close() error {
-	// Ollama client doesn't require explicit cleanup
+	// Ollama client doesn't require explicit cleanup.
 	return nil
 }

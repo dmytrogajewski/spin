@@ -12,7 +12,7 @@ import (
 func BenchmarkRendererRender_Execute(b *testing.B) {
 	renderer := blocks.NewRenderer(120)
 
-	// Create realistic EXECUTE block with 500-line transcript
+	// Create realistic EXECUTE block with 500-line transcript.
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
 	block.Title = "Run integration tests"
 	block.Body = generateLargeTranscript(500)
@@ -25,12 +25,12 @@ func BenchmarkRendererRender_Execute(b *testing.B) {
 		DurationMS: ptr(int64(45200)),
 		LinesOut:   ptr(500),
 	}
-	blocks.SetExecuteMeta(block, meta)
+	_ = blocks.SetExecuteMeta(block, meta)
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_, _ = renderer.Render(block)
 	}
 }
@@ -39,7 +39,7 @@ func BenchmarkRendererRender_Execute(b *testing.B) {
 func BenchmarkRendererRender_Diff(b *testing.B) {
 	renderer := blocks.NewRenderer(120)
 
-	// Create realistic diff with 100 lines
+	// Create realistic diff with 100 lines.
 	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
 	block.Title = "Update authentication logic"
 	block.Body = generateUnifiedDiff(100)
@@ -49,12 +49,12 @@ func BenchmarkRendererRender_Diff(b *testing.B) {
 		LinesAdded:   ptr(42),
 		LinesRemoved: ptr(18),
 	}
-	blocks.SetPatchMeta(block, meta)
+	_ = blocks.SetPatchMeta(block, meta)
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_, _ = renderer.Render(block)
 	}
 }
@@ -63,7 +63,7 @@ func BenchmarkRendererRender_Diff(b *testing.B) {
 func BenchmarkRendererRender_Code(b *testing.B) {
 	renderer := blocks.NewRenderer(120)
 
-	// Create realistic code block with 200 lines
+	// Create realistic code block with 200 lines.
 	block := blocks.NewBlock(blocks.BlockTypeRead)
 	block.Title = "View source file"
 	block.Body = generateCodeSnippet(200)
@@ -72,12 +72,12 @@ func BenchmarkRendererRender_Code(b *testing.B) {
 		Offset: 0,
 		Limit:  200,
 	}
-	blocks.SetReadMeta(block, meta)
+	_ = blocks.SetReadMeta(block, meta)
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_, _ = renderer.Render(block)
 	}
 }
@@ -86,26 +86,28 @@ func BenchmarkRendererRender_Code(b *testing.B) {
 func BenchmarkRendererRender_Plan(b *testing.B) {
 	renderer := blocks.NewRenderer(120)
 
-	// Create plan with 50 items
+	// Create plan with 50 items.
 	block := blocks.NewBlock(blocks.BlockTypePlan)
 	block.Title = "Implementation plan"
 	block.Body = generatePlanList(50)
 
-	// Use type-safe metadata
+	// Use type-safe metadata.
 	meta := &blocks.PlanMeta{
 		Total:      50,
 		Pending:    10,
 		InProgress: 5,
 		Completed:  35,
 	}
-	if err := blocks.SetPlanMeta(block, meta); err != nil {
+
+	err := blocks.SetPlanMeta(block, meta)
+	if err != nil {
 		b.Fatalf("SetPlanMeta failed: %v", err)
 	}
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_, _ = renderer.Render(block)
 	}
 }
@@ -114,7 +116,7 @@ func BenchmarkRendererRender_Plan(b *testing.B) {
 func BenchmarkRendererRender_Error(b *testing.B) {
 	renderer := blocks.NewRenderer(120)
 
-	// Create error block with stack trace
+	// Create error block with stack trace.
 	block := blocks.NewBlock(blocks.BlockTypeError)
 	block.Title = "Command execution failed"
 	block.Body = generateErrorWithStackTrace(30)
@@ -122,8 +124,8 @@ func BenchmarkRendererRender_Error(b *testing.B) {
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_, _ = renderer.Render(block)
 	}
 }
@@ -140,12 +142,12 @@ func BenchmarkRendererRenderHeader(b *testing.B) {
 		Impact:     "high",
 		TimeoutSec: 600,
 	}
-	blocks.SetExecuteMeta(block, meta)
+	_ = blocks.SetExecuteMeta(block, meta)
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_ = renderer.RenderHeader(block)
 	}
 }
@@ -155,12 +157,12 @@ func BenchmarkRendererRenderBody_Large(b *testing.B) {
 	renderer := blocks.NewRenderer(120)
 
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
-	block.Body = generateLargeTranscript(1000) // 1000 lines
+	block.Body = generateLargeTranscript(1000) // 1000 lines.
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_, _ = renderer.RenderBody(block)
 	}
 }
@@ -176,12 +178,12 @@ func BenchmarkRendererRenderFooter(b *testing.B) {
 		DurationMS: ptr(int64(45200)),
 		LinesOut:   ptr(542),
 	}
-	blocks.SetExecuteMeta(block, meta)
+	_ = blocks.SetExecuteMeta(block, meta)
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		_ = renderer.RenderFooter(block)
 	}
 }
@@ -190,7 +192,7 @@ func BenchmarkRendererRenderFooter(b *testing.B) {
 func BenchmarkRenderViewport_40Blocks(b *testing.B) {
 	renderer := blocks.NewRenderer(120)
 
-	// Create timeline with mixed block types
+	// Create timeline with mixed block types.
 	tl := blocks.NewTimeline()
 	tl.SetViewportHeight(40)
 
@@ -202,7 +204,7 @@ func BenchmarkRenderViewport_40Blocks(b *testing.B) {
 		blocks.BlockTypeGrep,
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		blockType := blockTypes[i%len(blockTypes)]
 		block := blocks.NewBlock(blockType)
 		block.Title = fmt.Sprintf("Block %d", i)
@@ -216,11 +218,13 @@ func BenchmarkRenderViewport_40Blocks(b *testing.B) {
 				Impact:   "medium",
 				ExitCode: ptr(0),
 			}
-			blocks.SetExecuteMeta(block, meta)
+			_ = blocks.SetExecuteMeta(block, meta)
 		case blocks.BlockTypeApplyPatch:
 			block.Body = generateUnifiedDiff(20)
 		case blocks.BlockTypeRead:
 			block.Body = generateCodeSnippet(30)
+		default:
+			block.Body = "Sample content"
 		}
 
 		_ = tl.Append(block)
@@ -228,8 +232,8 @@ func BenchmarkRenderViewport_40Blocks(b *testing.B) {
 
 	b.ResetTimer()
 
-	// Benchmark: Get visible blocks + render all
-	for i := 0; i < b.N; i++ {
+	// Benchmark: Get visible blocks + render all.
+	for range b.N {
 		visibleBlocks := tl.GetVisibleBlocks()
 		for _, block := range visibleBlocks {
 			_, _ = renderer.Render(block)
@@ -243,19 +247,19 @@ func BenchmarkRendererSetWidth(b *testing.B) {
 
 	b.ResetTimer()
 
-	// Benchmark
-	for i := 0; i < b.N; i++ {
+	// Benchmark.
+	for range b.N {
 		renderer.SetWidth(120)
 		renderer.SetWidth(80)
 	}
 }
 
-// Helper: Generate large transcript
+// Helper: Generate large transcript.
 func generateLargeTranscript(lines int) string {
 	var sb strings.Builder
-	sb.Grow(lines * 80) // Pre-allocate
+	sb.Grow(lines * 80) // Pre-allocate.
 
-	for i := 0; i < lines; i++ {
+	for i := range lines {
 		fmt.Fprintf(&sb, "=== RUN   TestFunction%d\n", i)
 		fmt.Fprintf(&sb, "--- PASS: TestFunction%d (0.%02ds)\n", i, i%100)
 	}
@@ -263,18 +267,20 @@ func generateLargeTranscript(lines int) string {
 	return sb.String()
 }
 
-// Helper: Generate unified diff
+// Helper: Generate unified diff.
 func generateUnifiedDiff(lines int) string {
 	var sb strings.Builder
 	sb.Grow(lines * 100)
 
 	sb.WriteString("@@ -42,6 +42,8 @@ func authenticate(token string) error {\n")
-	for i := 0; i < lines; i++ {
-		if i%5 == 0 {
+
+	for i := range lines {
+		switch {
+		case i%5 == 0:
 			fmt.Fprintf(&sb, "+    log.Info(\"Processing line %d\")\n", i)
-		} else if i%7 == 0 {
+		case i%7 == 0:
 			fmt.Fprintf(&sb, "-    // Old comment line %d\n", i)
-		} else {
+		default:
 			fmt.Fprintf(&sb, "     // Context line %d\n", i)
 		}
 	}
@@ -282,12 +288,12 @@ func generateUnifiedDiff(lines int) string {
 	return sb.String()
 }
 
-// Helper: Generate code snippet
+// Helper: Generate code snippet.
 func generateCodeSnippet(lines int) string {
 	var sb strings.Builder
 	sb.Grow(lines * 60)
 
-	for i := 0; i < lines; i++ {
+	for i := range lines {
 		fmt.Fprintf(&sb, "func example%d() {\n", i)
 		sb.WriteString("    return nil\n")
 		sb.WriteString("}\n")
@@ -297,12 +303,12 @@ func generateCodeSnippet(lines int) string {
 	return sb.String()
 }
 
-// Helper: Generate plan list
+// Helper: Generate plan list.
 func generatePlanList(items int) string {
 	var sb strings.Builder
 	sb.Grow(items * 50)
 
-	for i := 0; i < items; i++ {
+	for i := range items {
 		status := "pending"
 		if i < 35 {
 			status = "completed"
@@ -316,12 +322,13 @@ func generatePlanList(items int) string {
 	return sb.String()
 }
 
-// Helper: Generate error with stack trace
+// Helper: Generate error with stack trace.
 func generateErrorWithStackTrace(depth int) string {
 	var sb strings.Builder
 
 	sb.WriteString("Error: command execution failed with exit code 1\n")
-	for i := 0; i < depth; i++ {
+
+	for i := range depth {
 		fmt.Fprintf(&sb, "    at function%d (file.go:%d)\n", i, i*10+42)
 	}
 

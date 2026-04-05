@@ -3,13 +3,18 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 )
 
+var errKeystoreError = errors.New("keystore error")
+
 // TestNewManager tests manager creation.
 func TestNewManager(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 
@@ -24,6 +29,8 @@ func TestNewManager(t *testing.T) {
 
 // TestManager_GetCredential_Success tests retrieving existing credentials.
 func TestManager_GetCredential_Success(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	ks.data["spin:cred:openai"] = "apikey:sk-test-key"
 
@@ -46,6 +53,8 @@ func TestManager_GetCredential_Success(t *testing.T) {
 
 // TestManager_GetCredential_NotFound tests retrieving non-existent credentials.
 func TestManager_GetCredential_NotFound(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 	ctx := context.Background()
@@ -62,11 +71,13 @@ func TestManager_GetCredential_NotFound(t *testing.T) {
 
 // TestManager_GetCredential_ContextCanceled tests context cancellation.
 func TestManager_GetCredential_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
 	_, err := m.GetCredential(ctx, "openai")
 	if err == nil {
@@ -80,6 +91,8 @@ func TestManager_GetCredential_ContextCanceled(t *testing.T) {
 
 // TestManager_GetCredential_ProviderNormalization tests provider name normalization.
 func TestManager_GetCredential_ProviderNormalization(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	ks.data["spin:cred:openai"] = "apikey:sk-test"
 
@@ -98,6 +111,8 @@ func TestManager_GetCredential_ProviderNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			cred, err := m.GetCredential(ctx, tt.provider)
 			if err != nil {
 				t.Fatalf("GetCredential(%q) error = %v", tt.provider, err)
@@ -112,6 +127,8 @@ func TestManager_GetCredential_ProviderNormalization(t *testing.T) {
 
 // TestManager_GetCredential_CredentialTypes tests different credential types.
 func TestManager_GetCredential_CredentialTypes(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		stored    string
@@ -146,37 +163,64 @@ func TestManager_GetCredential_CredentialTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ks := newMockKeystore()
-			ks.data["spin:cred:test"] = tt.stored
+			t.Parallel()
 
-			m := NewManager(ks)
-			ctx := context.Background()
-
-			cred, err := m.GetCredential(ctx, "test")
+			cred, err := getCredentialFromStored(t, tt.stored)
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("GetCredential() expected error, got nil")
-				}
+				requireError(t, err, "GetCredential()")
+
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("GetCredential() error = %v", err)
-			}
-
-			if cred.Type != tt.wantType {
-				t.Errorf("Credential.Type = %v, want %v", cred.Type, tt.wantType)
-			}
-
-			if cred.Value != tt.wantValue {
-				t.Errorf("Credential.Value = %q, want %q", cred.Value, tt.wantValue)
-			}
+			requireNoError(t, err, "GetCredential()")
+			assertCredential(t, cred, tt.wantType, tt.wantValue)
 		})
+	}
+}
+
+func getCredentialFromStored(t *testing.T, stored string) (Credential, error) {
+	t.Helper()
+
+	ks := newMockKeystore()
+	ks.data["spin:cred:test"] = stored
+
+	m := NewManager(ks)
+
+	return m.GetCredential(context.Background(), "test")
+}
+
+func requireError(t *testing.T, err error, op string) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatalf("%s expected error, got nil", op)
+	}
+}
+
+func requireNoError(t *testing.T, err error, op string) {
+	t.Helper()
+
+	if err != nil {
+		t.Fatalf("%s error = %v", op, err)
+	}
+}
+
+func assertCredential(t *testing.T, cred Credential, wantType CredentialType, wantValue string) {
+	t.Helper()
+
+	if cred.Type != wantType {
+		t.Errorf("Credential.Type = %v, want %v", cred.Type, wantType)
+	}
+
+	if cred.Value != wantValue {
+		t.Errorf("Credential.Value = %q, want %q", cred.Value, wantValue)
 	}
 }
 
 // TestManager_SetCredential_Success tests setting credentials.
 func TestManager_SetCredential_Success(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 	ctx := context.Background()
@@ -191,7 +235,7 @@ func TestManager_SetCredential_Success(t *testing.T) {
 		t.Fatalf("SetCredential() error = %v", err)
 	}
 
-	// Verify stored
+	// Verify stored.
 	stored, exists := ks.data["spin:cred:openai"]
 	if !exists {
 		t.Fatal("Credential not stored in keystore")
@@ -204,6 +248,8 @@ func TestManager_SetCredential_Success(t *testing.T) {
 
 // TestManager_SetCredential_InvalidCredential tests validation.
 func TestManager_SetCredential_InvalidCredential(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 	ctx := context.Background()
@@ -230,6 +276,8 @@ func TestManager_SetCredential_InvalidCredential(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := m.SetCredential(ctx, "test", tt.cred)
 			if err == nil {
 				t.Fatal("SetCredential() expected error, got nil")
@@ -244,6 +292,8 @@ func TestManager_SetCredential_InvalidCredential(t *testing.T) {
 
 // TestManager_SetCredential_Overwrite tests overwriting credentials.
 func TestManager_SetCredential_Overwrite(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	ks.data["spin:cred:openai"] = "apikey:old-key"
 
@@ -260,7 +310,7 @@ func TestManager_SetCredential_Overwrite(t *testing.T) {
 		t.Fatalf("SetCredential() error = %v", err)
 	}
 
-	// Verify overwritten
+	// Verify overwritten.
 	stored := ks.data["spin:cred:openai"]
 	if stored != "apikey:new-key" {
 		t.Errorf("Stored value = %q, want %q", stored, "apikey:new-key")
@@ -269,6 +319,8 @@ func TestManager_SetCredential_Overwrite(t *testing.T) {
 
 // TestManager_SetCredential_ContextCanceled tests context cancellation.
 func TestManager_SetCredential_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 
@@ -292,6 +344,8 @@ func TestManager_SetCredential_ContextCanceled(t *testing.T) {
 
 // TestManager_DeleteCredential_Success tests deleting credentials.
 func TestManager_DeleteCredential_Success(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	ks.data["spin:cred:openai"] = "apikey:test"
 
@@ -303,7 +357,7 @@ func TestManager_DeleteCredential_Success(t *testing.T) {
 		t.Fatalf("DeleteCredential() error = %v", err)
 	}
 
-	// Verify deleted
+	// Verify deleted.
 	if _, exists := ks.data["spin:cred:openai"]; exists {
 		t.Error("Credential still exists after delete")
 	}
@@ -311,11 +365,13 @@ func TestManager_DeleteCredential_Success(t *testing.T) {
 
 // TestManager_DeleteCredential_Idempotent tests deleting non-existent credentials.
 func TestManager_DeleteCredential_Idempotent(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 	ctx := context.Background()
 
-	// Delete non-existent credential should not error
+	// Delete non-existent credential should not error.
 	err := m.DeleteCredential(ctx, "nonexistent")
 	if err != nil {
 		t.Errorf("DeleteCredential() error = %v, want nil", err)
@@ -324,6 +380,8 @@ func TestManager_DeleteCredential_Idempotent(t *testing.T) {
 
 // TestManager_DeleteCredential_ContextCanceled tests context cancellation.
 func TestManager_DeleteCredential_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 
@@ -342,6 +400,8 @@ func TestManager_DeleteCredential_ContextCanceled(t *testing.T) {
 
 // TestManager_ListProviders_Empty tests listing when no credentials.
 func TestManager_ListProviders_Empty(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 	ctx := context.Background()
@@ -358,11 +418,13 @@ func TestManager_ListProviders_Empty(t *testing.T) {
 
 // TestManager_ListProviders_Multiple tests listing multiple providers.
 func TestManager_ListProviders_Multiple(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	ks.data["spin:cred:openai"] = "apikey:test1"
 	ks.data["spin:cred:ollama"] = "none:"
 	ks.data["spin:cred:lmstudio"] = "apikey:test2"
-	ks.data["spin:other:key"] = "value" // Should be filtered
+	ks.data["spin:other:key"] = "value" // Should be filtered.
 
 	m := NewManager(ks)
 	ctx := context.Background()
@@ -377,7 +439,7 @@ func TestManager_ListProviders_Multiple(t *testing.T) {
 		t.Fatalf("ListProviders() returned %d providers, want %d", len(providers), len(want))
 	}
 
-	// Check all expected providers present (order doesn't matter)
+	// Check all expected providers present (order doesn't matter).
 	providerMap := make(map[string]bool)
 	for _, p := range providers {
 		providerMap[p] = true
@@ -392,6 +454,8 @@ func TestManager_ListProviders_Multiple(t *testing.T) {
 
 // TestManager_ListProviders_ContextCanceled tests context cancellation.
 func TestManager_ListProviders_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 
@@ -410,49 +474,49 @@ func TestManager_ListProviders_ContextCanceled(t *testing.T) {
 
 // TestManager_ThreadSafety tests concurrent operations.
 func TestManager_ThreadSafety(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
+
 	errChan := make(chan error, 100)
 
-	// Concurrent sets
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func(n int) {
-			defer wg.Done()
+	// Concurrent sets.
+	for range 10 {
+		wg.Go(func() {
 			cred := Credential{
 				Type:  CredentialTypeAPIKey,
 				Value: "test",
 			}
-			if err := m.SetCredential(ctx, "test", cred); err != nil {
+
+			err := m.SetCredential(ctx, "test", cred)
+			if err != nil {
 				errChan <- err
 			}
-		}(i)
+		})
 	}
 
-	// Concurrent gets
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	// Concurrent gets.
+	for range 10 {
+		wg.Go(func() {
 			_, err := m.GetCredential(ctx, "test")
 			if err != nil && !errors.Is(err, ErrNotAuthenticated) {
 				errChan <- err
 			}
-		}()
+		})
 	}
 
-	// Concurrent lists
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if _, err := m.ListProviders(ctx); err != nil {
+	// Concurrent lists.
+	for range 10 {
+		wg.Go(func() {
+			_, err := m.ListProviders(ctx)
+			if err != nil {
 				errChan <- err
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -465,6 +529,8 @@ func TestManager_ThreadSafety(t *testing.T) {
 
 // TestCredential_Validate tests credential validation.
 func TestCredential_Validate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		cred    Credential
@@ -522,6 +588,8 @@ func TestCredential_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := validateCredential(tt.cred)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateCredential() error = %v, wantErr %v", err, tt.wantErr)
@@ -532,6 +600,8 @@ func TestCredential_Validate(t *testing.T) {
 
 // TestCredentialType_String tests string representation.
 func TestCredentialType_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		typ  CredentialType
 		want string
@@ -544,6 +614,8 @@ func TestCredentialType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.typ.String()
 			if got != tt.want {
 				t.Errorf("String() = %q, want %q", got, tt.want)
@@ -554,13 +626,15 @@ func TestCredentialType_String(t *testing.T) {
 
 // TestManager_ContextTimeout tests operations with timeout.
 func TestManager_ContextTimeout(t *testing.T) {
+	t.Parallel()
+
 	ks := newMockKeystore()
 	m := NewManager(ks)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	// Sleep longer than timeout to ensure it triggers
+	// Sleep longer than timeout to ensure it triggers.
 	time.Sleep(20 * time.Millisecond)
 
 	_, err := m.GetCredential(ctx, "test")
@@ -575,30 +649,33 @@ func TestManager_ContextTimeout(t *testing.T) {
 
 // TestManager_KeystoreErrors tests handling of keystore errors.
 func TestManager_KeystoreErrors(t *testing.T) {
-	ks := &errorKeystore{err: errors.New("keystore error")}
+	t.Parallel()
+
+	ks := &errorKeystore{err: errKeystoreError}
 	m := NewManager(ks)
 	ctx := context.Background()
 
-	// Get error
+	// Get error.
 	_, err := m.GetCredential(ctx, "test")
 	if err == nil {
 		t.Error("GetCredential() expected error, got nil")
 	}
 
-	// Set error
+	// Set error.
 	cred := Credential{Type: CredentialTypeAPIKey, Value: "test"}
+
 	err = m.SetCredential(ctx, "test", cred)
 	if err == nil {
 		t.Error("SetCredential() expected error, got nil")
 	}
 
-	// Delete error
+	// Delete error.
 	err = m.DeleteCredential(ctx, "test")
 	if err == nil {
 		t.Error("DeleteCredential() expected error, got nil")
 	}
 
-	// List error
+	// List error.
 	_, err = m.ListProviders(ctx)
 	if err == nil {
 		t.Error("ListProviders() expected error, got nil")
@@ -610,19 +687,19 @@ type errorKeystore struct {
 	err error
 }
 
-func (e *errorKeystore) Get(key string) (string, error) {
+func (e *errorKeystore) Get(_ context.Context, _ string) (string, error) {
 	return "", e.err
 }
 
-func (e *errorKeystore) Set(key, value string) error {
+func (e *errorKeystore) Set(_ context.Context, _, _ string) error {
 	return e.err
 }
 
-func (e *errorKeystore) Delete(key string) error {
+func (e *errorKeystore) Delete(_ context.Context, _ string) error {
 	return e.err
 }
 
-func (e *errorKeystore) List() ([]string, error) {
+func (e *errorKeystore) List(_ context.Context) ([]string, error) {
 	return nil, e.err
 }
 
@@ -638,7 +715,11 @@ func newMockKeystore() *mockKeystore {
 	}
 }
 
-func (m *mockKeystore) Get(key string) (string, error) {
+func (m *mockKeystore) Get(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("mock get: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -646,26 +727,41 @@ func (m *mockKeystore) Get(key string) (string, error) {
 	if !exists {
 		return "", ErrNotFound
 	}
+
 	return value, nil
 }
 
-func (m *mockKeystore) Set(key, value string) error {
+func (m *mockKeystore) Set(ctx context.Context, key, value string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("mock set: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.data[key] = value
+
 	return nil
 }
 
-func (m *mockKeystore) Delete(key string) error {
+func (m *mockKeystore) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("mock delete: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.data, key)
+
 	return nil
 }
 
-func (m *mockKeystore) List() ([]string, error) {
+func (m *mockKeystore) List(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("mock list: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -673,5 +769,6 @@ func (m *mockKeystore) List() ([]string, error) {
 	for k := range m.data {
 		keys = append(keys, k)
 	}
+
 	return keys, nil
 }

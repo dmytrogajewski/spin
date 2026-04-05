@@ -2,10 +2,21 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/patchapply"
+	"github.com/dmytrogajewski/spin/pkg/alg/diff"
+)
+
+var (
+	// ErrEmptyPatch is a sentinel error.
+	ErrEmptyPatch = errors.New("empty patch")
+	// ErrPatchMustBeInStandardDiff is a sentinel error.
+	ErrPatchMustBeInStandardDiff = errors.New(
+		"patch must be in standard diff format. Expected to start with '*** filename' or '--- filename'",
+	)
 )
 
 // ApplyPatchTool implements structured patch application functionality.
@@ -20,10 +31,14 @@ func NewApplyPatchTool(workspaceRoot string) *ApplyPatchTool {
 	}
 }
 
+const applyPatchName = "apply_patch"
+
+// Name implements the Name operation.
 func (t *ApplyPatchTool) Name() string {
-	return "apply_patch"
+	return applyPatchName
 }
 
+// Description implements the Description operation.
 func (t *ApplyPatchTool) Description() string {
 	return "Apply a patch to modify files in the workspace using standard diff format.\n" +
 		"Format: *** filename\n--- filename\n@@ -start,count +start,count @@\n+new line\n-old line\n" +
@@ -38,6 +53,7 @@ func (t *ApplyPatchTool) Description() string {
 		" func main() {\n"
 }
 
+// Schema implements the Schema operation.
 func (t *ApplyPatchTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -48,8 +64,10 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 				Type: "object",
 				Properties: map[string]PropertyDefinition{
 					"patch_text": {
-						Type:        "string",
-						Description: "The patch text in standard diff format. Must start with '*** filename' or '--- filename' and contain '@@ -start,count +start,count @@' hunks with '+', '-', or ' ' prefixed lines.",
+						Type: "string",
+						Description: "The patch text in standard diff format. Must start with " +
+							"'*** filename' or '--- filename' and contain " +
+							"'@@ -start,count +start,count @@' hunks with '+', '-', or ' ' prefixed lines.",
 					},
 					"workspace_root": {
 						Type:        "string",
@@ -70,29 +88,35 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	// Extract patch_text parameter
-	patchText, err := params.GetString("patch_text")
-	if err != nil || patchText == "" {
+	if err := ctx.Err(); err != nil {
+		return NewToolError(err), nil
+	}
+	// Extract patch_text parameter. Accept "patch" as alias since LLMs frequently
+	// use the shorter name despite the schema specifying "patch_text".
+	patchText := params.GetStringOr("patch_text", "")
+	if patchText == "" {
+		patchText = params.GetStringOr("patch", "")
+	}
+
+	if patchText == "" {
 		return ToolResult{
 			Success: false,
 			Error:   "patch_text parameter must be a non-empty string",
 		}, nil
 	}
 
-	// Extract workspace_root parameter (optional)
-	workspaceRoot := t.workspaceRoot
-	if customRoot, err := params.GetString("workspace_root"); err == nil && customRoot != "" {
-		workspaceRoot = customRoot
-	}
+	// Extract workspace_root parameter (optional).
+	workspaceRoot := resolveWorkspaceRoot(t.workspaceRoot, params)
 
-	// Extract dry_run parameter (optional)
+	// Extract dry_run parameter (optional).
 	dryRun := params.GetBoolOr("dry_run", false)
 
-	// Extract force parameter (optional)
+	// Extract force parameter (optional).
 	force := params.GetBoolOr("force", false)
 
-	// Detect patch format and parse accordingly
+	// Detect patch format and parse accordingly.
 	patch, err := t.parsePatch(patchText)
 	if err != nil {
 		return ToolResult{
@@ -101,31 +125,37 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Create applier
-	applier, err := patchapply.NewApplier(workspaceRoot)
+	result, err := t.applyPatch(ctx, workspaceRoot, patch, dryRun, force)
 	if err != nil {
 		return ToolResult{
 			Success: false,
-			Error:   fmt.Sprintf("failed to create applier: %v", err),
+			Error:   fmt.Sprintf("failed to apply patch: %v", err),
 		}, nil
 	}
 
-	// Configure applier
+	return ToolResult{
+		Success: true,
+		Output:  formatApplyResult(result, dryRun),
+	}, nil
+}
+
+// applyPatch creates an applier and applies the patch.
+func (t *ApplyPatchTool) applyPatch(
+	ctx context.Context, workspaceRoot string, patch *patchapply.Patch, dryRun, force bool,
+) (*patchapply.ApplyResult, error) {
+	applier, err := patchapply.NewApplier(workspaceRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create applier: %w", err)
+	}
+
 	applier.SetDryRun(dryRun)
 	applier.SetForceOverwrite(force)
 
-	// Apply the patch
-	result, err := applier.Apply(patch)
-	if err != nil {
-		// Extract error message
-		errMsg := err.Error()
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to apply patch: %v", errMsg),
-		}, nil
-	}
+	return applier.Apply(ctx, patch)
+}
 
-	// Format output
+// formatApplyResult formats the apply result into a human-readable string.
+func formatApplyResult(result *patchapply.ApplyResult, dryRun bool) string {
 	var output strings.Builder
 	if dryRun {
 		output.WriteString("Dry run completed successfully. No files were modified.\n\n")
@@ -134,152 +164,116 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 
 	if len(result.FilesCreated) > 0 {
-		output.WriteString(fmt.Sprintf("Created %d file(s):\n", len(result.FilesCreated)))
+		fmt.Fprintf(&output, "Created %d file(s):\n", len(result.FilesCreated))
+
 		for _, file := range result.FilesCreated {
-			output.WriteString(fmt.Sprintf("  + %s\n", file))
+			fmt.Fprintf(&output, "  + %s\n", file)
 		}
 	}
 
 	if len(result.FilesDeleted) > 0 {
-		output.WriteString(fmt.Sprintf("Deleted %d file(s):\n", len(result.FilesDeleted)))
+		fmt.Fprintf(&output, "Deleted %d file(s):\n", len(result.FilesDeleted))
+
 		for _, file := range result.FilesDeleted {
-			output.WriteString(fmt.Sprintf("  - %s\n", file))
+			fmt.Fprintf(&output, "  - %s\n", file)
 		}
 	}
 
 	if len(result.FilesUpdated) > 0 {
-		output.WriteString(fmt.Sprintf("Updated %d file(s):\n", len(result.FilesUpdated)))
+		fmt.Fprintf(&output, "Updated %d file(s):\n", len(result.FilesUpdated))
+
 		for _, file := range result.FilesUpdated {
-			output.WriteString(fmt.Sprintf("  ~ %s\n", file))
+			fmt.Fprintf(&output, "  ~ %s\n", file)
 		}
 	}
 
 	if len(result.FilesMoved) > 0 {
-		output.WriteString(fmt.Sprintf("Moved %d file(s):\n", len(result.FilesMoved)))
+		fmt.Fprintf(&output, "Moved %d file(s):\n", len(result.FilesMoved))
+
 		for oldPath, newPath := range result.FilesMoved {
-			output.WriteString(fmt.Sprintf("  %s → %s\n", oldPath, newPath))
+			fmt.Fprintf(&output, "  %s → %s\n", oldPath, newPath)
 		}
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return output.String()
 }
 
 // parsePatch parses a patch in standard diff format.
 func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error) {
 	lines := strings.Split(patchText, "\n")
 	if len(lines) == 0 {
-		return nil, fmt.Errorf("empty patch")
+		return nil, ErrEmptyPatch
 	}
 
-	// Check if it's a proper patchapply format (starts with "*** Begin Patch")
+	// Check if it's a proper patchapply format (starts with "*** Begin Patch").
 	firstLine := strings.TrimSpace(lines[0])
 	if firstLine == "*** Begin Patch" {
-		// Use the proper patchapply parser
+		// Use the proper patchapply parser.
 		parser := patchapply.NewParser(patchText)
+
 		return parser.Parse()
 	}
 
-	// Check if it's a diff format (starts with "*** filename" or "--- filename")
+	// Check if it's a diff format (starts with "*** filename" or "--- filename").
 	if !strings.HasPrefix(firstLine, "*** ") && !strings.HasPrefix(firstLine, "--- ") {
-		return nil, fmt.Errorf("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename', got: %q", firstLine)
+		return nil, fmt.Errorf(
+			"patch must be in standard diff format. Expected '*** filename' or '--- filename', got: %q: %w",
+			firstLine, ErrPatchMustBeInStandardDiff)
 	}
 
-	// Parse diff format directly
+	// Parse diff format directly.
 	return t.parseDiffFormat(patchText)
 }
 
-// parseDiffFormat parses a patch in standard diff format directly.
+// parseDiffFormat parses a patch in standard diff format using pkg/alg/diff.
 func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, error) {
-	lines := strings.Split(diffText, "\n")
-	if len(lines) < 3 {
-		return nil, fmt.Errorf("diff format too short")
+	filename, hunks, err := diff.Parse(diffText)
+	if err != nil {
+		return nil, fmt.Errorf("parse diff: %w", err)
 	}
 
-	// Extract filename from the first line
-	firstLine := strings.TrimSpace(lines[0])
-	var filename string
-	if strings.HasPrefix(firstLine, "*** ") {
-		filename = strings.TrimSpace(strings.TrimPrefix(firstLine, "*** "))
-	} else if strings.HasPrefix(firstLine, "--- ") {
-		filename = strings.TrimSpace(strings.TrimPrefix(firstLine, "--- "))
-	} else {
-		return nil, fmt.Errorf("could not extract filename from first line: %q", firstLine)
-	}
-
-	// Create patch with update file operation
-	patch := &patchapply.Patch{
+	return &patchapply.Patch{
 		Operations: []patchapply.FileOperation{
 			&patchapply.UpdateFile{
 				FilePath: filename,
-				Hunks:    []patchapply.Hunk{},
+				Hunks:    convertHunks(hunks),
 			},
 		},
-	}
+	}, nil
+}
 
-	// Parse hunks
-	var currentHunk *patchapply.Hunk
-	for i := 2; i < len(lines); i++ {
-		line := lines[i]
+// convertHunks converts diff.Hunk slices to patchapply.Hunk slices.
+func convertHunks(hunks []diff.Hunk) []patchapply.Hunk {
+	result := make([]patchapply.Hunk, len(hunks))
 
-		if strings.HasPrefix(line, "@@") {
-			// Start of a new hunk
-			if currentHunk != nil {
-				patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
-					patch.Operations[0].(*patchapply.UpdateFile).Hunks,
-					*currentHunk,
-				)
-			}
-			currentHunk = &patchapply.Hunk{
-				Header:  strings.TrimSpace(strings.TrimPrefix(line, "@@")),
-				Changes: []patchapply.LineChange{},
-			}
-		} else if currentHunk != nil {
-			// Parse line change
-			if len(line) == 0 {
-				currentHunk.Changes = append(currentHunk.Changes, patchapply.LineChange{
-					Type: patchapply.LineContext,
-					Text: "",
-				})
-			} else {
-				prefix := line[0]
-				text := ""
-				if len(line) > 1 {
-					text = line[1:]
-				}
-
-				var changeType patchapply.LineChangeType
-				switch prefix {
-				case ' ':
-					changeType = patchapply.LineContext
-				case '-':
-					changeType = patchapply.LineDelete
-				case '+':
-					changeType = patchapply.LineInsert
-				default:
-					// Skip lines without proper prefixes
-					continue
-				}
-
-				currentHunk.Changes = append(currentHunk.Changes, patchapply.LineChange{
-					Type: changeType,
-					Text: text,
-				})
-			}
+	for idx, hunk := range hunks {
+		result[idx] = patchapply.Hunk{
+			Changes: convertChanges(hunk.Changes),
 		}
 	}
 
-	// Add the last hunk
-	if currentHunk != nil {
-		patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
-			patch.Operations[0].(*patchapply.UpdateFile).Hunks,
-			*currentHunk,
-		)
+	return result
+}
+
+// lineTypeMap maps diff.LineType to patchapply.LineChangeType.
+var lineTypeMap = map[diff.LineType]patchapply.LineChangeType{
+	diff.LineContext: patchapply.LineContext,
+	diff.LineInsert:  patchapply.LineInsert,
+	diff.LineDelete:  patchapply.LineDelete,
+}
+
+// convertChanges converts diff.LineChange slices to patchapply.LineChange slices.
+func convertChanges(changes []diff.LineChange) []patchapply.LineChange {
+	result := make([]patchapply.LineChange, len(changes))
+
+	for idx, change := range changes {
+		result[idx] = patchapply.LineChange{
+			Type: lineTypeMap[change.Type],
+			Text: change.Text,
+		}
 	}
 
-	return patch, nil
+	return result
 }
 
 // CheckApproval assesses whether the patch operation requires approval.
