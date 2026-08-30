@@ -11,17 +11,22 @@ import (
 	"sync/atomic"
 	"time"
 
+	"unicode/utf8"
+
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 const (
 	maxContentLineLen    = 120
 	truncatedContentLen  = 117
 	streamChannelBufSize = 100
+	thinkingStartMark    = " [thinking]"
+	thinkingDoneFmt      = " [thought for %.2fs, ~%d tokens]"
 )
 
 // Mapper maps core agent events to TUI blocks.
@@ -38,7 +43,7 @@ type Mapper struct {
 	// State for thinking blocks.
 	thinking           bool
 	thinkStart         time.Time
-	thinkTokens        int
+	thinkChars         int
 	mu                 sync.RWMutex    // Protects blockRegistry.
 	lastBulletSet      map[string]bool // Track last retrieved bullet content (for deduplication).
 	lastLearnedBullets map[string]bool // Track last learned bullet content (for deduplication).
@@ -63,14 +68,12 @@ func NewMapper(ui ports.UI) *Mapper {
 // It handles tool calls, content streaming, errors, and system messages.
 // Returns an error only for critical failures; gracefully handles unexpected data.
 func (m *Mapper) MapEvent(ctx context.Context, event events.Event) error {
-	// Handle nil data gracefully.
-	if event.Data == nil {
-		return nil
-	}
-
-	// Process event for status updates (Phase 1).
 	if statusUI, ok := m.ui.(interface{ ProcessEvent(*events.Event) }); ok {
 		statusUI.ProcessEvent(&event)
+	}
+
+	if event.Data == nil {
+		return nil
 	}
 
 	switch event.Type {
@@ -104,6 +107,9 @@ func (m *Mapper) handleToolStart(ctx context.Context, event events.Event) error 
 	if !ok {
 		return nil // Gracefully handle type assertion failure.
 	}
+
+	// Close the in-flight thinking phase so its summary lands before the tool badge.
+	m.checkCloseThinking()
 
 	// Create block based on tool type (block header provides compact feedback).
 	block := m.createBlockForTool(data)
@@ -557,20 +563,14 @@ func (m *Mapper) handleThinkingDelta(event events.Event) error {
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
 
-	// Start thinking block if not active.
 	if !m.thinking {
 		m.thinking = true
 		m.thinkStart = time.Now()
-		m.thinkTokens = 0
+		m.thinkChars = 0
+		m.sendStreamLocked(thinkingLine(thinkingStartMark))
 	}
 
-	// Update metrics
-	// Rough token estimation: whitespace-delimited words.
-	for _, char := range data.Content {
-		if char == ' ' || char == '\n' || char == '\t' {
-			m.thinkTokens++
-		}
-	}
+	m.thinkChars += utf8.RuneCountInString(data.Content)
 
 	return nil
 }
@@ -586,19 +586,34 @@ func (m *Mapper) checkCloseThinking() {
 	}
 
 	duration := time.Since(m.thinkStart)
+	tokens := thinkTokensFromChars(m.thinkChars)
 	m.thinking = false
+	m.thinkChars = 0
 
-	if m.streamCh != nil {
-		var out strings.Builder
-		out.WriteString("\x1b[2m\x1b[38;5;242m")
-		fmt.Fprintf(&out, " [thought for %.2fs, ~%d tokens]",
-			duration.Seconds(), m.thinkTokens)
-		out.WriteString("\x1b[0m\n")
+	m.sendStreamLocked(thinkingLine(fmt.Sprintf(thinkingDoneFmt, duration.Seconds(), tokens)))
+}
 
-		select {
-		case m.streamCh <- out.String():
-		default:
-		}
+func thinkTokensFromChars(chars int) int {
+	if chars <= 0 {
+		return 0
+	}
+
+	return max(1, chars/stringsx.CharsPerToken)
+}
+
+func thinkingLine(text string) string {
+	return "\x1b[2m\x1b[38;5;242m" + text + "\x1b[0m\n"
+}
+
+func (m *Mapper) sendStreamLocked(text string) {
+	if m.streamCh == nil {
+		return
+	}
+
+	select {
+	case m.streamCh <- text:
+	case <-m.streamDone:
+	default:
 	}
 }
 

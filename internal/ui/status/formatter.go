@@ -153,6 +153,9 @@ func FormatMetrics(metrics *Metrics, level DetailLevel, spinnerFrame string) str
 	// Agent state.
 	parts = appendStateParts(parts, metrics, level)
 
+	// Approval mode (medium and up, only when not the default "ask").
+	parts = appendApprovalMode(parts, metrics, level)
+
 	// Provider/model and TPS (medium and full).
 	parts = appendProviderAndTPS(parts, metrics, level)
 
@@ -205,6 +208,16 @@ func appendStateParts(parts []string, metrics *Metrics, level DetailLevel) []str
 	}
 
 	return parts
+}
+
+// appendApprovalMode appends a loud marker when approvals are bypassed.
+// The default "ask" mode is not shown to keep the bar quiet.
+func appendApprovalMode(parts []string, metrics *Metrics, level DetailLevel) []string {
+	if level < DetailMedium || metrics.ApprovalMode == "" || metrics.ApprovalMode == "ask" {
+		return parts
+	}
+
+	return append(parts, strings.ToUpper(metrics.ApprovalMode))
 }
 
 // appendProviderAndTPS appends provider/model and TPS for medium and full levels.

@@ -32,6 +32,7 @@ const (
 	minTitleWidth      = 10
 	rightMetaReserved  = 20
 	labelPaddingSpaces = 2
+	accentBarCells     = 2 // glyph + trailing space.
 )
 
 // Renderer renders blocks to ANSI terminal output.
@@ -120,17 +121,12 @@ func (r *Renderer) RenderHeader(b *Block) string {
 
 	var out strings.Builder
 
-	// Accent bar (1ch).
+	// 1-cell accent gutter on the same line as the badge.
 	tagColor := GetTagColor(b.Type)
 	out.WriteString(string(tagColor))
+	out.WriteString(AccentBarGlyph)
 	out.WriteString(string(ColorReset))
-
-	// Spacing after accent bar.
-
-	// Newline before new tag.
-	out.WriteString("\n")
-
-	// out.WriteString(strings.Repeat(" ", S2)).
+	out.WriteString(" ")
 
 	// Tag badge with colored background
 	// Get background color and label for block type.
@@ -148,9 +144,9 @@ func (r *Renderer) RenderHeader(b *Block) string {
 
 	// Title/Meta (left-aligned).
 	title := r.formatTitle(b)
-	// Calculate available width: total - bar - spacing - label - spacing - rightmeta.
+	// Calculate available width: total - accent - spacing - label - spacing - rightmeta.
 	maxTitleWidth := max(
-		r.width-1-S2-len(label)-labelPaddingSpaces-S2-S3-rightMetaReserved, minTitleWidth)
+		r.width-accentBarCells-S2-len(label)-labelPaddingSpaces-S2-S3-rightMetaReserved, minTitleWidth)
 
 	title = textwidth.MidEllipsize(title, maxTitleWidth)
 	out.WriteString(title)

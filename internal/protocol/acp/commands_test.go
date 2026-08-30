@@ -85,6 +85,14 @@ func TestExecuteCommand(t *testing.T) {
 		assert.Contains(t, result, "/help")
 	})
 
+	t.Run("execute_resume_command_error", func(t *testing.T) {
+		t.Parallel()
+
+		_, execErr := acpAgent.executeCommand(context.Background(), "/resume", []string{}, sessionID)
+		require.Error(t, execErr)
+		assert.Contains(t, execErr.Error(), "not available via ACP")
+	})
+
 	t.Run("execute_exit_command_error", func(t *testing.T) {
 		t.Parallel()
 

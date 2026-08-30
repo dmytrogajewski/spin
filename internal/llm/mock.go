@@ -124,6 +124,17 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 	return resp, nil
 }
 
+// mockStreamState is an immutable snapshot of provider configuration taken
+// under the lock. The streaming goroutine outlives the Stream call's lock,
+// so it must never touch MockProvider fields directly (SetResponse et al.
+// may run concurrently).
+type mockStreamState struct {
+	streamChunks []string
+	toolCalls    []openai.ChatCompletionMessageToolCall
+	response     string
+	delay        time.Duration
+}
+
 // Stream implements Provider.Stream.
 func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	p.mu.RLock()
@@ -134,6 +145,13 @@ func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewPar
 		return nil, p.err
 	}
 
+	state := mockStreamState{
+		streamChunks: p.streamChunks,
+		toolCalls:    p.toolCalls,
+		response:     p.response,
+		delay:        p.delay,
+	}
+
 	chunks := make(chan openai.ChatCompletionChunk, mockStreamChunkBuffer)
 	chunkID := fmt.Sprintf("mock-chunk-%d", time.Now().UnixNano())
 
@@ -142,37 +160,37 @@ func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewPar
 
 		// Send content chunks or tool calls.
 		switch {
-		case len(p.streamChunks) > 0:
-			if !p.streamContentChunks(ctx, chunks, chunkID) {
+		case len(state.streamChunks) > 0:
+			if !streamContentChunks(ctx, chunks, chunkID, state) {
 				return
 			}
-		case len(p.toolCalls) > 0:
-			if !p.streamToolCallChunks(ctx, chunks, chunkID) {
+		case len(state.toolCalls) > 0:
+			if !streamToolCallChunks(ctx, chunks, chunkID, state) {
 				return
 			}
 		default:
-			if !p.streamSingleChunk(ctx, chunks, chunkID) {
+			if !streamSingleChunk(ctx, chunks, chunkID, state) {
 				return
 			}
 		}
 
 		// Send done chunk with finish reason.
-		p.sendDoneChunk(ctx, chunks, chunkID)
+		sendDoneChunk(ctx, chunks, chunkID, state)
 	}()
 
 	return chunks, nil
 }
 
 // streamContentChunks streams configured content chunks. Returns false if context canceled.
-func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
-	for _, content := range p.streamChunks {
+func streamContentChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string, state mockStreamState) bool {
+	for _, content := range state.streamChunks {
 		chunk := newMockChunk(chunkID, content, "assistant", nil)
 
 		if !concurrency.SendOrCancel(ctx, chunks, chunk) {
 			return false
 		}
 
-		if p.delay > 0 && !concurrency.SleepCtx(ctx, p.delay) {
+		if state.delay > 0 && !concurrency.SleepCtx(ctx, state.delay) {
 			return false
 		}
 	}
@@ -181,9 +199,9 @@ func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- op
 }
 
 // streamToolCallChunks streams tool call chunks. Returns false if context canceled.
-func (p *MockProvider) streamToolCallChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
-	toolCallChunks := make([]openai.ChatCompletionChunkChoiceDeltaToolCall, len(p.toolCalls))
-	for i, tc := range p.toolCalls {
+func streamToolCallChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string, state mockStreamState) bool {
+	toolCallChunks := make([]openai.ChatCompletionChunkChoiceDeltaToolCall, len(state.toolCalls))
+	for i, tc := range state.toolCalls {
 		toolCallChunks[i] = openai.ChatCompletionChunkChoiceDeltaToolCall{
 			Index: int64(i),
 			ID:    tc.ID,
@@ -201,22 +219,25 @@ func (p *MockProvider) streamToolCallChunks(ctx context.Context, chunks chan<- o
 }
 
 // streamSingleChunk streams a single response chunk. Returns false if context canceled.
-func (p *MockProvider) streamSingleChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
-	if p.delay > 0 && !concurrency.SleepCtx(ctx, p.delay) {
+func streamSingleChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string, state mockStreamState) bool {
+	if state.delay > 0 && !concurrency.SleepCtx(ctx, state.delay) {
 		return false
 	}
 
-	chunk := newMockChunk(chunkID, p.response, "assistant", nil)
+	chunk := newMockChunk(chunkID, state.response, "assistant", nil)
 
 	return concurrency.SendOrCancel(ctx, chunks, chunk)
 }
 
 // sendDoneChunk sends the final done chunk with the appropriate finish reason.
-func (p *MockProvider) sendDoneChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) {
+// Like real providers, the done chunk carries token usage for the whole call.
+func sendDoneChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string, state mockStreamState) {
 	finishReason := FinishReasonStop
-	if len(p.toolCalls) > 0 {
+	if len(state.toolCalls) > 0 {
 		finishReason = FinishReasonToolCalls
 	}
+
+	completionTokens := int64(len(state.response) / mockCharsPerToken)
 
 	select {
 	case <-ctx.Done():
@@ -231,6 +252,11 @@ func (p *MockProvider) sendDoneChunk(ctx context.Context, chunks chan<- openai.C
 				Index:        0,
 				FinishReason: finishReason,
 			},
+		},
+		Usage: openai.CompletionUsage{
+			PromptTokens:     mockTokensPerMessage,
+			CompletionTokens: completionTokens,
+			TotalTokens:      mockTokensPerMessage + completionTokens,
 		},
 	}:
 	}

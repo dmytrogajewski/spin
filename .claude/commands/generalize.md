@@ -5,7 +5,9 @@ description: Find reusable code and document generalization opportunities
 
 # Agent Instructions: Generalize — Find Reusable Code
 
+<role>
 You are a code analysis agent. Your goal is to find all potentially reusable code and document it for generalization.
+</role>
 
 ---
 
@@ -34,7 +36,7 @@ For each function ask: **is it reusable?**
 | **(a), (b), (c)** | Document into `specs/ref/LIST.md` |
 | **(d)** | Add info into `specs/ref/LIST.md` near the corresponding function that could replace it |
 
-**Update `specs/ref/LIST.md` after every file — do NOT batch.**
+**Update `specs/ref/LIST.md` after every file — do not batch**, because batching risks losing findings if the process is interrupted.
 
 ### 4. Build the Spec
 
@@ -66,29 +68,43 @@ After completing all files:
 
 ## Progress Tracking Graph
 
-Track your progress as a graph. Always do **one movement at a time**.
+Track your progress as a graph. Complete one movement at a time.
 
 ```
-[ {pkg1} [x] ] -> [ {pkg2} [✅] ] -> [ {pkg2.1} [🚫] ]
-                                  -> [ {pkg2.2} [🚫] ]
-                -> [ {pkg3} [⌛] ] -> [ {pkg3.1} [ ] ]
+[ {pkg1} [x] ] -> [ {pkg2} [done] ] -> [ {pkg2.1} [skip] ]
+                                     -> [ {pkg2.2} [skip] ]
+               -> [ {pkg3} [next] ] -> [ {pkg3.1} [ ] ]
 ```
 
 **Legend:**
 
 | Symbol | Meaning |
 |--------|---------|
-| ✅ | Done, completed, or checked hypothesis |
-| 🚫 | Canceled |
-| ⌛ | Next / current work |
-| [ ] | Not complete, not checked |
+| done | Completed or checked hypothesis |
+| skip | Canceled |
+| next | Current work |
+| [ ] | Not started |
 
 ---
 
-## Rules
+<self_check>
+
+Before writing SPEC.md, verify:
+
+- Are all findings backed by exact file paths and line numbers?
+- Have you checked for false positives — is each finding genuinely reusable, not just a helper?
+- Does LIST.md cover every source file (excluding tests)?
+
+</self_check>
+
+<rules>
 
 1. **Micro-loops** — update `LIST.md` after every file, not at the end.
-2. **One graph movement at a time** — do not skip ahead.
+2. **One graph movement at a time** — complete the current file before moving on.
 3. **Be specific** — include exact file paths, line numbers, and function signatures.
 4. **Generics focus** — when criterion (b) applies, note which type parameters would be needed.
-5. **No false positives** — only document genuinely reusable code, not every helper.
+5. **Only genuine reuse** — document genuinely reusable code, not every helper, because false positives waste implementation effort.
+6. **Persistence.** You are an agent: scan every source file (excluding tests) and write `specs/ref/SPEC.md` before yielding. "I scanned the first few modules, ask me to continue for the rest" is not a valid stop. The only hard blockers that allow earlier yield are: the source tree is not readable, or `specs/ref/LIST.md` cannot be written.
+7. **No clocks.** Findings, file paths, and the SPEC body never reference dates, weekdays, months, or time-of-day. The graph in §Progress Tracking uses node labels for modules, not timestamps.
+
+</rules>

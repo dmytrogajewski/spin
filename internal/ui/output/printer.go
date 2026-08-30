@@ -81,6 +81,20 @@ func (p *Printer) PrintLine(s string) error {
 	return nil
 }
 
+// WriteRaw writes s verbatim, without newline translation.
+// Intended for self-contained ANSI sequences (cursor save/restore included).
+// Thread-safe. Can be called concurrently.
+func (p *Printer) WriteRaw(s string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, err := io.WriteString(p.out, s); err != nil {
+		return fmt.Errorf("write raw: %w", err)
+	}
+
+	return nil
+}
+
 // PrintChunks streams chunks from a channel with optional coalescing.
 // Flushes immediately on newline or after coalesceDelay.
 // Large chunks (>10KB) are written immediately without buffering.

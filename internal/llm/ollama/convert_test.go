@@ -431,6 +431,41 @@ func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
 	assert.Equal(t, "chatcmpl-test-123-0", chunk.Choices[0].Delta.ToolCalls[0].ID)
 }
 
+// TestConvertOllamaChunkToOpenAI_DoneChunkCarriesUsage verifies real token
+// usage from Ollama's final response survives the chunk conversion so the
+// UI context counter reflects actual context size, not estimates.
+func TestConvertOllamaChunkToOpenAI_DoneChunkCarriesUsage(t *testing.T) {
+	t.Parallel()
+
+	resp := api.ChatResponse{
+		Done:       true,
+		DoneReason: "stop",
+		Metrics:    api.Metrics{PromptEvalCount: 12345, EvalCount: 678},
+		Message:    api.Message{Role: "assistant", Content: "done"},
+	}
+
+	chunk := convertOllamaChunkToOpenAI(testCtx, resp, "chatcmpl-usage", "qwen3:1.7b", testLogger)
+
+	assert.Equal(t, int64(12345), chunk.Usage.PromptTokens)
+	assert.Equal(t, int64(678), chunk.Usage.CompletionTokens)
+	assert.Equal(t, int64(13023), chunk.Usage.TotalTokens)
+}
+
+// TestConvertOllamaChunkToOpenAI_IntermediateChunkHasNoUsage verifies that
+// usage is only attached to the final done chunk (the accumulator sums
+// chunk usage, so intermediate chunks must stay zero).
+func TestConvertOllamaChunkToOpenAI_IntermediateChunkHasNoUsage(t *testing.T) {
+	t.Parallel()
+
+	resp := api.ChatResponse{
+		Message: api.Message{Role: "assistant", Content: "partial"},
+	}
+
+	chunk := convertOllamaChunkToOpenAI(testCtx, resp, "chatcmpl-partial", "qwen3:1.7b", testLogger)
+
+	assert.Zero(t, chunk.Usage.TotalTokens)
+}
+
 // newTestTool creates an api.Tool with a single string property.
 func newTestTool(name, description, propName, propDesc string) api.Tool {
 	return api.Tool{

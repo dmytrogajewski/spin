@@ -18,7 +18,11 @@ import (
 	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
-const maxPreviewLen = 100
+const (
+	maxPreviewLen = 100
+	thinkTagOpen  = "<think>"
+	thinkTagClose = "</think>"
+)
 
 // ErrModelIsRequired is a sentinel error.
 var ErrModelIsRequired = errors.New("model is required")
@@ -293,10 +297,57 @@ func (p *Provider) setRequestOptions(ctx context.Context, params openaisdk.ChatC
 // mergeThinkingContent merges thinking and content strings into a single content string.
 func mergeThinkingContent(thinking, content string) string {
 	if thinking != "" {
-		return "<think>" + thinking + "</think>" + content
+		return thinkTagOpen + thinking + thinkTagClose + content
 	}
 
 	return content
+}
+
+// applyStreamMerge wraps one Ollama callback for the OpenAI chunk stream.
+// skip is true when Done repeats visible text that already streamed.
+func applyStreamMerge(resp api.ChatResponse, streamed string) (content string, skip bool) {
+	merged := mergeThinkingContent(resp.Message.Thinking, resp.Message.Content)
+	if resp.Done && isFullStreamReplay(merged, streamed) {
+		return "", true
+	}
+
+	return merged, false
+}
+
+func isFullStreamReplay(chunk, already string) bool {
+	if already == "" || chunk == "" {
+		return false
+	}
+
+	visibleChunk := stripThinkTags(chunk)
+	visibleAlready := stripThinkTags(already)
+
+	return visibleChunk != "" && visibleChunk == visibleAlready
+}
+
+func stripThinkTags(s string) string {
+	var b strings.Builder
+
+	for {
+		start := strings.Index(s, thinkTagOpen)
+		if start < 0 {
+			b.WriteString(s)
+
+			break
+		}
+
+		b.WriteString(s[:start])
+		s = s[start+len(thinkTagOpen):]
+
+		end := strings.Index(s, thinkTagClose)
+		if end < 0 {
+			break
+		}
+
+		s = s[end+len(thinkTagClose):]
+	}
+
+	return b.String()
 }
 
 // filterToolCalls filters tool calls, inferring names for nameless calls and removing phantom ones.
@@ -356,25 +407,20 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 		chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 		chunkIndex := 0
 
-		var lastDoneReason string
+		var (
+			lastDoneReason string
+			streamed       strings.Builder
+		)
 
 		err := p.client.Chat(ctx, req, func(resp api.ChatResponse) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
+			chunk, doneReason, sendErr := p.mapStreamResponse(ctx, resp, chunkID, req.Tools, &streamed)
+			if sendErr != nil {
+				return sendErr
 			}
 
-			// Merge thinking into content.
-			resp.Message.Content = mergeThinkingContent(resp.Message.Thinking, resp.Message.Content)
-			resp.Message.Thinking = ""
-
-			// Fix tool calls with empty function names.
-			resp.Message.ToolCalls = filterToolCalls(ctx, resp.Message.ToolCalls, req.Tools, p.logger)
-
-			if resp.Done && resp.DoneReason != "" {
-				lastDoneReason = resp.DoneReason
+			if doneReason != "" {
+				lastDoneReason = doneReason
 			}
-
-			chunk := convertOllamaChunkToOpenAI(ctx, resp, chunkID, p.model, p.logger)
 
 			select {
 			case chunks <- chunk:
@@ -396,6 +442,34 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 	}()
 
 	return chunks, nil
+}
+
+func (p *Provider) mapStreamResponse(
+	ctx context.Context,
+	resp api.ChatResponse,
+	chunkID string,
+	tools []api.Tool,
+	streamed *strings.Builder,
+) (openaisdk.ChatCompletionChunk, string, error) {
+	if ctx.Err() != nil {
+		return openaisdk.ChatCompletionChunk{}, "", fmt.Errorf("ollama stream: %w", ctx.Err())
+	}
+
+	merged, skip := applyStreamMerge(resp, streamed.String())
+	if !skip {
+		streamed.WriteString(merged)
+	}
+
+	resp.Message.Content = merged
+	resp.Message.Thinking = ""
+	resp.Message.ToolCalls = filterToolCalls(ctx, resp.Message.ToolCalls, tools, p.logger)
+
+	doneReason := ""
+	if resp.Done && resp.DoneReason != "" {
+		doneReason = resp.DoneReason
+	}
+
+	return convertOllamaChunkToOpenAI(ctx, resp, chunkID, p.model, p.logger), doneReason, nil
 }
 
 // Close closes the provider and releases resources.

@@ -108,6 +108,21 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 	return nil
 }
 
+// WriteRaw writes a raw ANSI sequence serialized with prompt redraws and
+// transcript output. The sequence must not scroll the terminal and must
+// save/restore the cursor position itself; the prompt is not redrawn.
+// Thread-safe. Can be called concurrently.
+func (c *CoordinatedWriter) WriteRaw(s string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.printer.WriteRaw(s); err != nil {
+		return fmt.Errorf("write raw: %w", err)
+	}
+
+	return nil
+}
+
 // PrintChunks streams chunks and redraws the prompt after completion.
 // Thread-safe. Can be called concurrently.
 // Blocks until the channel closes or context is canceled.

@@ -281,6 +281,30 @@ func TestFormatAdaptive_MediumTerminal(t *testing.T) {
 	}
 }
 
+func TestFormatAdaptive_ApprovalMode(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+
+	// Default "ask" mode stays hidden to keep the bar quiet.
+	m.SetApprovalMode("ask")
+
+	if got := m.FormatAdaptive(120); strings.Contains(got, "ASK") {
+		t.Errorf("ask mode should not be shown, got: %s", got)
+	}
+
+	// Yolo mode is a loud marker at medium and full detail.
+	m.SetApprovalMode("yolo")
+
+	if got := m.FormatAdaptive(120); !strings.Contains(got, "YOLO") {
+		t.Errorf("yolo mode should be shown at full detail, got: %s", got)
+	}
+
+	if got := m.FormatAdaptive(80); !strings.Contains(got, "YOLO") {
+		t.Errorf("yolo mode should be shown at medium detail, got: %s", got)
+	}
+}
+
 func TestFormatAdaptive_WideTerminal(t *testing.T) {
 	t.Parallel()
 

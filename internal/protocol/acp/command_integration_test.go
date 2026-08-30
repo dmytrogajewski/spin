@@ -156,6 +156,7 @@ func TestNewSession_SendsAvailableCommandsUpdate(t *testing.T) {
 		// Check that /exit and /quit are NOT included (TUI-only).
 		assert.False(t, commandNames["/exit"], "should not include /exit command (TUI-only)")
 		assert.False(t, commandNames["/quit"], "should not include /quit command (TUI-only)")
+		assert.False(t, commandNames["/resume"], "should not include /resume command (TUI-only)")
 
 		break
 	}

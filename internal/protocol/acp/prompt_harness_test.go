@@ -158,6 +158,7 @@ func TestSpinACPAgent_Prompt_RealHarnessExecutor(t *testing.T) {
 				}
 			}
 		}
+
 		return false
 	}, 2*time.Second, 10*time.Millisecond,
 		"expected agent_message_chunk notification from real harness executor, got: %v",
@@ -208,15 +209,17 @@ func TestSpinACPAgent_Prompt_ErrorSwallowed(t *testing.T) {
 		SessionId: sessionResp.SessionId,
 		Prompt:    []acp.ContentBlock{acp.TextBlock("hi")},
 	})
-	// BUG: error is nil even though RunTurn failed.
+	// Prompt currently returns nil even when RunTurn failed.
 	require.NoError(t, err)
 	assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason)
 
 	// After fix: client receives an error notification explaining what went wrong.
 	time.Sleep(50 * time.Millisecond)
+
 	notifications := mockConn.GetNotifications()
 
 	hasErrorNotification := false
+
 	for _, n := range notifications {
 		if chunk := n.Update.AgentMessageChunk; chunk != nil {
 			if chunk.Content.Text != nil && strings.Contains(chunk.Content.Text.Text, "Error") {

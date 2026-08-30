@@ -1,0 +1,20 @@
+---
+description: Install a fresh spin binary after every finished task
+alwaysApply: true
+---
+
+# Install spin after finishing work
+
+When a task that changes Go code, the CLI, or the TUI is complete (tests/gates done, or the user can run the result):
+
+1. Rebuild with `make -B build`
+2. Install with `make install` (`~/.local/bin/spin`)
+3. Confirm the installed binary is newer than the source change (mtime or hash)
+
+Do this even if `make test` already compiled `build/bin/spin`. That target does not update `~/.local/bin/spin`.
+
+```bash
+make -B build && make install
+```
+
+Skip only when the task touched no runnable spin code (docs-only, specs-only, promptkit-only).

@@ -17,7 +17,21 @@ const (
 	minTermWidth       = 10 // minimum terminal width to render status bar.
 	statusBarLines     = 2  // lines reserved for status bar and prompt.
 	highUsageThreshold = 80 // context usage percentage for warning color.
+
+	// ansiBrightWhite is the base status bar color.
+	ansiBrightWhite = "\x1b[37;1m"
+	// ansiYellowBold highlights attention markers like the YOLO mode.
+	ansiYellowBold = "\x1b[33;1m"
+	// yoloMarker is the bypass-approvals indicator produced by the formatter.
+	yoloMarker = "YOLO"
 )
+
+// highlightYolo colors the YOLO marker yellow and restores the base status
+// color afterwards. Applied after width measurement so it never affects
+// truncation or centering math.
+func highlightYolo(s string) string {
+	return strings.Replace(s, yoloMarker, ansiYellowBold+yoloMarker+ansiBrightWhite, 1)
+}
 
 // Renderer handles rendering the status bar to the terminal.
 // It uses ANSI escape sequences for positioning and scrolling regions.
@@ -52,14 +66,12 @@ func (r *Renderer) setupScrollingRegionLocked() {
 		return
 	}
 
-	// Set scrolling region to lines 1 through (height - 2).
-	// This leaves the last 2 lines for status bar and prompt.
-	scrollableLines := r.height - statusBarLines
-	fmt.Fprintf(r.out, "\x1b[1;%dr", scrollableLines)
+	bottom := r.height - statusBarLines
 
-	// Move cursor to the bottom of the scrolling region.
-	// This ensures new content appears at the bottom of the scrollable area.
-	fmt.Fprintf(r.out, "\x1b[%d;1H", scrollableLines)
+	// DECSTBM: transcript scrolls across the full width above the
+	// status/prompt lines; the welcome banner scrolls away naturally.
+	fmt.Fprintf(r.out, "\x1b[1;%dr", bottom)
+	fmt.Fprintf(r.out, "\x1b[%d;1H", bottom)
 
 	r.scrollingSetup = true
 }
@@ -132,10 +144,10 @@ func (r *Renderer) Render(statusText string) error {
 		}
 
 		// Apply consistent color: bright white for status bar.
-		buf.WriteString("\x1b[0m")    // Reset any previous formatting.
-		buf.WriteString("\x1b[37;1m") // Bright white.
-		buf.WriteString(cleanText)    // Render clean text.
-		buf.WriteString("\x1b[0m")    // Reset formatting.
+		buf.WriteString("\x1b[0m") // Reset any previous formatting.
+		buf.WriteString(ansiBrightWhite)
+		buf.WriteString(highlightYolo(cleanText))
+		buf.WriteString("\x1b[0m") // Reset formatting.
 
 		content = buf.String()
 	}
@@ -148,6 +160,19 @@ func (r *Renderer) Render(statusText string) error {
 // Clear clears the status bar.
 func (r *Renderer) Clear() error {
 	return r.Render("")
+}
+
+// RenderANSI renders pre-colored content on the status line verbatim.
+// Unlike Render, ANSI codes are preserved and no centering is applied;
+// the caller is responsible for fitting content to the terminal width.
+func (r *Renderer) RenderANSI(content string) error {
+	if r.height < minTermHeight || r.width < minTermWidth {
+		return nil
+	}
+
+	r.renderAtStatusLine(content)
+
+	return nil
 }
 
 // MoveToPrompt moves cursor to the prompt line.

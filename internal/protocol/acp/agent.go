@@ -1132,8 +1132,7 @@ func (a *SpinACPAgent) sendAvailableCommandsUpdate(ctx context.Context, sessionI
 	// Convert to ACP AvailableCommand format.
 	availableCommands := make([]acp.AvailableCommand, 0, len(allCommands))
 	for _, cmd := range allCommands {
-		// Skip exit/quit commands as they're TUI-only.
-		if cmd.Name() == "/exit" || cmd.Name() == "/quit" {
+		if commands.IsTUIOnly(cmd.Name()) {
 			continue
 		}
 

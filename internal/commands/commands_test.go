@@ -119,6 +119,7 @@ func TestHelpCommand(t *testing.T) {
 	assert.Contains(t, result, "Available commands:")
 	assert.Contains(t, result, "/mode")
 	assert.Contains(t, result, "/help")
+	assert.Contains(t, result, "/resume")
 	assert.Contains(t, result, "Available modes:")
 	assert.Contains(t, result, "regular")
 	assert.Contains(t, result, "review")
@@ -150,6 +151,61 @@ func TestQuitCommand(t *testing.T) {
 	_, err := cmd.Execute(context.Background(), []string{}, ctx)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not available via ACP")
+}
+
+// mockSessionBrowser extends mockCommandContext with resume hooks.
+type mockSessionBrowser struct {
+	mockCommandContext
+
+	catalog  string
+	resumeTo string
+}
+
+func (m *mockSessionBrowser) ResumeCatalog(_ context.Context) string {
+	return m.catalog
+}
+
+func (m *mockSessionBrowser) ResumeBySelector(_ context.Context, selector string) (string, error) {
+	m.resumeTo = selector
+
+	return "resumed " + selector, nil
+}
+
+func TestResumeCommand_ListsWithoutArgs(t *testing.T) {
+	t.Parallel()
+
+	cmd := &ResumeCommand{}
+	assert.Equal(t, "/resume", cmd.Name())
+
+	ctx := &mockSessionBrowser{catalog: "Resumable sessions:"}
+	result, err := cmd.Execute(context.Background(), nil, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "Resumable sessions:", result)
+}
+
+func TestResumeCommand_Selects(t *testing.T) {
+	t.Parallel()
+
+	ctx := &mockSessionBrowser{}
+	result, err := (&ResumeCommand{}).Execute(context.Background(), []string{"last"}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "resumed last", result)
+	assert.Equal(t, "last", ctx.resumeTo)
+}
+
+func TestResumeCommand_RequiresBrowser(t *testing.T) {
+	t.Parallel()
+
+	_, err := (&ResumeCommand{}).Execute(context.Background(), nil, &mockCommandContext{})
+	require.ErrorIs(t, err, ErrResumeCommandIsNotAvailableVia)
+}
+
+func TestIsTUIOnly(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, IsTUIOnly("/resume"))
+	assert.True(t, IsTUIOnly("/exit"))
+	assert.False(t, IsTUIOnly("/mode"))
 }
 
 // TestExecuteCommand tests command execution.
@@ -192,4 +248,5 @@ func TestListCommands(t *testing.T) {
 	assert.True(t, commandNames["/help"], "should have /help command")
 	assert.True(t, commandNames["/exit"], "should have /exit command")
 	assert.True(t, commandNames["/quit"], "should have /quit command")
+	assert.True(t, commandNames["/resume"], "should have /resume command")
 }

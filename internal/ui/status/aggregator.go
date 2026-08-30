@@ -31,10 +31,15 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 		return
 	}
 
-	// Map events to user-friendly agent states.
+	a.applyEvent(event)
+}
+
+func (a *Aggregator) applyEvent(event *events.Event) {
 	switch event.Type {
 	case events.EventTurnStart:
 		a.handleTurnStart()
+	case events.EventThinkingDelta:
+		a.manager.SetAgentState("Thinking")
 	case events.EventContentDelta:
 		a.handleContentDelta(event)
 	case events.EventContentComplete:

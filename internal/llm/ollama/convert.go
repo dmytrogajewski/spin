@@ -601,6 +601,17 @@ func convertOllamaChunkToOpenAI(
 		chunk.Choices[0].FinishReason = mapOllamaDoneReasonToOpenAI(ctx, resp.DoneReason, len(resp.Message.ToolCalls) > 0, logger)
 	}
 
+	// Ollama reports eval counts only on the final done response. Surface
+	// them as chunk usage so the stream accumulator preserves real token
+	// usage (prompt = full context actually processed).
+	if resp.Done && (resp.PromptEvalCount > 0 || resp.EvalCount > 0) {
+		chunk.Usage = openai.CompletionUsage{
+			PromptTokens:     int64(resp.PromptEvalCount),
+			CompletionTokens: int64(resp.EvalCount),
+			TotalTokens:      int64(resp.PromptEvalCount + resp.EvalCount),
+		}
+	}
+
 	// Convert tool calls if present.
 	if len(resp.Message.ToolCalls) > 0 {
 		chunk.Choices[0].Delta.ToolCalls = make([]openai.ChatCompletionChunkChoiceDeltaToolCall, len(resp.Message.ToolCalls))

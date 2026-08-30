@@ -1,0 +1,104 @@
+name: RLM E2E (long_log)
+
+# Runs examples/rlm/long_log/run.sh against a local Ollama model and
+# asserts two invariants:
+#   1. stdout (final answer) is non-empty
+#   2. stderr summary reports sub_calls <= --max-subcalls cap
+#
+# The job is gated on Ollama availability: when OLLAMA_HOST is not
+# reachable from the runner, the job logs a skip and passes without
+# invoking `spin rlm`. This keeps the workflow safe to enable in CI
+# before a managed Ollama runner exists; point it at a concrete host
+# (GHA self-hosted runner, Docker-side Ollama, etc.) when you have one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Ollama model id (e.g. llama3.1:8b)'
+        required: false
+        default: 'llama3.1:8b'
+  pull_request:
+    paths:
+      - 'cmd/spin/rlm*.go'
+      - 'internal/rlm/**'
+      - 'internal/tools/rlm_query*.go'
+      - 'examples/rlm/long_log/**'
+      - '.github/workflows/rlm-e2e.yml'
+
+jobs:
+  rlm-e2e:
+    name: RLM long-log e2e
+    runs-on: ubuntu-latest
+    env:
+      OLLAMA_HOST: ${{ vars.OLLAMA_HOST || '' }}
+      SPIN_RLM_MODEL: ${{ github.event.inputs.model || vars.SPIN_RLM_MODEL || 'llama3.1:8b' }}
+      SPIN_RLM_MAX_TURNS: '10'
+      SPIN_RLM_MAX_SUBS: '8'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Probe Ollama
+        id: probe
+        shell: bash
+        run: |
+          set -eu
+          if [ -z "${OLLAMA_HOST:-}" ]; then
+            echo "OLLAMA_HOST not set — skipping e2e" >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! curl -fsS --max-time 5 "${OLLAMA_HOST%/}/api/tags" > /dev/null; then
+            echo "Ollama not reachable at $OLLAMA_HOST — skipping e2e" >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Build spin
+        if: steps.probe.outputs.skip == 'false'
+        run: go build ./cmd/spin
+
+      - name: Generate fixture (deterministic)
+        if: steps.probe.outputs.skip == 'false'
+        working-directory: examples/rlm/long_log
+        run: go run generate.go
+
+      - name: Run spin rlm
+        if: steps.probe.outputs.skip == 'false'
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p /tmp/rlm-e2e
+          bash examples/rlm/long_log/run.sh \
+            > /tmp/rlm-e2e/stdout \
+            2> /tmp/rlm-e2e/stderr
+          echo "--- stdout ---" && cat /tmp/rlm-e2e/stdout
+          echo "--- stderr ---" && cat /tmp/rlm-e2e/stderr
+
+      - name: Assert invariants
+        if: steps.probe.outputs.skip == 'false'
+        shell: bash
+        run: |
+          set -eu
+          if [ ! -s /tmp/rlm-e2e/stdout ]; then
+            echo "FAIL: stdout (final answer) is empty" >&2
+            exit 1
+          fi
+          if ! grep -qE 'sub_calls=([0-8]) ' /tmp/rlm-e2e/stderr; then
+            echo "FAIL: sub_calls budget violated or summary missing" >&2
+            cat /tmp/rlm-e2e/stderr >&2
+            exit 1
+          fi
+          echo "OK: non-empty answer, sub_calls within cap"
+
+      - name: Skipped (no Ollama)
+        if: steps.probe.outputs.skip == 'true'
+        run: echo "Skipped — OLLAMA_HOST not configured. See docs/rlm.md for local-run instructions."

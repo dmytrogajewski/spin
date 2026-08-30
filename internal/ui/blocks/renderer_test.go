@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -8,6 +9,55 @@ import (
 const (
 	testFileName = "file.txt"
 )
+
+// Journey: specs/bugs/BUG-tui-blocks-and-thinking.md.
+func TestRenderHeader_AccentBarOnBadgeLine(t *testing.T) {
+	t.Parallel()
+
+	r := NewRenderer(80)
+	b := NewBlock(BlockTypeApplyPatch)
+	b.Title = testFileName
+
+	header := r.RenderHeader(b)
+	if !strings.Contains(header, AccentBarGlyph) {
+		t.Fatalf("accent glyph %q missing from header %q", AccentBarGlyph, header)
+	}
+
+	plain := strings.TrimLeft(stripANSI(header), "\n")
+	firstLine, _, _ := strings.Cut(plain, "\n")
+
+	if !strings.Contains(firstLine, AccentBarGlyph) {
+		t.Fatalf("accent glyph %q missing from badge line %q (raw %q)", AccentBarGlyph, firstLine, header)
+	}
+
+	if !strings.Contains(firstLine, "WRITE") {
+		t.Fatalf("WRITE badge not on same line as accent: %q", firstLine)
+	}
+
+	if strings.HasPrefix(plain, "\n") || strings.Contains(plain, "\n\n") {
+		t.Fatalf("header should not insert a blank line before the badge: %q", plain)
+	}
+}
+
+func TestRender_NoColorOnlyBlankLineBeforeBadge(t *testing.T) {
+	t.Parallel()
+
+	r := NewRenderer(80)
+	b := NewBlock(BlockTypeApplyPatch)
+	b.Title = testFileName
+
+	out, err := r.Render(b)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	plain := strings.TrimLeft(stripANSI(out), "\n")
+	firstLine, _, _ := strings.Cut(plain, "\n")
+
+	if !strings.Contains(firstLine, AccentBarGlyph) || !strings.Contains(firstLine, "WRITE") {
+		t.Fatalf("first visible line should be accent+WRITE, got %q", firstLine)
+	}
+}
 
 // Test that WRITE block does not render failure/success before completion.
 func TestWriteRender_BeforeCompletion_NoStatusOrFooter(t *testing.T) {
@@ -115,34 +165,9 @@ func TestWriteRender_AfterFailure_ShowsFailure(t *testing.T) {
 	}
 }
 
-// stripANSI removes ANSI escape codes from a string for testing purposes.
+var ansiCSI = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// stripANSI removes ANSI SGR sequences without splitting UTF-8 runes.
 func stripANSI(s string) string {
-	// Simple ANSI stripper (strips \x1b[...m sequences).
-	result := ""
-	inEscape := false
-
-	var resultSb108 strings.Builder
-
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
-			inEscape = true
-			i++ // Skip '['.
-
-			continue
-		}
-
-		if inEscape {
-			if s[i] == 'm' {
-				inEscape = false
-			}
-
-			continue
-		}
-
-		resultSb108.WriteString(string(s[i]))
-	}
-
-	result += resultSb108.String()
-
-	return result
+	return ansiCSI.ReplaceAllString(s, "")
 }

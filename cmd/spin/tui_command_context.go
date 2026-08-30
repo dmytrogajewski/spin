@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/commands"
 	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
@@ -31,9 +33,32 @@ func (c *tuiCommandContext) SetMode(_ context.Context, mode string) error {
 
 // GetWorkDir returns the working directory for the session.
 func (c *tuiCommandContext) GetWorkDir() string {
-	// Conversation doesn't expose workDir directly, but we can get it from session if needed
-	// Return empty string as it's not currently used in TUI commands.
-	return ""
+	return c.conv.GetWorkDir()
+}
+
+// ResumeCatalog implements commands.SessionBrowser.
+func (c *tuiCommandContext) ResumeCatalog(ctx context.Context) string {
+	return session.FormatResumeList(c.conv.ListResumableSessions(ctx), time.Now())
+}
+
+// ResumeBySelector implements commands.SessionBrowser.
+func (c *tuiCommandContext) ResumeBySelector(ctx context.Context, selector string) (string, error) {
+	cands := c.conv.ListResumableSessions(ctx)
+
+	picked, err := session.ResolveSelector(cands, selector)
+	if err != nil {
+		return "", err
+	}
+
+	if resumeErr := c.conv.Resume(ctx, picked.ID); resumeErr != nil {
+		return "", resumeErr
+	}
+
+	return commands.FormatResumeSuccess(
+		session.ShortID(picked.ID),
+		len(c.conv.GetHistoryMessages()),
+		picked.Preview,
+	), nil
 }
 
 // handleCommand processes slash commands using the command system.
@@ -63,6 +88,11 @@ func handleCommand(
 		_ = ui.PrintLine(fmt.Sprintf("Error: %v\n", err))
 
 		return nil
+	}
+
+	if cmdName == "/resume" {
+		ui.SetConversationID(conv.ID())
+		ui.SetTokenCount(int64(conv.GetTokenCount()))
 	}
 
 	// Print command output.

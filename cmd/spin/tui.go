@@ -19,6 +19,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
+	"github.com/dmytrogajewski/spin/internal/ui/banner"
 )
 
 // newTUICmd creates the TUI command for interactive terminal mode.
@@ -152,15 +153,32 @@ func setupTUIProvider(
 		return nil, nil, nil, fmt.Errorf("create TUI: %w", err)
 	}
 
-	ui.SetApprovalPolicyTTLs(cfg.Security.SessionPolicyTTL, cfg.Security.GlobalPolicyTTL)
-	configureMaxTokens(ui)
+	printTUIWelcome(ui)
+
+	configureMaxTokens(ui, cfg, provider)
 
 	return cfg, provider, ui, nil
 }
 
-// configureMaxTokens sets max tokens on the UI.
-func configureMaxTokens(ui *adapters.PureTTY) {
-	ui.SetMaxTokens(int64(defaultMaxTokens))
+// configureMaxTokens sets the status-bar context window from config or the provider.
+func configureMaxTokens(ui *adapters.PureTTY, cfg *config.V2, provider llm.Provider) {
+	ui.SetMaxTokens(int64(resolveUIContextWindow(cfg, provider)))
+}
+
+// resolveUIContextWindow returns the token window shown in the TUI status bar.
+// Config override wins, then provider-detected capabilities, then defaultMaxTokens.
+func resolveUIContextWindow(cfg *config.V2, provider llm.Provider) int {
+	if cfg != nil && cfg.LLM.ContextWindow > 0 {
+		return cfg.LLM.ContextWindow
+	}
+
+	if provider != nil {
+		if n := provider.Capabilities().ContextWindow; n > 0 {
+			return n
+		}
+	}
+
+	return defaultMaxTokens
 }
 
 // startTUIBackground starts the UI and streaming in the background.
@@ -183,26 +201,52 @@ func startTUIBackground(ctx context.Context, ui *adapters.PureTTY, errOut io.Wri
 }
 
 // processEvent handles a single event from the conversation stream.
-func processEvent(ctx context.Context, event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
+func processEvent(
+	ctx context.Context, event events.Event, mapper *tui.Mapper,
+	ui *adapters.PureTTY, conv *conversation.Conversation, tokens *tokenCounter,
+) {
 	mapErr := mapper.MapEvent(ctx, event)
 	if mapErr != nil {
 		_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
 	}
 
-	updateTokensFromEvent(event, ui, conv)
+	tokens.update(event, ui, conv)
 }
 
-// updateTokensFromEvent updates token counts based on event type.
-func updateTokensFromEvent(event events.Event, ui *adapters.PureTTY, conv *conversation.Conversation) {
+// tokenSink receives context token counts for display.
+type tokenSink interface {
+	SetTokenCount(tokenCount int64)
+}
+
+// tokenSource estimates conversation tokens from history.
+type tokenSource interface {
+	GetTokenCount() int
+}
+
+// tokenCounter tracks the context counter shown in the status bar.
+// Providers report real usage (prompt = full context actually processed)
+// via EventTurnProgress; once seen, that value wins over the history
+// estimate, which undercounts by excluding system prompt and tool schemas.
+type tokenCounter struct {
+	sawRealUsage bool
+}
+
+// update refreshes the token count from a conversation event.
+// It is called from the single event-loop goroutine, so no locking is needed.
+func (tc *tokenCounter) update(event events.Event, sink tokenSink, source tokenSource) {
 	switch event.Type {
-	case events.EventTurnComplete, events.EventContentComplete, events.EventToolCallComplete:
-		ui.SetTokenCount(int64(conv.GetTokenCount()))
 	case events.EventTurnProgress:
 		if data, ok := event.Data.(events.TurnEventData); ok && data.TokensUsed > 0 {
-			ui.SetTokenCount(int64(data.TokensUsed))
+			tc.sawRealUsage = true
+
+			sink.SetTokenCount(int64(data.TokensUsed))
+		}
+	case events.EventTurnComplete, events.EventContentComplete, events.EventToolCallComplete:
+		if !tc.sawRealUsage {
+			sink.SetTokenCount(int64(source.GetTokenCount()))
 		}
 	default:
-		// Other event types don't require token count updates.
+		// Other event types don't affect the token count.
 	}
 }
 
@@ -217,6 +261,8 @@ func startEventLoop(
 	go func() {
 		defer close(eventDone)
 
+		tokens := &tokenCounter{}
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -226,7 +272,7 @@ func startEventLoop(
 					return
 				}
 
-				processEvent(ctx, event, mapper, ui, conv)
+				processEvent(ctx, event, mapper, ui, conv, tokens)
 			}
 		}
 	}()
@@ -276,6 +322,8 @@ func executeTurn(
 	conv *conversation.Conversation, mapper *tui.Mapper,
 	ui *adapters.PureTTY, streamDone chan struct{},
 ) chan struct{} {
+	ui.SetAgentState(ctx, "Starting")
+
 	turnCtx, turnCancel := context.WithCancel(ctx)
 	turnErr := conv.RunTurn(turnCtx, line)
 
@@ -322,9 +370,16 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	defer uiCancel()
 	defer func() { _ = ui.Stop() }()
 
+	stopBlink := startCatBlink(ctx, ui)
+	defer stopBlink()
+
+	ui.SetTranscriptStartHook(stopBlink)
+
 	var approvalHandler = createTUIApprovalHandler(ui)
 	if flags.autoApprove {
 		approvalHandler = createAutoApproveHandler()
+
+		ui.SetApprovalMode(adapters.ApprovalModeYolo)
 	}
 
 	conv, err := createConversation(ctx, provider, cfg, conversationConfig{
@@ -338,7 +393,7 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	}
 	defer conv.Close(ctx)
 
-	initializeUI(ui, conv, provider, cfg.LLM.Model)
+	initializeUI(ui, conv, provider, cfg)
 
 	mapper := tui.NewMapper(ui)
 	defer mapper.Close()
@@ -351,11 +406,6 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 
 		close(streamDone)
 	}()
-
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine(SpinLogo)
-	_ = ui.PrintLine("Type your prompt and press Enter.")
-	_ = ui.PrintLine("Commands: /mode [name], /help, /exit (or press Ctrl-D)\n")
 
 	eventDone := startEventLoop(ctx, conv.Stream(), mapper, ui, conv)
 	inputCh := ui.RequestInput()
@@ -407,13 +457,74 @@ func setupSignalHandling(cancel context.CancelFunc, shutdownMsg ...string) {
 	}()
 }
 
+// Welcome banner layout constants.
+const (
+	// termClearHome homes the cursor, clears the screen, and purges the
+	// terminal scrollback (ED3, same as clear(1)). The clear gives the
+	// banner a deterministic row (required by the idle blink overlay);
+	// the purge removes stale frames from previous runs that terminals
+	// like xterm.js would otherwise keep forever at the top of scrollback.
+	termClearHome = "\x1b[H\x1b[2J\x1b[3J"
+	// bannerBaseRow is the terminal row of the banner's first line after clearing.
+	bannerBaseRow = 1
+	// welcomeFooterLines is the number of lines printed below the banner.
+	welcomeFooterLines = 5
+	// statusReserveLines is the bottom area reserved for the status bar and prompt.
+	statusReserveLines = 2
+	// minBlinkTermWidth guards against banner line wrapping which would
+	// break the blink overlay row math.
+	minBlinkTermWidth = 60
+)
+
+func printTUIWelcome(ui *adapters.PureTTY) {
+	_, _ = io.WriteString(ui.Out(), termClearHome)
+	_ = banner.Play(ui.Out(), banner.PlayOptions{})
+	_, _ = io.WriteString(ui.Out(),
+		"\nType your prompt and press Enter.\n"+
+			"Commands: /mode [name], /resume, /help, /exit (or press Ctrl-D)\n"+
+			"Shift+Tab: cycle approvals (ask / yolo)\n")
+}
+
+// startCatBlink keeps the welcome mascot blinking until the returned stop
+// function is called. It is a no-op on terminals too small to hold the
+// whole welcome screen without scrolling. The stop function is idempotent
+// and blocks until the blink goroutine has fully exited.
+func startCatBlink(ctx context.Context, ui *adapters.PureTTY) func() {
+	width, height := ui.TermSize()
+	if height < banner.Height()+welcomeFooterLines+statusReserveLines || width < minBlinkTermWidth {
+		return func() {}
+	}
+
+	blinkCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		_ = banner.Blink(blinkCtx, ui, banner.BlinkOptions{
+			BaseRow: bannerBaseRow,
+			Active: func() bool {
+				w, h := ui.TermSize()
+
+				return w == width && h == height
+			},
+		})
+	}()
+
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
 // initializeUI initializes the UI with conversation metadata.
-func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider, model string) {
+func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider, cfg *config.V2) {
 	taskMode := conv.GetTaskMode()
 	ui.SetTaskMode(taskMode)
 
 	providerName := provider.Name()
-	ui.SetProviderInfo(providerName, model)
+	ui.SetProviderInfo(providerName, cfg.LLM.Model)
+	configureMaxTokens(ui, cfg, provider)
 
 	tokenCount := int64(conv.GetTokenCount())
 	ui.SetTokenCount(tokenCount)

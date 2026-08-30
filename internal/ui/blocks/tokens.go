@@ -19,6 +19,9 @@ const (
 	S8 = 8
 	// S12 is 12 cell spacing (extra large gap).
 	S12 = 12
+
+	// AccentBarGlyph is the 1-cell left gutter drawn on the same line as a block badge.
+	AccentBarGlyph = "▌"
 )
 
 // Color represents an ANSI escape code for terminal colors.

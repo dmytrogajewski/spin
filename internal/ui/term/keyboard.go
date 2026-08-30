@@ -19,6 +19,8 @@ const (
 	KeyEnter
 	// KeyTab represents the tab key.
 	KeyTab
+	// KeyShiftTab represents the shift+tab key combination (CSI Z).
+	KeyShiftTab
 	// KeyBackspace represents the backspace key.
 	KeyBackspace
 	// KeyDelete represents the delete key.
@@ -91,6 +93,7 @@ func (k KeyKind) String() string {
 		KeyRune:      "Rune",
 		KeyEnter:     "Enter",
 		KeyTab:       "Tab",
+		KeyShiftTab:  "Shift-Tab",
 		KeyBackspace: "Backspace",
 		KeyDelete:    "Delete",
 		KeyUp:        "Up",
@@ -402,6 +405,8 @@ func (p *keyParser) parseSingleCharCSI(seq, raw []byte) (KeyEvent, bool) {
 		kind = KeyHome
 	case 'F':
 		kind = KeyEnd
+	case 'Z':
+		kind = KeyShiftTab
 	default:
 		return KeyEvent{}, false
 	}

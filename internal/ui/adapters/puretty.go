@@ -24,7 +24,6 @@ import (
 
 const (
 	promptModelCapacity  = 100
-	maxCommandDisplayLen = 50
 	externalInputBufSize = 100
 )
 
@@ -90,9 +89,15 @@ type PureTTY struct {
 	// Used by non-interactive `spin exec` to avoid cursor positioning issues.
 	execMode bool
 
-	// Approval TTL hints (from config) used for key preview in approval status.
-	sessionPolicyTTL time.Duration
-	globalPolicyTTL  time.Duration
+	// approvalMode is the current approval mode ("" means ApprovalModeAsk).
+	// Cycled with Shift+Tab; ApprovalModeYolo bypasses the approval dialog.
+	approvalMode string
+
+	// Transcript-start hook (e.g. stops the welcome banner animation)
+	// runs synchronously before the first transcript output — a submitted
+	// line, a printed line, streamed chunks, or an appended block.
+	transcriptStartHook func()
+	transcriptStartOnce sync.Once
 
 	mu      sync.Mutex
 	running bool
@@ -380,6 +385,7 @@ func (p *PureTTY) runMainLoop(ctx context.Context, inputs <-chan string) error {
 				}
 			}
 
+			p.notifyTranscriptStart()
 			p.handleSubmittedLine(line)
 
 			p.externalInputs <- line
@@ -390,13 +396,54 @@ func (p *PureTTY) runMainLoop(ctx context.Context, inputs <-chan string) error {
 	}
 }
 
+// Out returns the underlying output writer.
+func (p *PureTTY) Out() io.Writer {
+	return p.out
+}
+
+// WriteRaw writes a self-contained ANSI sequence serialized with
+// transcript output and prompt redraws. See CoordinatedWriter.WriteRaw.
+func (p *PureTTY) WriteRaw(s string) error {
+	return p.coord.WriteRaw(s)
+}
+
+// TermSize returns the terminal dimensions in cells.
+func (p *PureTTY) TermSize() (width, height int) {
+	return p.tty.Size()
+}
+
+// SetTranscriptStartHook registers fn to run exactly once, synchronously,
+// right before the first transcript output. The welcome banner animation
+// hooks in here: it must stop before anything can scroll the banner.
+func (p *PureTTY) SetTranscriptStartHook(fn func()) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.transcriptStartHook = fn
+}
+
+// notifyTranscriptStart runs the registered transcript-start hook once.
+func (p *PureTTY) notifyTranscriptStart() {
+	p.mu.Lock()
+	fn := p.transcriptStartHook
+	p.mu.Unlock()
+
+	if fn != nil {
+		p.transcriptStartOnce.Do(fn)
+	}
+}
+
 // PrintLine prints a line to the transcript with newline.
 func (p *PureTTY) PrintLine(line string) error {
+	p.notifyTranscriptStart()
+
 	return p.coord.PrintLine(line)
 }
 
 // PrintChunks streams chunks to the transcript.
 func (p *PureTTY) PrintChunks(ctx context.Context, chunks <-chan string) error {
+	p.notifyTranscriptStart()
+
 	return p.coord.PrintChunks(ctx, chunks)
 }
 
@@ -428,6 +475,16 @@ func (p *PureTTY) SetProviderInfo(provider, model string) {
 		p.statusManager.SetConnected(true)
 		p.updateStatusBar()
 	}
+}
+
+// SetAgentState updates the status-bar agent state and spinner using ctx.
+func (p *PureTTY) SetAgentState(ctx context.Context, state string) {
+	if p.statusManager == nil {
+		return
+	}
+
+	p.statusManager.SetAgentStateWithContext(ctx, state)
+	p.updateStatusBar()
 }
 
 // SetMaxTokens sets the maximum token limit for context percentage calculation.
@@ -480,6 +537,7 @@ func (p *PureTTY) shouldUpdateStatusBar(eventType events.EventType) bool {
 	case events.EventTurnStart,
 		events.EventToolCallStart,
 		events.EventToolCallComplete,
+		events.EventThinkingDelta,
 		events.EventContentDelta,
 		events.EventContentComplete,
 		events.EventTurnComplete:
@@ -550,25 +608,41 @@ func (p *PureTTY) routeKeyboardEvents(ctx context.Context, rawKeys <-chan term.K
 				return
 			}
 
-			// Check current mode.
-			p.mu.Lock()
-			mode := p.mode
-			dialog := p.approvalDialog
-			p.mu.Unlock()
-
-			// Route based on mode.
-			if mode == ModeApproval && dialog != nil {
-				// Route to approval dialog.
-				p.handleApprovalKey(event, dialog)
-			} else {
-				// Route to prompt loop.
-				select {
-				case promptKeys <- event:
-				case <-ctx.Done():
-					return
-				}
+			if !p.dispatchKeyEvent(ctx, event, promptKeys) {
+				return
 			}
 		}
+	}
+}
+
+// dispatchKeyEvent routes a single key event based on the current mode.
+// Returns false when the context is done and routing should stop.
+func (p *PureTTY) dispatchKeyEvent(ctx context.Context, event term.KeyEvent, promptKeys chan<- term.KeyEvent) bool {
+	p.mu.Lock()
+	mode := p.mode
+	dialog := p.approvalDialog
+	p.mu.Unlock()
+
+	// Route to approval dialog while it is visible.
+	if mode == ModeApproval && dialog != nil {
+		p.handleApprovalKey(event, dialog)
+
+		return true
+	}
+
+	// Shift+Tab cycles the approval mode instead of reaching the prompt.
+	if event.Kind == term.KeyShiftTab {
+		p.CycleApprovalMode()
+
+		return true
+	}
+
+	// Route to prompt loop.
+	select {
+	case promptKeys <- event:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -747,23 +821,72 @@ func (p *PureTTY) renderFilterUI() {
 	}
 }
 
-// ShowApprovalDialog displays an approval dialog for the given request.
-func (p *PureTTY) ShowApprovalDialog(ctx context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
-	// Set approval mode.
-	p.mode = ModeApproval
+// ApprovalMode returns the current approval mode (ask or yolo).
+func (p *PureTTY) ApprovalMode() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	// Create approval dialog for key handling.
-	p.approvalDialog = overlay.NewApprovalDialog(req)
+	return normalizeApprovalMode(p.approvalMode)
+}
+
+// SetApprovalMode sets the approval mode and refreshes the status bar.
+// Unknown modes fall back to ApprovalModeAsk.
+func (p *PureTTY) SetApprovalMode(mode string) {
+	p.applyApprovalMode(normalizeApprovalMode(mode))
+}
+
+// CycleApprovalMode advances to the next approval mode (Shift+Tab) and
+// returns the new mode.
+func (p *PureTTY) CycleApprovalMode() string {
+	p.mu.Lock()
+	next := nextApprovalMode(p.approvalMode)
+	p.mu.Unlock()
+
+	p.applyApprovalMode(next)
+
+	return next
+}
+
+// applyApprovalMode stores the mode and propagates it to the status bar.
+func (p *PureTTY) applyApprovalMode(mode string) {
+	p.mu.Lock()
+	p.approvalMode = mode
+	p.mu.Unlock()
+
+	if p.statusManager != nil {
+		p.statusManager.SetApprovalMode(mode)
+	}
+
+	p.updateStatusBar()
+}
+
+// ShowApprovalDialog displays an approval dialog for the given request.
+// In yolo mode the request is approved immediately without prompting.
+func (p *PureTTY) ShowApprovalDialog(ctx context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+	if p.ApprovalMode() == ApprovalModeYolo {
+		return p.autoApproveYolo(req)
+	}
+
+	// Set approval mode and dialog under the mutex; routeKeyboardEvents
+	// and updateStatusBar read both fields concurrently.
+	dialog := overlay.NewApprovalDialog(req)
+
+	p.mu.Lock()
+	p.mode = ModeApproval
+	p.approvalDialog = dialog
+	p.mu.Unlock()
 
 	// Show approval prompt in status bar.
 	p.showApprovalStatus(req)
 
 	// Wait for user response (respect context cancellation).
-	response := p.approvalDialog.Show(ctx)
+	response := dialog.Show(ctx)
 
 	// Clean up.
+	p.mu.Lock()
 	p.approvalDialog = nil
 	p.mode = ModeInput
+	p.mu.Unlock()
 
 	// Clear approval status and show result.
 	p.clearApprovalStatus()
@@ -772,80 +895,36 @@ func (p *PureTTY) ShowApprovalDialog(ctx context.Context, req safety.ApprovalReq
 	return response
 }
 
-// showApprovalStatus displays the approval prompt in the status bar.
+// autoApproveYolo approves without prompting and leaves a transcript trace.
+func (p *PureTTY) autoApproveYolo(req safety.ApprovalRequest) safety.ApprovalResponse {
+	trace := barAccent + "▌" + barReset + " ⚡ yolo: auto-approved " +
+		barBold + sanitizeApprovalCommand(req.Command.Raw) + barReset
+	_ = p.PrintLine(trace)
+
+	return safety.ApprovalResponse{
+		RequestID: req.ID,
+		Approved:  true,
+		Reason:    "yolo mode",
+		Scope:     safety.ScopeOnce,
+		Timestamp: time.Now(),
+	}
+}
+
+// showApprovalStatus displays a concise colored approval bar in the status
+// line; narrow terminals fall back to plain mid-ellipsized text.
 func (p *PureTTY) showApprovalStatus(req safety.ApprovalRequest) {
 	if p.statusRenderer == nil {
 		return
 	}
 
-	// Create approval prompt text.
-	command := req.Command.Raw
-	if len(command) > maxCommandDisplayLen {
-		command = command[:47] + "..."
-	}
-
-	// Compute normalized key preview (matches PolicyStore semantics).
-	keyPreview := ""
-
-	if req.Command != nil {
-		key := safety.NewPolicyKey(req.Command.Program, req.Command.Args, req.WorkDir)
-
-		args := strings.Join(key.Args, " ")
-		if args != "" {
-			keyPreview = fmt.Sprintf("%s %s (wd=%s)", key.Program, args, key.WorkDir)
-		} else {
-			keyPreview = fmt.Sprintf("%s (wd=%s)", key.Program, key.WorkDir)
-		}
-	}
-
-	ttlPreview := p.formatApprovalTTLPreview()
-
-	// Show scope-aware options: A=once, S=session, G=global, D=deny.
-	if keyPreview != "" {
-		approvalText := fmt.Sprintf(
-			"Executing: %q | Key: %s | %s | [A] once  [S] session  [G] global  [D] deny",
-			command, keyPreview, ttlPreview)
-		_ = p.statusRenderer.Render(approvalText)
+	w, _ := p.tty.Size()
+	if w >= minApprovalBarWidth {
+		_ = p.statusRenderer.RenderANSI(buildApprovalBar(req, w))
 
 		return
 	}
 
-	approvalText := fmt.Sprintf("Executing: %q | %s | [A] once  [S] session  [G] global  [D] deny", command, ttlPreview)
-
-	// Render in status bar.
-	_ = p.statusRenderer.Render(approvalText)
-}
-
-// SetApprovalPolicyTTLs configures TTL hints for approval persistence scopes.
-func (p *PureTTY) SetApprovalPolicyTTLs(sessionTTL, globalTTL time.Duration) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.sessionPolicyTTL = sessionTTL
-	p.globalPolicyTTL = globalTTL
-}
-
-// formatApprovalTTLPreview returns a compact human-readable TTL hint string.
-func (p *PureTTY) formatApprovalTTLPreview() string {
-	p.mu.Lock()
-	sessionTTL := p.sessionPolicyTTL
-	globalTTL := p.globalPolicyTTL
-	p.mu.Unlock()
-
-	var parts []string
-	if sessionTTL > 0 {
-		parts = append(parts, fmt.Sprintf("session=%s", sessionTTL))
-	}
-
-	if globalTTL > 0 {
-		parts = append(parts, fmt.Sprintf("global=%s", globalTTL))
-	}
-
-	if len(parts) == 0 {
-		return "TTLs: disabled"
-	}
-
-	return "TTLs: " + strings.Join(parts, ", ")
+	_ = p.statusRenderer.Render(compactApprovalText(req))
 }
 
 // clearApprovalStatus clears the approval status from the status bar.
@@ -888,6 +967,9 @@ func (p *PureTTY) displayApprovalResult(req safety.ApprovalRequest, resp safety.
 
 // AppendBlock appends a new block to timeline and prints it.
 func (p *PureTTY) AppendBlock(block *blocks.Block) error {
+	// Runs before taking p.mu: the hook reads p.mu itself.
+	p.notifyTranscriptStart()
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
