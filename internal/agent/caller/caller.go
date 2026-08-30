@@ -117,8 +117,27 @@ func (lc *LLMCaller) Call(
 
 	lc.applyFinishReasonFallback(response)
 	lc.extractXMLToolCalls(ctx, response)
+	lc.emitTokenUsage(response)
 
 	return response, nil
+}
+
+// emitTokenUsage reports real token usage from a completed LLM call.
+// PromptTokens covers the full context the provider actually processed
+// (system prompt, tools, history), so the UI context counter reflects
+// reality instead of history-based estimates.
+func (lc *LLMCaller) emitTokenUsage(response *openai.ChatCompletion) {
+	if response.Usage.TotalTokens == 0 {
+		return
+	}
+
+	lc.emitter.Emit(events.Event{
+		Type:      events.EventTurnProgress,
+		Timestamp: time.Now(),
+		Data: events.TurnEventData{
+			TokensUsed: int(response.Usage.TotalTokens),
+		},
+	})
 }
 
 // CallWithTimeout wraps Call with a per-call timeout.
@@ -288,6 +307,17 @@ func (lc *LLMCaller) emitStreamDeltas(
 
 	content, thought := streamSanitizer.Process(delta.Content)
 
+	if thought != "" {
+		lc.emitter.Emit(events.Event{
+			Type:      events.EventThinkingDelta,
+			Timestamp: time.Now(),
+			Data: events.ThinkingDeltaData{
+				Content: thought,
+			},
+		})
+		lc.logger.DebugContext(ctx, "received thinking chunk", "count", chunkCount, "content_len", len(thought))
+	}
+
 	if content != "" {
 		lc.emitter.Emit(events.Event{
 			Type:      events.EventContentDelta,
@@ -298,17 +328,6 @@ func (lc *LLMCaller) emitStreamDeltas(
 			},
 		})
 		lc.logger.DebugContext(ctx, "received content chunk", "count", chunkCount, "content_len", len(content))
-	}
-
-	if thought != "" {
-		lc.emitter.Emit(events.Event{
-			Type:      events.EventThinkingDelta,
-			Timestamp: time.Now(),
-			Data: events.ThinkingDeltaData{
-				Content: thought,
-			},
-		})
-		lc.logger.DebugContext(ctx, "received thinking chunk", "count", chunkCount, "content_len", len(thought))
 	}
 }
 

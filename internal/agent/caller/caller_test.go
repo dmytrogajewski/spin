@@ -1,13 +1,88 @@
 package caller_test
 
 import (
+	"context"
+	"io"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/caller"
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
+
+// stubPromptBuilder satisfies caller.SystemPromptBuilder without enhancement.
+type stubPromptBuilder struct{}
+
+func (stubPromptBuilder) BuildSystemPrompt(_ context.Context, base string, _ []tools.Tool) string {
+	return base
+}
+
+func (stubPromptBuilder) ApplyACEPrompt(_ context.Context, prompt string, _ []*bullet.Bullet) string {
+	return prompt
+}
+
+// TestCall_EmitsRealTokenUsage verifies a successful LLM call emits
+// EventTurnProgress with the provider-reported token usage so the UI
+// context counter shows real context size, not history estimates.
+// Journey: specs/bugs/BUG-tui-context-counter.md.
+func TestCall_EmitsRealTokenUsage(t *testing.T) {
+	t.Parallel()
+
+	emitter := events.NewEventEmitter(100)
+	defer emitter.Close()
+
+	_, eventCh, err := emitter.Subscribe()
+	require.NoError(t, err)
+
+	lc := caller.New(caller.Config{
+		Provider:      llm.NewMockProvider("usage-model", llm.WithResponse("hello world")),
+		PromptBuilder: stubPromptBuilder{},
+		Emitter:       emitter,
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	msgs := []message.Message{{Role: message.RoleUser, Content: "hi"}}
+
+	_, err = lc.Call(ctx, msgs, agent.DefaultCallParams(), nil, nil)
+	require.NoError(t, err)
+
+	got := waitForTurnProgress(t, eventCh)
+
+	data, ok := got.Data.(events.TurnEventData)
+	require.True(t, ok, "TurnProgress must carry TurnEventData, got %T", got.Data)
+	assert.Positive(t, data.TokensUsed, "real usage from the provider must be reported")
+}
+
+// waitForTurnProgress drains the event channel until an EventTurnProgress
+// arrives or the wait times out.
+func waitForTurnProgress(t *testing.T, eventCh <-chan events.Event) events.Event {
+	t.Helper()
+
+	deadline := time.After(2 * time.Second)
+
+	for {
+		select {
+		case evt := <-eventCh:
+			if evt.Type == events.EventTurnProgress {
+				return evt
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for EventTurnProgress")
+		}
+	}
+}
 
 // TestNew_WithRouter_ResolvesProvider verifies that Router.ForRole is used when Router is set.
 // Kills mutant: ignoring Router would use wrong provider for non-action roles.

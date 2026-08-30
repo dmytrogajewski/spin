@@ -67,10 +67,10 @@ func (w *JSONLWriter[Item]) Append(item Item) error {
 	return nil
 }
 
-// ReadAll reads all valid items from the JSONL file.
-// Corrupted or empty lines are silently skipped.
-func (w *JSONLWriter[Item]) ReadAll() ([]Item, error) {
-	file, err := os.Open(w.path)
+// ReadJSONL reads all valid items from a JSONL file at path.
+// Missing files yield (nil, nil). Corrupted or empty lines are skipped.
+func ReadJSONL[Item any](path string) ([]Item, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -105,6 +105,12 @@ func (w *JSONLWriter[Item]) ReadAll() ([]Item, error) {
 	}
 
 	return items, nil
+}
+
+// ReadAll reads all valid items from the JSONL file.
+// Corrupted or empty lines are silently skipped.
+func (w *JSONLWriter[Item]) ReadAll() ([]Item, error) {
+	return ReadJSONL[Item](w.path)
 }
 
 // Count returns the number of items appended in this writer's lifetime.

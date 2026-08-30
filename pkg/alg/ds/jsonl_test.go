@@ -154,6 +154,26 @@ func TestJSONLWriter_nonexistent_read(t *testing.T) {
 	require.NoError(t, writer.Close())
 }
 
+func TestReadJSONL_MissingFile(t *testing.T) {
+	t.Parallel()
+
+	items, err := ReadJSONL[testItem](filepath.Join(t.TempDir(), "nope.jsonl"))
+	require.NoError(t, err)
+	require.Empty(t, items)
+}
+
+func TestReadJSONL_ValidLines(t *testing.T) {
+	t.Parallel()
+
+	path := testFilePath(t)
+	require.NoError(t, os.WriteFile(path, []byte("{\"name\":\"a\",\"value\":1}\n"), testFilePermissions))
+
+	items, err := ReadJSONL[testItem](path)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "a", items[0].Name)
+}
+
 // testFilePath returns a unique temp file path for a test.
 func testFilePath(t *testing.T) string {
 	t.Helper()

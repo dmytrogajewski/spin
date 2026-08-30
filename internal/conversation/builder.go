@@ -248,6 +248,7 @@ func (b *Builder) assembleConversation(
 		taskMode:          "regular",
 		id:                convID,
 		workDir:           b.workDir,
+		sessionDir:        b.resolveSessionDir(),
 		harnessExecutor:   harnessExec,
 		subagentManager:   b.createSubagentManager(),
 		retrievalPipeline: retrieval.NewPipeline(retrieval.NewBulletSource()),
@@ -277,7 +278,7 @@ func (b *Builder) validate() error {
 
 // initSessionIndex creates a session index and updates it with the new session (best-effort).
 func (b *Builder) initSessionIndex(ctx context.Context, convID string, sess *session.Session, logger *slog.Logger) *session.Index {
-	sessionIndexPath := filepath.Join(b.cfg.Agent.SessionDir, "index.json")
+	sessionIndexPath := filepath.Join(b.resolveSessionDir(), "index.json")
 
 	sessionIdx, idxErr := session.NewSessionIndex(ctx, sessionIndexPath, nil,
 		session.WithRebuildCallback(func() {
@@ -301,7 +302,7 @@ func (b *Builder) initSessionIndex(ctx context.Context, convID string, sess *ses
 
 // initTranscriptWriter creates a transcript writer for JSONL persistence (best-effort).
 func (b *Builder) initTranscriptWriter(ctx context.Context, convID string, logger *slog.Logger) *session.TranscriptWriter {
-	transcriptPath := filepath.Join(b.cfg.Agent.SessionDir, convID, "transcript.jsonl")
+	transcriptPath := session.TranscriptPath(b.resolveSessionDir(), convID)
 
 	if mkdirErr := os.MkdirAll(filepath.Dir(transcriptPath), 0o750); mkdirErr != nil {
 		return nil

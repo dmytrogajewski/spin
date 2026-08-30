@@ -142,6 +142,11 @@ clean:
 # Binary build targets
 # =============================================================================
 
-${GOBIN}/spin${EXE}:
+# FORCE prerequisite: always re-run go build (its cache makes this cheap);
+# a file target with no deps would silently ship stale binaries on install.
+${GOBIN}/spin${EXE}: FORCE
 	CGO_ENABLED=0 go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o ${GOBIN}/spin${EXE} ./cmd/spin
+
+.PHONY: FORCE
+FORCE:
 

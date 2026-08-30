@@ -522,6 +522,14 @@ func (a *SpinACPAgent) promptWithConversation(
 	// Execute turn via conversation (manages history automatically).
 	err = conv.RunTurn(ctx, input)
 	if err != nil {
+		slog.ErrorContext(ctx, "ACP RunTurn failed", "error", err, "session_id", req.SessionId)
+
+		// Send error as agent message so the client sees what went wrong.
+		if conn != nil {
+			errMsg := fmt.Sprintf("Error: %v", err)
+			a.sendSessionUpdate(ctx, req.SessionId, conn, acp.UpdateAgentMessageText(errMsg))
+		}
+
 		// Map error to stop reason.
 		stopReason := mapStopReasonFromError(err, nil)
 
@@ -1124,8 +1132,7 @@ func (a *SpinACPAgent) sendAvailableCommandsUpdate(ctx context.Context, sessionI
 	// Convert to ACP AvailableCommand format.
 	availableCommands := make([]acp.AvailableCommand, 0, len(allCommands))
 	for _, cmd := range allCommands {
-		// Skip exit/quit commands as they're TUI-only.
-		if cmd.Name() == "/exit" || cmd.Name() == "/quit" {
+		if commands.IsTUIOnly(cmd.Name()) {
 			continue
 		}
 

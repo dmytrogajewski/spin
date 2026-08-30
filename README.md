@@ -47,6 +47,8 @@ spin
 > implement user authentication with JWT
 > /mode review
 > analyze security of auth.go
+> /resume          # list previous sessions
+> /resume last     # continue the newest one
 ```
 
 Non-interactive execution:

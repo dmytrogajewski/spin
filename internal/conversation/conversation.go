@@ -78,6 +78,9 @@ type Conversation struct {
 	// Session index for fast session listing (optional, nil = no index).
 	sessionIndex *session.Index
 
+	// sessionDir is the on-disk root for transcripts and the session index.
+	sessionDir string
+
 	// SubAgent manager for spawning specialized subagents (optional).
 	subagentManager *subagent.Manager
 
@@ -186,6 +189,13 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 		}
 	}
 
+	if c.emitter != nil {
+		c.emitter.Emit(events.Event{
+			Type: events.EventTurnStart,
+			Data: events.TurnEventData{},
+		})
+	}
+
 	historyMessages := c.history.MessagesForLLM()
 
 	_, messages, execErr := c.harnessExecutor.Execute(ctx, input, historyMessages)
@@ -212,6 +222,8 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 		if c.transcriptWriter != nil {
 			_ = c.transcriptWriter.Append(ctx, msg)
 		}
+
+		c.touchSessionIndex(ctx)
 	}
 
 	return nil

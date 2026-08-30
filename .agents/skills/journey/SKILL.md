@@ -3,7 +3,9 @@ name: journey
 description: Journey-based feature requirements with CJM
 ---
 
-# JOURNEY-<date>: <description>
+# JOURNEY-<slug>: <description>
+
+<!-- Template for /implement only: copy to specs/journeys/JOURNEY-{slug}.md and complete every section. The slug is derived from the journey topic — never from a date or timestamp. This file is not an Agent Skill. -->
 
 ## Roadmap Link
 - Source roadmap: <source_roadmap_link>

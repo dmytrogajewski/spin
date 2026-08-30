@@ -11,7 +11,7 @@
         "streaming": false,
         "function_calling": true
       },
-      "fetched_at": "2026-04-03T22:09:46.026776095+03:00"
+      "fetched_at": "2026-08-30T23:53:28.287894335+03:00"
     },
     "fixture": {
       "capabilities": {
@@ -23,7 +23,7 @@
         "streaming": true,
         "function_calling": true
       },
-      "fetched_at": "2026-04-03T22:09:51.939746087+03:00"
+      "fetched_at": "2026-08-30T23:53:28.075218144+03:00"
     }
   }
 }

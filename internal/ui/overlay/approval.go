@@ -2,11 +2,14 @@ package overlay
 
 import (
 	"context"
+	"sync"
 
 	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 // ApprovalDialog represents a TUI approval dialog for command approval.
+// HandleKey and Show run on different goroutines, so response state is
+// guarded by mu.
 type ApprovalDialog struct {
 	request    *safety.ApprovalRequest
 	response   *safety.ApprovalResponse
@@ -15,6 +18,7 @@ type ApprovalDialog struct {
 	selected   int  // 0=Approve, 1=Deny, 2=Cancel.
 	shown      bool // tracks if Show() has been called.
 	responseCh chan safety.ApprovalResponse
+	mu         sync.Mutex
 }
 
 // NewApprovalDialog creates a new approval dialog.
@@ -69,17 +73,7 @@ func (d *ApprovalDialog) HandleKey(key string) bool {
 		return true
 	case '\x1b': // ESC.
 		// Cancel - deny with canceled reason.
-		resp := safety.ApprovalResponse{
-			RequestID: d.request.ID,
-			Approved:  false,
-			Reason:    "canceled",
-		}
-
-		d.response = &resp
-		select {
-		case d.responseCh <- resp:
-		default:
-		}
+		d.respond(false, "canceled", "")
 
 		return true
 	case '?':
@@ -93,18 +87,22 @@ func (d *ApprovalDialog) HandleKey(key string) bool {
 
 // GetResponse returns the user's response.
 func (d *ApprovalDialog) GetResponse() *safety.ApprovalResponse {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	return d.response
 }
 
 // Show displays the approval dialog and waits for user input.
 func (d *ApprovalDialog) Show(ctx context.Context) safety.ApprovalResponse {
-	// Mark as shown.
+	d.mu.Lock()
 	d.shown = true
+	d.mu.Unlock()
 
 	// Wait for response from Approve/Deny or context cancellation.
 	select {
 	case resp := <-d.responseCh:
-		d.response = &resp
+		d.setResponse(resp)
 
 		return resp
 	case <-ctx.Done():
@@ -114,7 +112,7 @@ func (d *ApprovalDialog) Show(ctx context.Context) safety.ApprovalResponse {
 			Approved:  false,
 			Reason:    "canceled",
 		}
-		d.response = &resp
+		d.setResponse(resp)
 
 		return resp
 	}
@@ -122,8 +120,19 @@ func (d *ApprovalDialog) Show(ctx context.Context) safety.ApprovalResponse {
 
 // IsVisible returns whether the dialog is currently visible.
 func (d *ApprovalDialog) IsVisible() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	// Dialog is visible if Show() has been called and not responded to.
 	return d.shown && d.response == nil
+}
+
+// setResponse records the response under the mutex.
+func (d *ApprovalDialog) setResponse(resp safety.ApprovalResponse) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.response = &resp
 }
 
 // Approve approves the request and closes the dialog.
@@ -149,7 +158,7 @@ func (d *ApprovalDialog) respond(approved bool, reason, scope string) {
 		Reason:    reason,
 		Scope:     scope,
 	}
-	d.response = &resp
+	d.setResponse(resp)
 	// Send to channel if Show() is waiting.
 	select {
 	case d.responseCh <- resp:

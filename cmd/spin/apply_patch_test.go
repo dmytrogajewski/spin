@@ -18,33 +18,14 @@ var (
 	errContentMismatch2    = errors.New("content mismatch")
 )
 
-// TestReadPatchInput_Stdin tests reading patch from stdin.
+// TestReadPatchInput_Stdin tests reading patch from the injected stdin.
 func TestReadPatchInput_Stdin(t *testing.T) {
 	t.Parallel()
 
-	// Save original stdin.
-	oldStdin := os.Stdin
-
-	defer func() { os.Stdin = oldStdin }()
-
-	// Create a pipe to simulate stdin.
-	pipeReader, pipeWriter, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	os.Stdin = pipeReader
-
-	// Write test data.
 	testPatch := "*** Begin Patch\n*** End Patch"
 
-	go func() {
-		_, _ = pipeWriter.WriteString(testPatch)
-		pipeWriter.Close()
-	}()
-
-	// Test with empty patchFile (reads from stdin).
-	result, err := readPatchInput("")
+	// Test with empty patchFile (reads from the injected stdin).
+	result, err := readPatchInput("", strings.NewReader(testPatch))
 	if err != nil {
 		t.Errorf("readPatchInput() error = %v", err)
 	}
@@ -69,7 +50,7 @@ func TestReadPatchInput_File(t *testing.T) {
 	}
 
 	// Test.
-	result, err := readPatchInput(patchFile)
+	result, err := readPatchInput(patchFile, strings.NewReader(""))
 	if err != nil {
 		t.Errorf("readPatchInput() error = %v", err)
 	}
@@ -83,7 +64,7 @@ func TestReadPatchInput_File(t *testing.T) {
 func TestReadPatchInput_FileNotFound(t *testing.T) {
 	t.Parallel()
 
-	_, err := readPatchInput("/nonexistent/file.patch")
+	_, err := readPatchInput("/nonexistent/file.patch", strings.NewReader(""))
 	if err == nil {
 		t.Error("readPatchInput() expected error, got nil")
 	}

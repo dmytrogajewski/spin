@@ -37,6 +37,8 @@ func getParseCommandTestCases() []parseCommandTestCase {
 		{name: "quit command", input: "/quit", wantCmd: true, wantName: "/quit", wantArgs: []string{}},
 		{name: "case insensitive command", input: "/MODE REVIEW", wantCmd: true, wantName: "/mode", wantArgs: []string{"review"}},
 		{name: "unknown command", input: "/unknown", wantCmd: true, wantName: "/unknown", wantArgs: []string{}},
+		{name: "resume list", input: "/resume", wantCmd: true, wantName: "/resume", wantArgs: []string{}},
+		{name: "resume last", input: "/resume last", wantCmd: true, wantName: "/resume", wantArgs: []string{"last"}},
 	}
 }
 

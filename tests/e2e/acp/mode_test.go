@@ -92,21 +92,14 @@ func TestACP_SetSessionMode_AllModes(t *testing.T) {
 		acp.SessionModeId("planning"),
 	}
 
+	// Sequential: one JSON-RPC connection cannot serve concurrent SetSessionMode calls.
 	for _, mode := range modes {
-		t.Run(string(mode), func(t *testing.T) {
-			t.Parallel()
-
-			setModeReq := acp.SetSessionModeRequest{
-				SessionId: sessionResp.SessionId,
-				ModeId:    mode,
-			}
-
-			var resp acp.SetSessionModeResponse
-
-			resp, err = client.SetSessionMode(ctx, setModeReq)
-			require.NoError(t, err, "Should set mode %s", mode)
-			assert.NotNil(t, resp)
+		resp, setErr := client.SetSessionMode(ctx, acp.SetSessionModeRequest{
+			SessionId: sessionResp.SessionId,
+			ModeId:    mode,
 		})
+		require.NoError(t, setErr, "Should set mode %s", mode)
+		assert.NotNil(t, resp)
 	}
 }
 

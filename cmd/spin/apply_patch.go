@@ -55,7 +55,7 @@ func runApplyPatch(cmd *cobra.Command, _ []string) error {
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	// Read patch text.
-	patchText, err := readPatchInput(patchFile)
+	patchText, err := readPatchInput(patchFile, cmd.InOrStdin())
 	if err != nil {
 		return fmt.Errorf("read patch: %w", err)
 	}
@@ -102,9 +102,11 @@ func runApplyPatch(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// readPatchInput reads patch from file or stdin.
-func readPatchInput(patchFile string) (string, error) {
-	var reader io.Reader
+// readPatchInput reads the patch from patchFile, or from stdin when no
+// file is given. The stdin reader is injected so tests never need to swap
+// the process-global [os.Stdin] (which races with parallel tests).
+func readPatchInput(patchFile string, stdin io.Reader) (string, error) {
+	reader := stdin
 
 	if patchFile != "" {
 		f, err := os.Open(patchFile)
@@ -114,8 +116,6 @@ func readPatchInput(patchFile string) (string, error) {
 		defer f.Close()
 
 		reader = f
-	} else {
-		reader = os.Stdin
 	}
 
 	data, err := io.ReadAll(reader)

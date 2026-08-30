@@ -168,6 +168,14 @@ func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
 			event:         &events.Event{Type: events.EventWarning},
 			expectedState: "Warning",
 		},
+		{
+			name: "ThinkingDelta",
+			event: &events.Event{
+				Type: events.EventThinkingDelta,
+				Data: events.ThinkingDeltaData{Content: "hmm"},
+			},
+			expectedState: testStateThinking,
+		},
 	}
 
 	for _, tt := range tests {

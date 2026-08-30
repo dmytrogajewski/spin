@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
@@ -653,9 +654,9 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 	ui.showApprovalStatus(req)
 
 	approvalOutput := buf.String()
-	assertContains(t, approvalOutput, "Executing:", "approval prompt")
-	assertContains(t, approvalOutput, "Key:", "normalized key preview")
-	assertContains(t, approvalOutput, "TTLs:", "TTL preview")
+	assertContains(t, approvalOutput, "approve?", "approval bar label")
+	assertContains(t, approvalOutput, "rm -rf /tmp/build", "approval bar command")
+	assertContains(t, approvalOutput, "[a]once", "approval bar key hints")
 	buf.Reset()
 
 	// Simulate event-driven status update (this would normally overwrite the approval prompt).
@@ -749,5 +750,110 @@ func assertCountInRange(t *testing.T, s, substr string, minCount, maxCount int) 
 
 	if count > maxCount {
 		t.Errorf("'%s' should appear at most %d time(s), but appeared %d\nOutput:\n%s", substr, maxCount, count, s)
+	}
+}
+
+// Journey: specs/bugs/BUG-tui-context-and-spinner.md.
+func TestProcessEvent_TurnStartStartsSpinner(t *testing.T) {
+	t.Parallel()
+
+	statusManager := status.NewManager()
+	p := &PureTTY{
+		statusManager:    statusManager,
+		statusAggregator: status.NewAggregator(statusManager),
+	}
+
+	t.Cleanup(statusManager.StopSpinner)
+
+	p.ProcessEvent(&events.Event{Type: events.EventTurnStart})
+
+	if statusManager.GetMetrics().AgentState != "Starting" {
+		t.Fatalf("agent state = %q, want Starting", statusManager.GetMetrics().AgentState)
+	}
+
+	if sp := statusManager.GetSpinner(); sp == nil || !sp.IsRunning() {
+		t.Fatal("spinner should run after EventTurnStart")
+	}
+}
+
+// Journey: specs/bugs/BUG-tui-blocks-and-thinking.md.
+func TestShouldUpdateStatusBar_IncludesThinkingDelta(t *testing.T) {
+	t.Parallel()
+
+	p := &PureTTY{}
+	if !p.shouldUpdateStatusBar(events.EventThinkingDelta) {
+		t.Fatal("status bar should redraw on EventThinkingDelta")
+	}
+}
+
+func TestNotifyTranscriptStart_RunsHookExactlyOnce(t *testing.T) {
+	t.Parallel()
+
+	p := &PureTTY{}
+
+	calls := 0
+
+	p.SetTranscriptStartHook(func() { calls++ })
+
+	p.notifyTranscriptStart()
+	p.notifyTranscriptStart()
+
+	if calls != 1 {
+		t.Fatalf("hook calls = %d, want 1", calls)
+	}
+}
+
+func TestNotifyTranscriptStart_NoHookIsNoop(t *testing.T) {
+	t.Parallel()
+
+	p := &PureTTY{}
+	p.notifyTranscriptStart() // Must not panic.
+}
+
+// TestPrintLine_TriggersTranscriptStartHook guards against background
+// transcript output scrolling the banner while the blink overlay still
+// paints at absolute rows: any transcript write must fire the hook first.
+func TestPrintLine_TriggersTranscriptStartHook(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	ui, err := NewPureTTY(&buf, WithTTY(&mockTerminalController{width: 80, height: 24}))
+	if err != nil {
+		t.Fatalf("NewPureTTY failed: %v", err)
+	}
+
+	fired := false
+
+	ui.SetTranscriptStartHook(func() { fired = true })
+
+	if printErr := ui.PrintLine("background notice"); printErr != nil {
+		t.Fatalf("PrintLine failed: %v", printErr)
+	}
+
+	if !fired {
+		t.Fatal("PrintLine must fire the transcript-start hook before writing")
+	}
+}
+
+func TestWriteRaw_PassesThroughVerbatim(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
+	model := prompt.NewModel(100)
+	printer := output.NewPrinter(&buf)
+	coord := output.NewCoordinatedWriter(printer, &rendererAdapter{renderer: renderer}, model)
+
+	p := &PureTTY{out: &buf, coord: coord}
+
+	const seq = "\x1b7\x1b[7;1Hblink\x1b8"
+	if err := p.WriteRaw(seq); err != nil {
+		t.Fatalf("WriteRaw: %v", err)
+	}
+
+	if got := buf.String(); got != seq {
+		t.Fatalf("output = %q, want %q (no newline translation, no prompt redraw)", got, seq)
 	}
 }

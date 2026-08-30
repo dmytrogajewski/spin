@@ -195,6 +195,12 @@ func TestReadKeys_HomeEnd(t *testing.T) {
 	}
 }
 
+func TestReadKeys_ShiftTab(t *testing.T) {
+	t.Parallel()
+
+	assertKeyParsed(t, []byte{0x1b, '[', 'Z'}, KeyShiftTab)
+}
+
 func TestReadKeys_PageKeys(t *testing.T) {
 	t.Parallel()
 

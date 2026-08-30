@@ -2,6 +2,7 @@ package status
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/rivo/uniseg"
@@ -170,6 +171,29 @@ func TestRenderer_Render_WithANSICodes(t *testing.T) {
 	}
 }
 
+// TestRenderer_Render_HighlightsYolo verifies the YOLO approval marker is
+// painted yellow while the rest of the status line stays bright white.
+func TestRenderer_Render_HighlightsYolo(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	renderer := NewRenderer(&buf, 80, 24)
+	buf.Reset()
+
+	err := renderer.Render("[●] 5% Ready YOLO ollama/model")
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	output := buf.String()
+	want := ansiYellowBold + "YOLO" + ansiBrightWhite
+
+	if !containsRenderer(output, want) {
+		t.Errorf("Render() output %q must color YOLO yellow (%q)", output, want)
+	}
+}
+
 func TestRenderer_Render_EmptyText(t *testing.T) {
 	t.Parallel()
 
@@ -210,6 +234,26 @@ func TestRenderer_MoveToPrompt(t *testing.T) {
 	// Should move to line 24 (height).
 	if !containsRenderer(output, "\x1b[24;1H") {
 		t.Errorf("Expected cursor positioning to prompt line, got: %q", output)
+	}
+}
+
+// TestRenderer_ScrollRegionStartsAtLineOne verifies the transcript scroll
+// region spans from the first line down to the status reserve, so the
+// welcome banner scrolls away naturally as the session appends text.
+func TestRenderer_ScrollRegionStartsAtLineOne(t *testing.T) {
+	t.Parallel()
+
+	const termHeight = 24
+
+	var buf bytes.Buffer
+
+	_ = NewRenderer(&buf, 80, termHeight)
+
+	got := buf.String()
+	want := fmt.Sprintf("\x1b[1;%dr", termHeight-statusBarLines)
+
+	if !containsRenderer(got, want) {
+		t.Fatalf("NewRenderer DECSTBM = %q, want substring %q", got, want)
 	}
 }
 

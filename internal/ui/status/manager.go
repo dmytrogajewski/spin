@@ -26,6 +26,7 @@ type Metrics struct {
 	// Agent state.
 	AgentState     string // Current agent activity (e.g., "Calling tools", "Thinking").
 	TaskMode       string // Task mode: regular, review, compact, planning.
+	ApprovalMode   string // Approval mode: ask (default) or yolo.
 	ConversationID string // Session/conversation identifier.
 
 	// Timestamps.
@@ -173,6 +174,13 @@ func (m *Manager) SetAgentStateWithContext(ctx context.Context, state string) {
 func (m *Manager) SetTaskMode(mode string) {
 	m.UpdateMetrics(func(m *Metrics) {
 		m.TaskMode = mode
+	})
+}
+
+// SetApprovalMode sets the approval mode shown in the status bar.
+func (m *Manager) SetApprovalMode(mode string) {
+	m.UpdateMetrics(func(m *Metrics) {
+		m.ApprovalMode = mode
 	})
 }
 

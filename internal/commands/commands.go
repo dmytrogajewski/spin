@@ -195,6 +195,8 @@ func (c *HelpCommand) Execute(_ context.Context, _ []string, _ CommandContext) (
 	help.WriteString("Examples:\n\n")
 	help.WriteString("  /mode review          # Switch to review mode\n")
 	help.WriteString("  /mode                 # Show current mode\n")
+	help.WriteString("  /resume               # List previous sessions\n")
+	help.WriteString("  /resume last          # Continue the newest session\n")
 	help.WriteString("  /help                 # Show this help\n")
 
 	return help.String(), nil
@@ -276,4 +278,5 @@ func init() {
 	RegisterCommand(&HelpCommand{})
 	RegisterCommand(&ExitCommand{})
 	RegisterCommand(&QuitCommand{})
+	RegisterCommand(&ResumeCommand{})
 }
