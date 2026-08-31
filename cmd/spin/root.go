@@ -88,6 +88,8 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.AddCommand(newApplyPatchCmd()) // Apply patch CLI (Feature 2.4).
 	cmd.AddCommand(newModeCmd())       // Mode management (P3.3).
 	cmd.AddCommand(newApprovalCmd())   // Approval policy management (CLI, ACP-compliant).
+	cmd.AddCommand(newPluginCmd())     // Agent Plugins 1.0 validation.
+	cmd.AddCommand(newA2ACmd())        // Local A2A child (Step 17).
 
 	return cmd
 }

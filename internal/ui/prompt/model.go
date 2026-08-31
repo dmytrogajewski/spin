@@ -168,6 +168,15 @@ func (m *Model) Cursor() int {
 	return m.buffer.Cursor()
 }
 
+// Replace sets the buffer text and cursor (grapheme index).
+func (m *Model) Replace(text string, cursor int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.buffer.SetText(text)
+	m.buffer.SetCursor(cursor)
+}
+
 // History returns the history manager (for testing/inspection).
 // Note: The returned History is not protected by Model's mutex.
 // Callers should not mutate it concurrently with Model operations.

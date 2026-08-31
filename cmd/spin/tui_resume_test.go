@@ -51,3 +51,17 @@ func TestTuiCommandContext_GetWorkDir(t *testing.T) {
 	ctx := &tuiCommandContext{conv: newResumeTestConv(t, workDir)}
 	require.Equal(t, workDir, ctx.GetWorkDir())
 }
+
+func TestTuiCommandContext_AgentTasks(t *testing.T) {
+	t.Parallel()
+
+	ctx := &tuiCommandContext{conv: newResumeTestConv(t, t.TempDir())}
+	require.NotNil(t, ctx.AgentTasks())
+}
+
+func TestTuiCommandContext_ShellTasks(t *testing.T) {
+	t.Parallel()
+
+	ctx := &tuiCommandContext{conv: newResumeTestConv(t, t.TempDir())}
+	_ = ctx.ShellTasks()
+}

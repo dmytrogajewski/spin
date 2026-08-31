@@ -1,0 +1,10 @@
+running 2 tests
+test ok ... ok
+test bad ... FAILED
+
+failures:
+
+---- bad stdout ----
+assertion failed
+
+test result: FAILED. 1 passed; 1 failed

@@ -1,5 +1,7 @@
 package prompt
 
+import "github.com/dmytrogajewski/spin/internal/agent/frame"
+
 // Section names for the Regular mode prompt.
 const (
 	SectionIdentity       = "identity"
@@ -8,6 +10,7 @@ const (
 	SectionToolGuidance   = "tool-guidance"
 	SectionResponseStyle  = "response-style"
 	SectionProjectInstr   = "project-instructions"
+	SectionTaskFrame      = "task-frame"
 )
 
 // Priority values for standard sections.
@@ -19,7 +22,10 @@ const (
 	priorityToolPrinciple  = 100
 	priorityToolGuidance   = 110
 	priorityResponseStyle  = 200
+	priorityTaskFrame      = PriorityDynamicMin
 )
+
+const taskFrameHeading = "# Task Frame"
 
 // templateIdentity is the core identity section.
 const templateIdentity = `You are an expert software engineer assistant ` +
@@ -188,4 +194,23 @@ func ProjectInstructionsSection(content string) Section {
 		Cacheable: false,
 		Template:  "# Project Instructions\n\n" + content + "\n\n---",
 	}
+}
+
+// TaskFrameSection renders a TaskFrame as a dynamic (non-cacheable) section.
+func TaskFrameSection(f frame.TaskFrame) Section {
+	return Section{
+		Name:      SectionTaskFrame,
+		Priority:  priorityTaskFrame,
+		Cacheable: false,
+		Template:  taskFrameHeading + "\n\n" + f.Render(),
+	}
+}
+
+// ApplyTaskFrame adds the dynamic TaskFrame section. Nil composer is a no-op.
+func ApplyTaskFrame(composer *Composer, f frame.TaskFrame) {
+	if composer == nil {
+		return
+	}
+
+	composer.AddSection(TaskFrameSection(f))
 }

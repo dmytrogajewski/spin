@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // TestV2_Validate_MinimalValid tests that a minimal valid v2 config passes validation.
@@ -473,6 +474,30 @@ func TestDefaultV2(t *testing.T) {
 	assert.InDelta(t, 0.7, cfg.LLM.Temperature, 1e-9, "default temperature should be 0.7")
 	assert.Equal(t, 50, cfg.Agent.MaxTurns, "default max_turns should be 50")
 	assert.False(t, cfg.ACE.Enabled, "ACE should be disabled by default")
+}
+
+// Journey: specs/journeys/JOURNEY-011-apply-compact-to-shell-exec.md.
+func TestDefaultV2_CompactEnabledOn(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultV2()
+	assert.True(t, cfg.Compact.Enabled, "compact.enabled should default on")
+	assert.Empty(t, cfg.Compact.Backend, "compact.backend should default empty (Go pipeline)")
+	assert.Equal(t, DefaultCompactReadLevel, cfg.Compact.ReadLevel)
+}
+
+func TestCompactV2_ActiveEnvOff(t *testing.T) {
+	t.Setenv("SPIN_COMPACT", "0")
+
+	cfg := CompactV2{Enabled: true}
+	assert.False(t, cfg.Active(), "SPIN_COMPACT=0 must disable compact")
+}
+
+func TestCompactV2_ActiveConfigOff(t *testing.T) {
+	t.Setenv("SPIN_COMPACT", "")
+
+	cfg := CompactV2{Enabled: false}
+	assert.False(t, cfg.Active(), "compact.enabled false must disable compact")
 }
 
 // TestV2_CrossSectionValidation_ACEPlaybookRequired tests that ACE playbook is required when enabled.
@@ -1079,6 +1104,77 @@ func TestDefaultV2_WorkflowsAndSubagents(t *testing.T) {
 
 	assert.Equal(t, WorkflowsV2{}, cfg.Workflows, "workflows should be zero value by default")
 	assert.Nil(t, cfg.Subagents, "subagents should be nil by default")
+	assert.Empty(t, cfg.Plugins.Paths, "plugins.paths should be empty by default")
+}
+
+// Journey: specs/journeys/JOURNEY-024-remote-a2a-https-client-and-card-allowlist.md.
+func TestDefaultV2_A2AAllowlistEmpty(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultV2()
+	assert.Empty(t, cfg.A2A.Allowlist, "a2a.allowlist must default empty (no remote cards)")
+}
+
+func TestPluginsV2_PathsUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	const payload = `
+llm:
+  provider: ollama
+  model: test
+  temperature: 0.7
+  max_tokens: 100
+  timeout: 1m
+agent:
+  max_turns: 1
+  timeout: 1m
+  work_dir: /tmp
+plugins:
+  paths:
+    - /opt/spin/plugins/acme
+`
+
+	var cfg V2
+	require.NoError(t, yaml.Unmarshal([]byte(payload), &cfg))
+	require.Equal(t, []string{"/opt/spin/plugins/acme"}, cfg.Plugins.Paths)
+}
+
+// Journey: specs/journeys/JOURNEY-024-remote-a2a-https-client-and-card-allowlist.md.
+func TestV2_A2AAllowlistUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	const payload = `
+a2a:
+  allowlist:
+    - https://peer.example.com/.well-known/agent-card.json
+`
+
+	var cfg V2
+	require.NoError(t, yaml.Unmarshal([]byte(payload), &cfg))
+	require.Equal(t, []string{"https://peer.example.com/.well-known/agent-card.json"}, cfg.A2A.Allowlist)
+}
+
+// Journey: specs/journeys/JOURNEY-024-remote-a2a-https-client-and-card-allowlist.md.
+func TestV2_A2AAllowlistRejectsHTTP(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultV2()
+	cfg.A2A.Allowlist = []string{"http://peer.example.com/card.json"}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "a2a.allowlist")
+}
+
+// Journey: specs/journeys/JOURNEY-024-remote-a2a-https-client-and-card-allowlist.md.
+func TestA2AV2_AllowsRequiresExactEntry(t *testing.T) {
+	t.Parallel()
+
+	empty := A2AV2{}
+	assert.False(t, empty.Allows("https://peer.example.com/card"))
+
+	listed := A2AV2{Allowlist: []string{"https://peer.example.com/card"}}
+	assert.True(t, listed.Allows("https://peer.example.com/card"))
+	assert.False(t, listed.Allows("https://other.example.com/card"))
 }
 
 // TestMCPTransportType_IsRemote tests transport type remote detection.

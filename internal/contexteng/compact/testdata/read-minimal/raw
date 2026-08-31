@@ -1,0 +1,6 @@
+package demo
+
+// Hello greets.
+func Hello(name string) string {
+	return "hi"
+}

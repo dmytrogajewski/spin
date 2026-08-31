@@ -1,0 +1,4 @@
+README.md
+cmd/spin/main.go
+internal/foo.go
+internal/bar.go

@@ -101,12 +101,21 @@ func bindEnvVars(viperInst *viper.Viper) {
 	_ = viperInst.BindEnv("agents_md.path")
 	_ = viperInst.BindEnv("agents_md.max_size")
 
+	// Plugin discovery.
+	_ = viperInst.BindEnv("plugins.paths")
+
 	// Workflows fields.
 	_ = viperInst.BindEnv("workflows.action_model")
 	_ = viperInst.BindEnv("workflows.thinking_model")
 	_ = viperInst.BindEnv("workflows.critique_model")
 	_ = viperInst.BindEnv("workflows.compact_model")
 	_ = viperInst.BindEnv("workflows.vision_model")
+
+	_ = viperInst.BindEnv("compact.enabled")
+	_ = viperInst.BindEnv("compact.backend")
+	_ = viperInst.BindEnv("compact.read_level")
+
+	_ = viperInst.BindEnv("a2a.allowlist")
 }
 
 // LoadFromFile loads configuration from a specific YAML file.
@@ -192,6 +201,7 @@ func (l *LoaderV2) applyDefaults(cfg *V2) {
 	l.applyProtocolDefaults(cfg, defaults)
 	l.applyAgentsMDDefaults(cfg, defaults)
 	l.applyMemoryDefaults(cfg, defaults)
+	l.applyCompactDefaults(cfg, defaults)
 }
 
 // applyLLMDefaults applies default values for LLM fields.
@@ -333,6 +343,20 @@ func (l *LoaderV2) applyMemoryDefaults(cfg, defaults *V2) {
 
 	if !l.viper.IsSet("memory.scratchpad.auto_evict") {
 		cfg.Memory.Scratchpad.AutoEvict = defaults.Memory.Scratchpad.AutoEvict
+	}
+}
+
+func (l *LoaderV2) applyCompactDefaults(cfg, defaults *V2) {
+	if !l.viper.IsSet("compact.enabled") {
+		cfg.Compact.Enabled = defaults.Compact.Enabled
+	}
+
+	if !l.viper.IsSet("compact.backend") {
+		cfg.Compact.Backend = defaults.Compact.Backend
+	}
+
+	if !l.viper.IsSet("compact.read_level") {
+		cfg.Compact.ReadLevel = defaults.Compact.ReadLevel
 	}
 }
 

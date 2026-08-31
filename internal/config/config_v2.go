@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/dmytrogajewski/spin/pkg/apperr"
@@ -99,6 +100,8 @@ var (
 	ErrPersistentBasePathRequired = errors.New("memory.persistent: base_path is required when persistent memory is enabled")
 	// ErrSubagentMaxIterationsNegative is a sentinel error.
 	ErrSubagentMaxIterationsNegative = errors.New("subagents: max_iterations must not be negative")
+	// ErrA2AAllowlistNotHTTPS is returned when an allowlist entry is not https.
+	ErrA2AAllowlistNotHTTPS = errors.New("a2a.allowlist url must be https")
 )
 
 // V2 is the unified configuration for Spin v2.0.
@@ -114,6 +117,49 @@ type V2 struct {
 	Memory    MemoryV2                    `mapstructure:"memory"    yaml:"memory"`
 	Workflows WorkflowsV2                 `mapstructure:"workflows" yaml:"workflows"`
 	Subagents map[string]SubagentConfigV2 `mapstructure:"subagents" yaml:"subagents"`
+	Plugins   PluginsV2                   `mapstructure:"plugins"   yaml:"plugins"`
+	Compact   CompactV2                   `mapstructure:"compact"   yaml:"compact"`
+	A2A       A2AV2                       `mapstructure:"a2a"       yaml:"a2a"`
+}
+
+// A2AV2 configures remote A2A HTTPS peers. Empty Allowlist forbids every remote card.
+type A2AV2 struct {
+	// Allowlist is the exact https:// Agent Card URLs permitted to be fetched.
+	Allowlist []string `mapstructure:"allowlist" yaml:"allowlist"`
+}
+
+// CompactV2 configures RTK-style tool-output compact (default on).
+type CompactV2 struct {
+	// Enabled controls shell and built-in read/grep/glob/ls compact (default: true).
+	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
+	// Backend is empty (Go pipeline) or "rtk" (PATH rtk when present).
+	Backend string `mapstructure:"backend" yaml:"backend"`
+	// ReadLevel is the R8 code-filter level for read_file (default: minimal).
+	ReadLevel string `mapstructure:"read_level" yaml:"read_level"`
+}
+
+// DefaultCompactReadLevel is R8 minimal (comments stripped, bodies kept).
+const DefaultCompactReadLevel = "minimal"
+
+const (
+	envSpinCompactOff = "0"
+	// CompactBackendRTK selects PATH rtk for R11 rewrite.
+	CompactBackendRTK = "rtk"
+)
+
+// Active is true when compact is enabled and SPIN_COMPACT is not 0.
+func (c CompactV2) Active() bool {
+	if os.Getenv("SPIN_COMPACT") == envSpinCompactOff {
+		return false
+	}
+
+	return c.Enabled
+}
+
+// PluginsV2 configures Agent Plugin discovery roots.
+type PluginsV2 struct {
+	// Paths are extra plugin roots or directories of plugin roots.
+	Paths []string `mapstructure:"paths" yaml:"paths"`
 }
 
 // AgentsMDV2 configures AGENTS.md project instructions support.
@@ -438,7 +484,28 @@ func (c *V2) Validate() error {
 		}
 	}
 
+	if err = c.A2A.Validate(); err != nil {
+		errs.Add(err)
+	}
+
 	return errs.Err()
+}
+
+// Allows reports whether cardURL is an exact a2a.allowlist entry.
+func (a A2AV2) Allows(cardURL string) bool {
+	return slices.Contains(a.Allowlist, cardURL)
+}
+
+// Validate rejects allowlist entries that are not absolute https URLs.
+func (a *A2AV2) Validate() error {
+	for index, rawURL := range a.Allowlist {
+		parsed, parseErr := url.Parse(rawURL)
+		if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			return fmt.Errorf("a2a.allowlist[%d]: %w", index, ErrA2AAllowlistNotHTTPS)
+		}
+	}
+
+	return nil
 }
 
 // Validate performs validation on the AgentsMD configuration.
@@ -829,6 +896,16 @@ func DefaultV2() *V2 {
 				Enabled:  false,
 				BasePath: "~/.spin/memory",
 			},
+		},
+		Plugins: PluginsV2{
+			Paths: []string{},
+		},
+		Compact: CompactV2{
+			Enabled:   true,
+			ReadLevel: DefaultCompactReadLevel,
+		},
+		A2A: A2AV2{
+			Allowlist: []string{},
 		},
 	}
 }

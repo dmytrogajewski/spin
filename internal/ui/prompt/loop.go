@@ -3,6 +3,7 @@ package prompt
 import (
 	"context"
 
+	"github.com/dmytrogajewski/spin/internal/ui/suggest"
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
@@ -25,6 +26,11 @@ type Loop struct {
 	out        chan string
 	onRender   func() // Callback to trigger re-render (for sticky coordination).
 	skipRender bool   // If true, skip direct rendering (use callback only).
+	source     *suggest.Source
+	clipper    suggest.Clipper
+	items      []suggest.Item
+	selected   int
+	workDir    string
 }
 
 // NewLoop creates a new input loop with the specified components.
@@ -100,6 +106,14 @@ func (l *Loop) dispatchNavigation(event term.KeyEvent) (done, handled bool) {
 		return l.handleUp(), true
 	case term.KeyDown:
 		return l.handleDown(), true
+	case term.KeyTab:
+		l.handleTab()
+
+		return false, true
+	case term.KeyEscape:
+		l.handleEscape()
+
+		return false, true
 	default:
 		return false, false
 	}
@@ -122,6 +136,10 @@ func (l *Loop) dispatchEditing(event term.KeyEvent) (done, handled bool) {
 		return l.handleCtrlW(), true
 	case term.KeyPaste:
 		return l.handlePaste(event), true
+	case term.KeyCtrlV:
+		l.handleCtrlV()
+
+		return false, true
 	default:
 		return false, false
 	}
@@ -201,7 +219,10 @@ func (l *Loop) handleEnd() bool {
 
 // handleUp handles up arrow key.
 func (l *Loop) handleUp() bool {
-	l.model.PrevHistory()
+	if !l.moveHint(-1) {
+		l.model.PrevHistory()
+	}
+
 	l.redraw()
 
 	return false
@@ -209,7 +230,10 @@ func (l *Loop) handleUp() bool {
 
 // handleDown handles down arrow key.
 func (l *Loop) handleDown() bool {
-	l.model.NextHistory()
+	if !l.moveHint(1) {
+		l.model.NextHistory()
+	}
+
 	l.redraw()
 
 	return false
@@ -249,6 +273,7 @@ func (l *Loop) handleCtrlL() bool {
 
 // handleEnter handles enter key.
 func (l *Loop) handleEnter(ctx context.Context) bool {
+	l.clearHints()
 	line := l.model.Submit()
 	l.redraw()
 
@@ -280,10 +305,7 @@ func (l *Loop) handleCtrlD() bool {
 
 // handlePaste handles paste events.
 func (l *Loop) handlePaste(event term.KeyEvent) bool {
-	for _, r := range string(event.Paste) {
-		l.model.Insert(r)
-	}
-
+	l.insertPaste(event.Paste)
 	l.redraw()
 
 	return false
@@ -297,6 +319,9 @@ func (l *Loop) handleUnknown() bool {
 
 // redraw triggers a prompt redraw, either via callback or directly.
 func (l *Loop) redraw() {
+	l.refreshHints()
+	l.applyHintRenderer()
+
 	if l.skipRender && l.onRender != nil {
 		// Call callback to trigger coordinated render.
 		l.onRender()

@@ -44,7 +44,7 @@ func TestFixture_ToolCallBlockVisible(t *testing.T) {
 	assertNoError(t, r)
 
 	// The tool block header must appear in output (READ block for read_file).
-	assertOutputContains(t, r, "READ")
+	assertOutputContains(t, r, "Read ")
 
 	// The final LLM response must appear.
 	assertOutputContains(t, r, "The file contains")
@@ -76,7 +76,7 @@ func TestFixture_MultiToolObservation(t *testing.T) {
 	// Both tool calls should produce visible blocks.
 	// list_directory renders as EXECUTE block with "ls" command.
 	assertOutputContains(t, r, "EXECUTE")
-	assertOutputContains(t, r, "READ")
+	assertOutputContains(t, r, "Read ")
 
 	// Final response must contain data that could only come from the LLM
 	// having seen the raw tool result (not a summarized "Read file (X lines)" stub).
@@ -164,7 +164,7 @@ func TestFixture_ReadNonexistentFile(t *testing.T) {
 	assertNoError(t, r)
 
 	// The tool block must appear (even for errors).
-	assertOutputContains(t, r, "READ")
+	assertOutputContains(t, r, "Read ")
 
 	// The final LLM response must appear (LLM recovers from tool error).
 	assertOutputContains(t, r, "The file does not exist")
@@ -210,8 +210,8 @@ func TestFixture_WriteFileBlockVisible(t *testing.T) {
 		"write to out.txt", withWorkDir(workDir), withAutoApprove())
 	assertNoError(t, r)
 
-	// write_file renders as WRITE or APPLY_PATCH block.
-	assertOutputContains(t, r, "WRITE")
+	// write_file renders as an Edited activity line.
+	assertOutputContains(t, r, "Edited")
 
 	// File must be updated on disk.
 	content, err := os.ReadFile(filepath.Join(workDir, "out.txt"))
@@ -413,7 +413,7 @@ func TestFixture_ReadThenShell(t *testing.T) {
 		"process data", withWorkDir(workDir), withAutoApprove())
 	assertNoError(t, r)
 
-	assertOutputContains(t, r, "READ")
+	assertOutputContains(t, r, "Read ")
 	assertOutputContains(t, r, "processed")
 	assertOutputContains(t, r, "Read and shell both completed")
 }
@@ -441,7 +441,7 @@ func TestFixture_FiveToolTurns(t *testing.T) {
 
 	// All tool blocks should be visible.
 	assertOutputContains(t, r, "EXECUTE")
-	assertOutputContains(t, r, "READ")
+	assertOutputContains(t, r, "Read ")
 
 	// Final response references 5th tool call content.
 	assertOutputContains(t, r, "marker99")
@@ -464,7 +464,7 @@ func TestFixture_ReadThenWrite(t *testing.T) {
 		"transform input", withWorkDir(workDir), withAutoApprove())
 	assertNoError(t, r)
 
-	assertOutputContains(t, r, "READ")
+	assertOutputContains(t, r, "Read ")
 	assertOutputContains(t, r, "Read and write done")
 
 	// File must be updated on disk.
@@ -497,7 +497,7 @@ func TestFixture_ThreeToolCalls(t *testing.T) {
 
 	// All 3 tool types visible.
 	assertOutputContains(t, r, "EXECUTE")
-	assertOutputContains(t, r, "READ")
+	assertOutputContains(t, r, "Read ")
 	assertOutputContains(t, r, "done")
 	assertOutputContains(t, r, "All three tools executed")
 }

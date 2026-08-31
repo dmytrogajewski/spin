@@ -135,12 +135,12 @@ func TestTUIToolVisualization(t *testing.T) {
 	_, err = console.SendLine("read the README.md file")
 	require.NoError(t, err)
 
-	// Look for tool block header (EXECUTE, TOOL, or READ).
+	// Look for a tool activity or execute badge.
 	_, err = console.ExpectString("EXECUTE")
 	if err != nil {
 		_, err = console.ExpectString("TOOL")
 		if err != nil {
-			_, err = console.ExpectString("READ")
+			_, err = console.ExpectString("Read ")
 		}
 	}
 

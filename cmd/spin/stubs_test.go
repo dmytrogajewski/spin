@@ -137,7 +137,7 @@ func TestAllCommandsAvailable(t *testing.T) {
 
 	rootCmd := newRootCmd()
 
-	expectedCommands := []string{"version", "completion", "exec", "config", "mcp", "debug"}
+	expectedCommands := []string{"version", "completion", "exec", "config", "mcp", "debug", "plugin"}
 	for _, cmdName := range expectedCommands {
 		found := false
 

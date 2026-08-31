@@ -13,9 +13,13 @@ import (
 
 // Status bar rendering constants.
 const (
-	minTermHeight      = 3  // minimum terminal height to render status bar.
+	minTermHeight      = 6  // status + gap + 3-line input bar + one scroll line.
 	minTermWidth       = 10 // minimum terminal width to render status bar.
-	statusBarLines     = 2  // lines reserved for status bar and prompt.
+	inputBarLines      = 3  // grey box: pad, text, pad.
+	statusGapLines     = 1  // blank row between status and the input box.
+	statusBarLines     = 5  // status + gap + padded input bar.
+	statusWidthMargin  = 2  // cells reserved when truncating the status line.
+	centerDivisor      = 2  // horizontal centering.
 	highUsageThreshold = 80 // context usage percentage for warning color.
 
 	// ansiBrightWhite is the base status bar color.
@@ -57,7 +61,7 @@ func NewRenderer(out io.Writer, width, height int) *Renderer {
 }
 
 // setupScrollingRegionLocked sets up the terminal scrolling region.
-// This reserves the bottom 2 lines for status bar and prompt,
+// This reserves the bottom chrome (status + padded input bar)
 // allowing content to scroll only in the top area.
 // Caller must hold r.mu or be in the constructor.
 func (r *Renderer) setupScrollingRegionLocked() {
@@ -96,9 +100,8 @@ func (r *Renderer) renderAtStatusLine(content string) {
 	// Save cursor position.
 	fmt.Fprint(r.out, "\x1b7")
 
-	// Position cursor at the status bar line (second to last line).
-	statusLine := r.height - 1
-	fmt.Fprintf(r.out, "\x1b[%d;1H", statusLine)
+	// Status sits above a blank gap and the 3-line input bar.
+	fmt.Fprintf(r.out, "\x1b[%d;1H", r.height-inputBarLines-statusGapLines)
 
 	// Clear the status bar line.
 	fmt.Fprint(r.out, "\x1b[2K")
@@ -130,15 +133,15 @@ func (r *Renderer) Render(statusText string) error {
 
 		// Truncate if too long (measuring actual display width).
 		displayWidth := uniseg.StringWidth(cleanText)
-		if displayWidth > r.width-statusBarLines {
-			cleanText = textwidth.MidEllipsize(cleanText, r.width-statusBarLines)
+		if displayWidth > r.width-statusWidthMargin {
+			cleanText = textwidth.MidEllipsize(cleanText, r.width-statusWidthMargin)
 			displayWidth = uniseg.StringWidth(cleanText)
 		}
 
 		// Center the status text.
 		var buf strings.Builder
 
-		padding := (r.width - displayWidth) / statusBarLines
+		padding := (r.width - displayWidth) / centerDivisor
 		if padding > 0 {
 			buf.WriteString(strings.Repeat(" ", padding))
 		}
@@ -180,8 +183,7 @@ func (r *Renderer) MoveToPrompt() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	promptLine := r.height
-	fmt.Fprintf(r.out, "\x1b[%d;1H", promptLine)
+	fmt.Fprintf(r.out, "\x1b[%d;1H", r.height-1)
 
 	return nil
 }
@@ -239,8 +241,8 @@ func (r *Renderer) buildMetricsLine(metrics *Metrics) string {
 	}
 
 	// Truncate if too long (measuring actual display width).
-	if uniseg.StringWidth(fullLine) > r.width-statusBarLines {
-		fullLine = textwidth.MidEllipsize(fullLine, r.width-statusBarLines)
+	if uniseg.StringWidth(fullLine) > r.width-statusWidthMargin {
+		fullLine = textwidth.MidEllipsize(fullLine, r.width-statusWidthMargin)
 	}
 
 	return fullLine

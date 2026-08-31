@@ -13,7 +13,11 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/lsp"
+	"github.com/dmytrogajewski/spin/internal/nav"
+	"github.com/dmytrogajewski/spin/internal/plugins"
 	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/internal/session"
+	"github.com/dmytrogajewski/spin/internal/skills"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -241,7 +245,8 @@ func (b *Builder) buildToolRegistry(exec *agent.Executor, securityService *safet
 	// Other tools (get_context, apply_patch, file_search, git_context) are already configured
 	// by the factory, but we replace them again if they need different configuration.
 	if validatorAdapt != nil || shellCtxAdapt != nil || execAdapt != nil {
-		_ = registry.RegisterOrReplace(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
+		shell := tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt)
+		_ = registry.RegisterOrReplace(shell)
 	}
 
 	err := b.registerIntegrationTools(registry)
@@ -251,5 +256,40 @@ func (b *Builder) buildToolRegistry(exec *agent.Executor, securityService *safet
 		}
 	}
 
+	catalog := b.skillCatalog()
+	tools.RegisterSkillTools(registry, catalog)
+	b.registerNavigate(registry, nil)
+
+	if b.cfg != nil {
+		tools.ApplyCompactSettings(registry, b.cfg.Compact.Active(), b.cfg.Compact.ReadLevel)
+	}
+
 	return registry
+}
+
+func (b *Builder) registerNavigate(registry *tools.Registry, sessions *session.Index) {
+	var source nav.SessionSource
+	if sessions != nil {
+		source = sessions
+	}
+
+	loaded := b.discoverPlugins().Plugins
+
+	rows := make([]nav.PluginRow, 0, len(loaded))
+
+	for _, plugin := range loaded {
+		rows = append(rows, nav.PluginRow{
+			Name:        plugin.Manifest.Name,
+			Description: plugin.Manifest.Description,
+			Root:        plugin.Root,
+		})
+	}
+
+	tools.RegisterNavigateTool(registry, nav.Discover(nav.DiscoverOpts{
+		WorkDir:      b.workDir,
+		HomeDir:      skills.OptionsFor(b.workDir).HomeDir,
+		PluginSkills: plugins.SkillContributions(loaded),
+		Plugins:      rows,
+		Sessions:     source,
+	}))
 }

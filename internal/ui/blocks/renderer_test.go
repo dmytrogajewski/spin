@@ -54,8 +54,8 @@ func TestRender_NoColorOnlyBlankLineBeforeBadge(t *testing.T) {
 	plain := strings.TrimLeft(stripANSI(out), "\n")
 	firstLine, _, _ := strings.Cut(plain, "\n")
 
-	if !strings.Contains(firstLine, AccentBarGlyph) || !strings.Contains(firstLine, "WRITE") {
-		t.Fatalf("first visible line should be accent+WRITE, got %q", firstLine)
+	if !strings.Contains(firstLine, "Edited") || !strings.Contains(firstLine, testFileName) {
+		t.Fatalf("first visible line should be activity Edited <file>, got %q", firstLine)
 	}
 }
 

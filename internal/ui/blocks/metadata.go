@@ -50,6 +50,8 @@ var (
 	ErrPendingInProgressCompletedMustEqual = errors.New("pending + in_progress + completed () must equal total ()")
 	// ErrMetadataIsEmpty is a sentinel error.
 	ErrMetadataIsEmpty = errors.New("metadata is empty")
+	// ErrSkillNameIsRequired is a sentinel error.
+	ErrSkillNameIsRequired = errors.New("skill name is required")
 )
 
 // ExecuteMeta holds metadata for EXECUTE blocks.
@@ -301,6 +303,23 @@ func SetMeta[T interface{ Validate() error }](b *Block, m T) error {
 	return nil
 }
 
+// SkillMeta holds metadata for SKILL blocks.
+type SkillMeta struct {
+	// Name is the activated skill identifier.
+	Name string `json:"name"`
+	// Source is the catalog source tag (project, user, bundled).
+	Source string `json:"source,omitempty"`
+}
+
+// Validate validates the skill metadata.
+func (m *SkillMeta) Validate() error {
+	if m.Name == "" {
+		return ErrSkillNameIsRequired
+	}
+
+	return nil
+}
+
 // ParseExecuteMeta extracts ExecuteMeta from a block's metadata.
 func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) { return ParseMeta[ExecuteMeta](b) }
 
@@ -319,6 +338,9 @@ func ParsePatchMeta(b *Block) (*PatchMeta, error) { return ParseMeta[PatchMeta](
 // ParsePlanMeta extracts PlanMeta from a block's metadata.
 func ParsePlanMeta(b *Block) (*PlanMeta, error) { return ParseMeta[PlanMeta](b) }
 
+// ParseSkillMeta extracts SkillMeta from a block's metadata.
+func ParseSkillMeta(b *Block) (*SkillMeta, error) { return ParseMeta[SkillMeta](b) }
+
 // SetExecuteMeta sets ExecuteMeta on a block.
 func SetExecuteMeta(b *Block, m *ExecuteMeta) error { return SetMeta(b, m) }
 
@@ -336,3 +358,6 @@ func SetPatchMeta(b *Block, m *PatchMeta) error { return SetMeta(b, m) }
 
 // SetPlanMeta sets PlanMeta on a block.
 func SetPlanMeta(b *Block, m *PlanMeta) error { return SetMeta(b, m) }
+
+// SetSkillMeta sets SkillMeta on a block.
+func SetSkillMeta(b *Block, m *SkillMeta) error { return SetMeta(b, m) }

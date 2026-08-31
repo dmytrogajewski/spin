@@ -153,6 +153,9 @@ func TestNewSession_SendsAvailableCommandsUpdate(t *testing.T) {
 
 		assert.True(t, commandNames["/mode"], "should include /mode command")
 		assert.True(t, commandNames["/help"], "should include /help command")
+		assert.True(t, commandNames["/skills"], "should include /skills command")
+		assert.True(t, commandNames["/tasks"], "should include /tasks command")
+		assert.True(t, commandNames["/task"], "should include /task command")
 		// Check that /exit and /quit are NOT included (TUI-only).
 		assert.False(t, commandNames["/exit"], "should not include /exit command (TUI-only)")
 		assert.False(t, commandNames["/quit"], "should not include /quit command (TUI-only)")

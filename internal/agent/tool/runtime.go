@@ -3,10 +3,12 @@ package tool
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/dmytrogajewski/spin/internal/contexteng/compact"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/safety"
@@ -31,6 +33,9 @@ type RuntimeConfig struct {
 	Emitter         *events.EventEmitter
 	WorkDir         string
 	HookRunner      *hooks.Runner
+	CompactEnabled  bool
+	CompactBackend  string
+	LookPath        func(string) (string, error)
 }
 
 // Runtime executes tool calls with validation, approval, and event emission.
@@ -41,6 +46,9 @@ type Runtime struct {
 	emitter         *events.EventEmitter
 	workDir         string
 	hookRunner      *hooks.Runner
+	compactEnabled  bool
+	compactBackend  string
+	lookPath        func(string) (string, error)
 }
 
 // NewRuntime creates a new tool runtime from config.
@@ -52,6 +60,9 @@ func NewRuntime(cfg RuntimeConfig) *Runtime {
 		emitter:         cfg.Emitter,
 		workDir:         cfg.WorkDir,
 		hookRunner:      cfg.HookRunner,
+		compactEnabled:  cfg.CompactEnabled,
+		compactBackend:  cfg.CompactBackend,
+		lookPath:        cfg.LookPath,
 	}
 }
 
@@ -104,10 +115,12 @@ func (t *Runtime) Execute(ctx context.Context, call *message.ToolCall) (*tools.T
 		return denied, nil
 	}
 
-	// Run PRE_TOOL_USE hook — may block execution.
-	if hookResult := t.runPreToolHook(ctx, call); hookResult != nil {
+	// Run PRE_TOOL_USE hook — may block execution or replace arguments.
+	if hookResult := t.runPreToolHook(ctx, call, &args); hookResult != nil {
 		return hookResult, nil
 	}
+
+	t.rewriteShellArgv(call, &args)
 
 	// Emit tool call start event.
 	t.emitToolStart(call, args)
@@ -116,14 +129,14 @@ func (t *Runtime) Execute(ctx context.Context, call *message.ToolCall) (*tools.T
 	if err != nil {
 		result := tools.NewToolErrorWithID(call.ID, err)
 		t.emitToolComplete(call, tool.Name(), &result, err)
-		t.runPostToolHook(ctx, call, &result)
+		t.runPostToolHook(ctx, call, &result, hooks.EventPostToolUseFailure)
 
 		return &result, nil
 	}
 
 	result := toolResult.WithID(call.ID)
 	t.emitToolComplete(call, tool.Name(), &result, nil)
-	t.runPostToolHook(ctx, call, &result)
+	t.runPostToolHook(ctx, call, &result, hooks.EventPostToolUse)
 
 	return &result, nil
 }
@@ -289,7 +302,7 @@ func (t *Runtime) parseToolArguments(call *message.ToolCall) (tools.ToolParamete
 }
 
 // runPreToolHook executes PRE_TOOL_USE hooks. Returns a ToolResult if blocked.
-func (t *Runtime) runPreToolHook(ctx context.Context, call *message.ToolCall) *tools.ToolResult {
+func (t *Runtime) runPreToolHook(ctx context.Context, call *message.ToolCall, args *tools.ToolParameters) *tools.ToolResult {
 	if t.hookRunner == nil {
 		return nil
 	}
@@ -308,11 +321,50 @@ func (t *Runtime) runPreToolHook(ctx context.Context, call *message.ToolCall) *t
 		return &result
 	}
 
+	applyUpdatedInput(call, args, hookResult.UpdatedInput)
+
 	return nil
 }
 
-// runPostToolHook fires POST_TOOL_USE hooks asynchronously (non-blocking).
-func (t *Runtime) runPostToolHook(ctx context.Context, call *message.ToolCall, result *tools.ToolResult) {
+func applyUpdatedInput(call *message.ToolCall, args *tools.ToolParameters, raw string) {
+	if raw == "" || args == nil {
+		return
+	}
+
+	parsed, err := tools.NewStrictArgumentParser().Parse(raw)
+	if err != nil {
+		return
+	}
+
+	call.Function.Arguments = raw
+	*args = parsed
+}
+
+func (t *Runtime) rewriteShellArgv(call *message.ToolCall, args *tools.ToolParameters) {
+	if !t.compactEnabled || args == nil || call.Function.Name != "shell_command" {
+		return
+	}
+
+	cmd := args.GetStringOr("command", "")
+
+	rewritten, used := compact.RewriteArgv(cmd, t.compactBackend, t.lookPath)
+	if !used || rewritten == cmd {
+		return
+	}
+
+	mapped := args.ToMap()
+	mapped["command"] = rewritten
+
+	raw, err := json.Marshal(mapped)
+	if err != nil {
+		return
+	}
+
+	applyUpdatedInput(call, args, string(raw))
+}
+
+// runPostToolHook fires a post-tool lifecycle event asynchronously (non-blocking).
+func (t *Runtime) runPostToolHook(ctx context.Context, call *message.ToolCall, result *tools.ToolResult, event hooks.Event) {
 	if t.hookRunner == nil {
 		return
 	}
@@ -324,5 +376,5 @@ func (t *Runtime) runPostToolHook(ctx context.Context, call *message.ToolCall, r
 		ToolResponse: result.Output,
 	}
 
-	t.hookRunner.Execute(ctx, hooks.EventPostToolUse, evtCtx)
+	t.hookRunner.Execute(ctx, event, evtCtx)
 }

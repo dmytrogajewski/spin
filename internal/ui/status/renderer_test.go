@@ -25,7 +25,7 @@ func TestRenderer_Render(t *testing.T) {
 
 	// Check that ANSI sequences were written.
 	output := buf.String()
-	if !containsRenderer(output, "\x1b[22;1H") { // Position at line 22 (24-2).
+	if !containsRenderer(output, "\x1b[20;1H") { // Status above gap + 3-line bar (24-4).
 		t.Error("Expected cursor positioning to status line")
 	}
 
@@ -51,7 +51,7 @@ func TestRenderer_Clear(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !containsRenderer(output, "\x1b[22;1H") { // Position at status line.
+	if !containsRenderer(output, "\x1b[20;1H") { // Status above gap + 3-line bar.
 		t.Error("Expected cursor positioning")
 	}
 
@@ -70,14 +70,14 @@ func TestRenderer_SetSize(t *testing.T) {
 	// Change size.
 	renderer.SetSize(120, 30)
 
-	// Render should now position at line 28 (30-2).
+	// Scroll region bottom is line 25 (30-5).
 	err := renderer.Render("Test")
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
 
 	output := buf.String()
-	if !containsRenderer(output, "\x1b[28;1H") { // Position at line 28.
+	if !containsRenderer(output, "\x1b[25;1H") {
 		t.Error("Expected cursor positioning to new status line")
 	}
 }
@@ -231,8 +231,8 @@ func TestRenderer_MoveToPrompt(t *testing.T) {
 	}
 
 	output := buf.String()
-	// Should move to line 24 (height).
-	if !containsRenderer(output, "\x1b[24;1H") {
+	// Content row of the 3-line input bar (height-1).
+	if !containsRenderer(output, "\x1b[23;1H") {
 		t.Errorf("Expected cursor positioning to prompt line, got: %q", output)
 	}
 }
@@ -270,8 +270,8 @@ func TestRenderer_MoveToScrollRegion(t *testing.T) {
 	}
 
 	output := buf.String()
-	// Should move to line 22 (height - 2).
-	if !containsRenderer(output, "\x1b[22;1H") {
+	// Bottom of the scroll region (height - 5).
+	if !containsRenderer(output, "\x1b[19;1H") {
 		t.Errorf("Expected cursor positioning to scroll region, got: %q", output)
 	}
 }
@@ -326,8 +326,8 @@ func TestRenderer_RenderMetrics(t *testing.T) {
 	if !containsRenderer(output, "\x1b8") {
 		t.Error("Expected cursor restore sequence")
 	}
-	// Check for status line positioning (line 23 = 24-1).
-	if !containsRenderer(output, "\x1b[23;1H") {
+	// Status sits above the gap + 3-line bar (line 20 = 24-4).
+	if !containsRenderer(output, "\x1b[20;1H") {
 		t.Error("Expected cursor positioning to status line")
 	}
 	// Check for metrics content.

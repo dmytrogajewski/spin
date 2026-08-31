@@ -545,6 +545,10 @@ linters:
       - path: internal/mcp/smithery(_api)?\.go
         linters: [tagliatelle]
 
+      # A2A 1.0 JSON field names are camelCase (a2a-protocol.org + SPEC).
+      - path: internal/protocol/a2a/
+        linters: [tagliatelle]
+
       # ACP approval handler uses internal notificationSender interface in return types.
       - path: internal/protocol/acp/approval_handler\.go
         linters: [ireturn]

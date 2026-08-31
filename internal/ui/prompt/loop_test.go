@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/ui/suggest"
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
@@ -21,6 +22,7 @@ type FakeRenderer struct {
 	RedrawCount int
 	LastText    string
 	LastStatus  string
+	LastHints   []string
 	ClearCount  int
 	buf         *bytes.Buffer
 	done        chan struct{} // Signal when render completes.
@@ -59,6 +61,13 @@ func (f *FakeRenderer) ClearScreen() error {
 
 func (f *FakeRenderer) SetWidth(_ int)     {}
 func (f *FakeRenderer) SetPrefix(_ string) {}
+
+func (f *FakeRenderer) SetHints(lines []string, _ int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.LastHints = append([]string(nil), lines...)
+}
 
 func (f *FakeRenderer) GetRedrawCount() int {
 	f.mu.Lock()
@@ -510,6 +519,42 @@ func TestLoop_History(t *testing.T) {
 	// Should show line1 from history.
 	if text := renderer.GetLastText(); text != "line1" {
 		t.Errorf("Expected 'line1' from history, got %q", text)
+	}
+
+	cancel()
+	<-out
+}
+
+func TestLoop_TabCompletesSlash(t *testing.T) {
+	t.Parallel()
+
+	renderer := NewFakeRenderer()
+	keys := make(chan term.KeyEvent, 8)
+	model := NewModel(100)
+	loop := NewLoop(model, renderer, keys)
+	loop.SetSource(suggest.NewSource(t.TempDir(), nil))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	out := loop.Run(ctx)
+
+	for _, r := range "/hel" {
+		keys <- term.KeyEvent{Kind: term.KeyRune, Rune: r}
+	}
+
+	if !renderer.WaitForRedraws(4, 200*time.Millisecond) {
+		t.Fatal("timeout typing /hel")
+	}
+
+	keys <- term.KeyEvent{Kind: term.KeyTab}
+
+	if !renderer.WaitForRedraws(1, 200*time.Millisecond) {
+		t.Fatal("timeout tab")
+	}
+
+	if text := renderer.GetLastText(); text != "/help" {
+		t.Fatalf("tab complete got %q want /help", text)
 	}
 
 	cancel()

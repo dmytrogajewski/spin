@@ -29,6 +29,15 @@ type Metrics struct {
 	ApprovalMode   string // Approval mode: ask (default) or yolo.
 	ConversationID string // Session/conversation identifier.
 
+	// Tool-output compact (not task mode). Unset CompactEnabled must not claim on.
+	CompactEnabled  bool
+	CompactBytesIn  int
+	CompactBytesOut int
+
+	// Task registry snapshot. TasksTotal == 0 hides the tasks N/M chip.
+	TasksActive int
+	TasksTotal  int
+
 	// Timestamps.
 	LastUpdate   time.Time
 	SessionStart time.Time
@@ -181,6 +190,29 @@ func (m *Manager) SetTaskMode(mode string) {
 func (m *Manager) SetApprovalMode(mode string) {
 	m.UpdateMetrics(func(m *Metrics) {
 		m.ApprovalMode = mode
+	})
+}
+
+// SetCompactEnabled sets whether tool-output compact is active.
+func (m *Manager) SetCompactEnabled(enabled bool) {
+	m.UpdateMetrics(func(m *Metrics) {
+		m.CompactEnabled = enabled
+	})
+}
+
+// SetTaskCounts sets active/total task-registry counts for the status bar.
+func (m *Manager) SetTaskCounts(active, total int) {
+	m.UpdateMetrics(func(metrics *Metrics) {
+		metrics.TasksActive = active
+		metrics.TasksTotal = total
+	})
+}
+
+// SetCompactSavings records last-turn ledger BytesIn/BytesOut.
+func (m *Manager) SetCompactSavings(bytesIn, bytesOut int) {
+	m.UpdateMetrics(func(m *Metrics) {
+		m.CompactBytesIn = bytesIn
+		m.CompactBytesOut = bytesOut
 	})
 }
 

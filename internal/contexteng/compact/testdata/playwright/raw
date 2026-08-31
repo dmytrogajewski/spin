@@ -1,0 +1,6 @@
+Running 2 tests
+  ✓ ok
+  ✘ bad
+    Error: expect.toBe
+
+  1 failed

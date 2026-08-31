@@ -163,6 +163,16 @@ func (e Event) PhaseCritiqueData() (PhaseCritiqueData, bool) {
 	return TypedData[PhaseCritiqueData](e)
 }
 
+// HookVetoData returns the event data as HookVetoData if possible.
+func (e Event) HookVetoData() (HookVetoData, bool) {
+	return TypedData[HookVetoData](e)
+}
+
+// TaskStateData returns the event data as TaskStateData if possible.
+func (e Event) TaskStateData() (TaskStateData, bool) {
+	return TypedData[TaskStateData](e)
+}
+
 // EventType represents the category of event.
 type EventType int
 
@@ -247,6 +257,8 @@ const (
 	EventSessionIndexRebuilt
 	// EventLSPDiagnostics indicates LSP diagnostics were received from a language server.
 	EventLSPDiagnostics
+	// EventHookVeto indicates a blocking hook rejected an operation.
+	EventHookVeto
 )
 
 // String returns the string representation of EventType.
@@ -289,6 +301,7 @@ func (e EventType) String() string {
 		"snapshot_taken",
 		"session_index_rebuilt",
 		"lsp_diagnostics",
+		"hook_veto",
 	}
 
 	if int(e) < len(names) {
@@ -444,6 +457,21 @@ type SubagentCompleteData struct {
 	Summary      string `json:"summary"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
+}
+
+// HookVetoData contains a blocking hook's visible reason.
+type HookVetoData struct {
+	Event  string `json:"event"`
+	Reason string `json:"reason"`
+	Spec   string `json:"spec,omitempty"`
+}
+
+// TaskStateData contains A2A/agent task identity and state for TUI/ACP.
+type TaskStateData struct {
+	TaskID string `json:"task_id"`
+	Spec   string `json:"spec,omitempty"`
+	State  string `json:"state"`
+	Kind   string `json:"kind,omitempty"`
 }
 
 // PhaseThinkingData contains thinking phase event information.

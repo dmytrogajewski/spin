@@ -55,6 +55,8 @@ Examples:
 
 // runExec executes the exec mode using unified TUI logic but non-interactive.
 func runExec(cmd *cobra.Command, args []string) error {
+	reapParentOrphans()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

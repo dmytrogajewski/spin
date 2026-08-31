@@ -213,10 +213,10 @@ func TestE2E_ShutdownCtrlC_ExitsCleanly(t *testing.T) {
 	helper.Keyboard.InjectCtrlC()
 
 	// Wait for shutdown.
-	time.Sleep(100 * time.Millisecond)
-
-	// UI should stop without errors
-	// (We verify this by checking that Stop() doesn't panic).
+	// Journey: specs/bugs/BUG-tui-exit-clear.md.
+	if !helper.Writer.WaitForContent("\x1b[H\x1b[2J\x1b[3J", 2*time.Second) {
+		t.Fatalf("Ctrl+C exit must clear the terminal (home + ED2 + ED3); got %q", helper.Writer.Snapshot())
+	}
 }
 
 // TestE2E_ShutdownContextCancel_ExitsCleanly tests that context cancel exits cleanly.

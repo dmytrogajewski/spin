@@ -1045,14 +1045,10 @@ func (a *SpinACPAgent) sendPlanNotifications(ctx context.Context, sessionID acp.
 	return nil
 }
 
-// Cancel cancels ongoing operations for a session.
-//
-// This cancels any in-progress prompt execution for the specified session.
-// The cancellation is done by canceling the context used for the prompt execution,
-// which will cause the agent execution to stop and return a canceled stop reason.
-//
-// If there is no in-progress execution for the session, this is a no-op.
-func (a *SpinACPAgent) Cancel(_ context.Context, notif acp.CancelNotification) error {
+// Cancel cancels the in-progress prompt and every running A2A task
+// (tasks/cancel then SIGTERM). A session with no prompt is still valid.
+// If there is no in-progress execution, prompt cancel is a no-op.
+func (a *SpinACPAgent) Cancel(ctx context.Context, notif acp.CancelNotification) error {
 	// Validate session exists.
 	a.mu.RLock()
 	_, exists := a.sessions[notif.SessionId]
@@ -1064,7 +1060,6 @@ func (a *SpinACPAgent) Cancel(_ context.Context, notif acp.CancelNotification) e
 
 	// Cancel in-progress execution for this session.
 	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	if cancel, hasCancel := a.cancels[notif.SessionId]; hasCancel {
 		// Cancel the context for this session's prompt execution.
@@ -1073,8 +1068,14 @@ func (a *SpinACPAgent) Cancel(_ context.Context, notif acp.CancelNotification) e
 		delete(a.cancels, notif.SessionId)
 	}
 
-	// Note: Permission requests are canceled automatically when the context is canceled,
-	// since the approval service checks ctx.Done() in invokeHandler.
+	mgr := a.convManager
+	a.mu.Unlock()
+
+	if mgr != nil {
+		if conv, ok := mgr.Get(string(notif.SessionId)); ok {
+			_ = conv.GetTaskRegistry().CancelAll(context.WithoutCancel(ctx))
+		}
+	}
 
 	return nil
 }

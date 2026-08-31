@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/caller"
 	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/agent/frame"
 	"github.com/dmytrogajewski/spin/internal/agent/harness"
 	"github.com/dmytrogajewski/spin/internal/agent/harness/bridge"
 	"github.com/dmytrogajewski/spin/internal/agent/prompt"
@@ -31,6 +33,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/dmytrogajewski/spin/internal/mcp"
+	"github.com/dmytrogajewski/spin/internal/plugins"
 	acppkg "github.com/dmytrogajewski/spin/internal/protocol/acp"
 	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/session"
@@ -229,6 +232,8 @@ func createACPConversationManager(cfg *config.V2, core *coreAgentResult, infra *
 
 // runACPServer starts the ACP server.
 func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
+	reapParentOrphans()
+
 	var err error
 
 	workDir, err = filepath.Abs(workDir)
@@ -264,6 +269,7 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 	}
 
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(infra.logger))
+	attachPluginMCP(ctx, cfg, workDir, mcpService)
 
 	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreResult.agent, mcpService, infra.emitter, infra.storage)
 	if err != nil {
@@ -392,9 +398,10 @@ func buildCoreAgent(
 
 	// Create hook runner for lifecycle hooks (JOURNEY-1.3).
 	hookRunner := hooks.NewRunner(hooks.Config{
-		GlobalDir:  filepath.Join("~", ".spin", "hooks"),
-		ProjectDir: filepath.Join(workDir, ".spin", "hooks"),
-		Logger:     slog.Default(),
+		GlobalDir:     acpHooksGlobalDir(),
+		ProjectDir:    filepath.Join(workDir, ".spin", "hooks"),
+		Logger:        slog.Default(),
+		PluginScripts: acpPluginHookScripts(cfg, workDir),
 	})
 
 	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
@@ -404,6 +411,9 @@ func buildCoreAgent(
 		Emitter:         emitter,
 		WorkDir:         workDir,
 		HookRunner:      hookRunner,
+		CompactEnabled:  cfg.Compact.Active(),
+		CompactBackend:  cfg.Compact.Backend,
+		LookPath:        exec.LookPath,
 	})
 
 	opts := agentBuilder.BuildOptions()
@@ -465,6 +475,8 @@ func buildACPHarnessExecutor(
 		composer.AddSection(prompt.ProjectInstructionsSection(agentsMD))
 	}
 
+	prompt.ApplyCatalog(composer, plugins.DiscoverCatalog(workDir, pluginPaths(cfg)))
+	prompt.ApplyTaskFrame(composer, frame.FromMode(agent.ModeRegular))
 	composer.SetVar("WORK_DIR", workDir)
 
 	systemPrompt := composer.Compose(nil)
@@ -532,6 +544,43 @@ func defaultSessionDir(cfg *config.V2) string {
 }
 
 // logACPServerStart logs the ACP server startup information.
+func pluginPaths(cfg *config.V2) []string {
+	if cfg == nil {
+		return nil
+	}
+
+	return cfg.Plugins.Paths
+}
+
+func attachPluginMCP(ctx context.Context, cfg *config.V2, workDir string, svc *mcp.Service) {
+	if svc == nil {
+		return
+	}
+
+	_ = plugins.AttachMCP(ctx, svc, acpDiscoverPlugins(cfg, workDir).Plugins)
+}
+
+func acpHooksGlobalDir() string {
+	return hooks.DefaultGlobalDir()
+}
+
+func acpPluginHookScripts(cfg *config.V2, workDir string) []hooks.PluginScript {
+	return plugins.HookScripts(acpDiscoverPlugins(cfg, workDir).Plugins)
+}
+
+func acpDiscoverPlugins(cfg *config.V2, workDir string) plugins.Result {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = ""
+	}
+
+	return plugins.Discover(plugins.DiscoverOptions{
+		WorkDir:    workDir,
+		HomeDir:    home,
+		ExtraPaths: pluginPaths(cfg),
+	})
+}
+
 func logACPServerStart(providerType, model, workDir string) {
 	log.Println("Starting ACP server on stdin/stdout...")
 	log.Printf("Provider: %s, Model: %s", providerType, model)

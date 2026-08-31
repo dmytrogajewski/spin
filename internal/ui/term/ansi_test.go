@@ -19,6 +19,9 @@ func TestANSIConstants(t *testing.T) {
 		{"SaveCursor", SaveCursor, "\x1b7"},
 		{"RestoreCursor", RestoreCursor, "\x1b8"},
 		{"CarriageRet", CarriageRet, "\r"},
+		{"ClearHome", ClearHome, "\x1b[H\x1b[2J\x1b[3J"},
+		{"CursorBlock", CursorBlock, "\x1b[2 q"},
+		{"CursorDefault", CursorDefault, "\x1b[0 q"},
 	}
 
 	for _, tt := range tests {

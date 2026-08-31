@@ -74,10 +74,13 @@ func (r *Renderer) Render(b *Block) (string, error) {
 	// This prevents overlap when tool blocks are appended while streaming is still active.
 	out.WriteString("\n")
 
-	// Render header.
-	header := r.RenderHeader(b)
-	out.WriteString(header)
-	out.WriteString("\n")
+	if activity := FormatActivity(b); activity != "" {
+		out.WriteString(activity)
+		out.WriteString("\n")
+	} else {
+		out.WriteString(r.RenderHeader(b))
+		out.WriteString("\n")
+	}
 
 	// Render completion status line (if tool has completed).
 	statusLine := r.RenderCompletionStatus(b)
@@ -204,7 +207,8 @@ func (r *Renderer) RenderBody(b *Block) (string, error) {
 	}
 
 	switch b.Type {
-	case BlockTypeExecute, BlockTypeNotice, BlockTypeTool:
+	case BlockTypeExecute, BlockTypeNotice, BlockTypeTool, BlockTypeSkill,
+		BlockTypeTask, BlockTypeSubagent, BlockTypeHook, BlockTypeCompact:
 		return r.renderTranscript(b)
 	case BlockTypeRead, BlockTypeGrep:
 		return r.renderCode(b)
@@ -334,12 +338,13 @@ func (r *Renderer) renderTranscript(b *Block) (string, error) {
 // renderCode renders code with line numbers (for READ, GREP).
 func (r *Renderer) renderCode(b *Block) (string, error) {
 	lines := strings.Split(b.Body, "\n")
-	lineCount := len(lines)
+	visible, hidden := truncatePreview(lines, maxPreviewLines)
+	lineCount := len(visible)
 	gutterWidth := textwidth.GutterWidth(lineCount)
 
 	var out strings.Builder
 
-	for i, line := range lines {
+	for i, line := range visible {
 		lineNum := i + 1
 
 		// Gutter.
@@ -353,41 +358,27 @@ func (r *Renderer) renderCode(b *Block) (string, error) {
 		out.WriteString("\n")
 	}
 
+	if hidden > 0 {
+		out.WriteString(r.paintTruncationFooter(hidden))
+		out.WriteString("\n")
+	}
+
 	return out.String(), nil
 }
 
 // renderDiff renders unified diff (for APPLY_PATCH).
 func (r *Renderer) renderDiff(b *Block) (string, error) {
-	lines := strings.Split(b.Body, "\n")
+	visible, hidden := truncatePreview(strings.Split(b.Body, "\n"), maxPreviewLines)
 
 	var out strings.Builder
 
-	for _, line := range lines {
-		out.WriteString(strings.Repeat(" ", S2))
+	for _, line := range visible {
+		out.WriteString(r.paintBoxLine(line))
+		out.WriteString("\n")
+	}
 
-		switch {
-		case strings.HasPrefix(line, "@@"):
-			// Hunk header.
-			out.WriteString(string(ColorBorder))
-			out.WriteString(line)
-			out.WriteString(string(ColorReset))
-		case strings.HasPrefix(line, "+"):
-			// Added line.
-			out.WriteString(string(ColorGreen))
-			out.WriteString(line)
-			out.WriteString(string(ColorReset))
-		case strings.HasPrefix(line, "-"):
-			// Removed line.
-			out.WriteString(string(ColorRed))
-			out.WriteString(line)
-			out.WriteString(string(ColorReset))
-		default:
-			// Context line.
-			out.WriteString(string(ColorMuted))
-			out.WriteString(line)
-			out.WriteString(string(ColorReset))
-		}
-
+	if hidden > 0 {
+		out.WriteString(r.paintTruncationFooter(hidden))
 		out.WriteString("\n")
 	}
 
@@ -496,6 +487,11 @@ var blockTypeColors = map[BlockType]int{
 	BlockTypeNotice:     colorGray256,
 	BlockTypeError:      colorRed256,
 	BlockTypeTool:       colorCyan256,
+	BlockTypeSkill:      colorPurple256,
+	BlockTypeTask:       colorCyan256,
+	BlockTypeSubagent:   colorBlue256,
+	BlockTypeHook:       colorYellow256,
+	BlockTypeCompact:    colorGray256,
 }
 
 // getBlockTypeColor returns the 256-color background color for a block type badge.

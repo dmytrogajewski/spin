@@ -1,0 +1,5 @@
+count: number
+name: string
+nested: object
+  ok: boolean
+tags: array

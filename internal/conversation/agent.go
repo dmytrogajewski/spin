@@ -3,7 +3,7 @@ package conversation
 import (
 	"context"
 	"fmt"
-
+	osexec "os/exec"
 	"path/filepath"
 
 	"github.com/dmytrogajewski/spin/internal/ace"
@@ -44,9 +44,10 @@ func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *age
 	}
 
 	hookRunner := hooks.NewRunner(hooks.Config{
-		GlobalDir:  filepath.Join("~", ".spin", "hooks"),
-		ProjectDir: filepath.Join(b.workDir, ".spin", "hooks"),
-		Logger:     b.getLogger(),
+		GlobalDir:     b.hooksGlobalDir(),
+		ProjectDir:    filepath.Join(b.workDir, ".spin", "hooks"),
+		Logger:        b.getLogger(),
+		PluginScripts: b.pluginHookScripts(),
 	})
 
 	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
@@ -56,6 +57,9 @@ func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *age
 		Emitter:         b.emitter,
 		WorkDir:         env.WorkDir,
 		HookRunner:      hookRunner,
+		CompactEnabled:  b.cfg.Compact.Active(),
+		CompactBackend:  b.cfg.Compact.Backend,
+		LookPath:        osexec.LookPath,
 	})
 
 	opts := agentBuilder.BuildOptions()

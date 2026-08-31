@@ -73,8 +73,14 @@ const (
 	// ColorMagenta is the magenta accent (PLAN).
 	ColorMagenta Color = "\x1b[38;5;170m"
 
-	// ColorCyan is the cyan accent (READ, SUMMARY).
+	// ColorCyan is the cyan accent (READ, SUMMARY, paths).
 	ColorCyan Color = "\x1b[38;5;51m"
+
+	// ColorDiffBoxBg is the dark green background for boxed file previews.
+	ColorDiffBoxBg = "\x1b[48;5;22m"
+
+	// ColorDiffBoxFg is the bright green foreground inside boxed previews.
+	ColorDiffBoxFg = "\x1b[38;5;114m"
 )
 
 // TagColors maps block types to their accent colors.
@@ -89,6 +95,11 @@ var TagColors = map[BlockType]Color{
 	BlockTypeTesting:    ColorBlue,
 	BlockTypeNotice:     ColorMuted,
 	BlockTypeError:      ColorRed,
+	BlockTypeSkill:      ColorMagenta,
+	BlockTypeTask:       ColorCyan,
+	BlockTypeSubagent:   ColorBlue,
+	BlockTypeHook:       ColorYellow,
+	BlockTypeCompact:    ColorMuted,
 }
 
 // GetTagColor returns the accent color for a given block type.

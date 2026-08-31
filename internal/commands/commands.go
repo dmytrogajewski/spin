@@ -197,7 +197,16 @@ func (c *HelpCommand) Execute(_ context.Context, _ []string, _ CommandContext) (
 	help.WriteString("  /mode                 # Show current mode\n")
 	help.WriteString("  /resume               # List previous sessions\n")
 	help.WriteString("  /resume last          # Continue the newest session\n")
+	help.WriteString("  /skills               # List discovered agent skills\n")
+	help.WriteString("  /tasks                # List agent and shell tasks (kind=agent|shell)\n")
+	help.WriteString("  /task wait <id>       # Wait for an A2A task\n")
+	help.WriteString("  /task cancel <id>     # Cancel agent (RPC+SIGTERM) or shell (SIGTERM/SIGKILL)\n")
+	help.WriteString("  /agents               # List builtin specs and A2A peers\n")
 	help.WriteString("  /help                 # Show this help\n")
+	help.WriteString("  /<skill> [text]       # Activate a catalog skill (Tab completes /)\n")
+	help.WriteString("  @path                 # Attach a project file (Tab completes @)\n")
+	help.WriteString("  Ctrl-V / paste        # Attach copied paths or a clipboard image\n")
+	writeCompactHelp(&help)
 
 	return help.String(), nil
 }
@@ -279,4 +288,8 @@ func init() {
 	RegisterCommand(&ExitCommand{})
 	RegisterCommand(&QuitCommand{})
 	RegisterCommand(&ResumeCommand{})
+	RegisterCommand(&SkillsCommand{})
+	RegisterCommand(&TasksCommand{})
+	RegisterCommand(&TaskCommand{})
+	RegisterCommand(&AgentsCommand{})
 }

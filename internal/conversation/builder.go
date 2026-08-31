@@ -14,7 +14,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/caller"
+	"github.com/dmytrogajewski/spin/internal/agent/child"
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/agent/frame"
 	"github.com/dmytrogajewski/spin/internal/agent/harness"
 	"github.com/dmytrogajewski/spin/internal/agent/harness/bridge"
 	acemw "github.com/dmytrogajewski/spin/internal/agent/middleware/ace"
@@ -22,6 +24,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent/prompt"
 	"github.com/dmytrogajewski/spin/internal/agent/scaffold"
 	"github.com/dmytrogajewski/spin/internal/agent/subagent"
+	"github.com/dmytrogajewski/spin/internal/agent/tasks"
 	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
@@ -36,9 +39,11 @@ import (
 	llmcache "github.com/dmytrogajewski/spin/internal/llm/cache"
 	"github.com/dmytrogajewski/spin/internal/lsp"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
+	"github.com/dmytrogajewski/spin/internal/plugins"
 	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
+	"github.com/dmytrogajewski/spin/internal/skills"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/undo"
 	"github.com/dmytrogajewski/spin/pkg/tokenizer"
@@ -174,7 +179,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	}
 
 	harnessExec, err := b.buildHarnessExecutor(
-		ctx, result.toolReg, result.toolRuntime, result.aceService, result.aceConfig, env,
+		ctx, result.toolReg, result.toolRuntime, result.aceService, result.aceConfig, env, result.hookRunner,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build harness executor: %w", err)
@@ -200,8 +205,47 @@ func (b *Builder) initBuildPrerequisites(ctx context.Context) error {
 
 	b.lspManager = lsp.NewManager("file://"+b.workDir, lsp.DefaultServerFactory)
 	b.initProviderCache(ctx, b.getLogger())
+	b.attachPluginMCP(ctx)
 
 	return nil
+}
+
+func (b *Builder) pluginPaths() []string {
+	if b.cfg == nil {
+		return nil
+	}
+
+	return b.cfg.Plugins.Paths
+}
+
+func (b *Builder) skillCatalog() skills.Catalog {
+	return plugins.DiscoverCatalog(b.workDir, b.pluginPaths())
+}
+
+func (b *Builder) attachPluginMCP(ctx context.Context) {
+	if b.mcpService == nil {
+		return
+	}
+
+	_ = plugins.AttachMCP(ctx, b.mcpService, b.discoverPlugins().Plugins)
+}
+
+func (b *Builder) pluginHookScripts() []hooks.PluginScript {
+	return plugins.HookScripts(b.discoverPlugins().Plugins)
+}
+
+func (b *Builder) hooksGlobalDir() string {
+	return hooks.DefaultGlobalDir()
+}
+
+func (b *Builder) discoverPlugins() plugins.Result {
+	opts := skills.OptionsFor(b.workDir)
+
+	return plugins.Discover(plugins.DiscoverOptions{
+		WorkDir:    b.workDir,
+		HomeDir:    opts.HomeDir,
+		ExtraPaths: b.pluginPaths(),
+	})
 }
 
 // buildExecutorAndEnvironment creates the executor and gathers environment info.
@@ -234,6 +278,10 @@ func (b *Builder) assembleConversation(
 	convID := sess.ID
 	sessionIdx := b.initSessionIndex(ctx, convID, sess, logger)
 	transcriptWriter := b.initTranscriptWriter(ctx, convID, logger)
+	taskReg := tasks.Restore(sess)
+	mgr := b.createSubagentManager(result.hookRunner)
+	tools.RegisterAgentTaskTools(result.toolReg, taskReg)
+	b.registerNavigate(result.toolReg, sessionIdx)
 
 	b.fireSessionStartHook(ctx, result.hookRunner, convID)
 
@@ -250,12 +298,17 @@ func (b *Builder) assembleConversation(
 		workDir:           b.workDir,
 		sessionDir:        b.resolveSessionDir(),
 		harnessExecutor:   harnessExec,
-		subagentManager:   b.createSubagentManager(),
+		subagentManager:   mgr,
+		taskRegistry:      taskReg,
 		retrievalPipeline: retrieval.NewPipeline(retrieval.NewBulletSource()),
 		lspManager:        b.lspManager,
 		hookRunner:        result.hookRunner,
 		transcriptWriter:  transcriptWriter,
 		sessionIndex:      sessionIdx,
+	}
+
+	if tm, ok := b.runtime.(shellTaskProvider); ok {
+		conv.shellTasks = tools.AsShellSource(tm.TaskManager())
 	}
 
 	if b.cfg != nil && b.cfg.Agent.Debug {
@@ -331,14 +384,41 @@ func (b *Builder) fireSessionStartHook(ctx context.Context, hookRunner *hooks.Ru
 	hookRunner.Execute(ctx, hooks.EventSessionStart, evtCtx)
 }
 
-// createSubagentManager creates a subagent manager with builtin specs.
-func (b *Builder) createSubagentManager() *subagent.Manager {
-	return subagent.NewManager(
-		func(_ context.Context, spec *subagent.Spec, _ string) (string, error) {
-			return "", fmt.Errorf("subagent %q: %w", spec.Name, ErrSubagentSpawnNotSupported)
-		},
-		subagent.DefaultMaxConcurrent,
-	)
+// createSubagentManager creates a subagent manager with the process executor.
+func (b *Builder) createSubagentManager(runner *hooks.Runner) *subagent.Manager {
+	mgr := subagent.NewManager(b.processExecutor(runner), subagent.DefaultMaxConcurrent)
+	mgr.SetBackgroundStarter(child.ImmediateStarter(child.ResolveBinary(), b.workDir, runner))
+	b.registerConfigSubagents(mgr)
+
+	return mgr
+}
+
+func (b *Builder) processExecutor(runner *hooks.Runner) subagent.Executor {
+	return child.NewExecutor(child.ResolveBinary(), b.workDir, b.emitter, runner)
+}
+
+func (b *Builder) registerConfigSubagents(mgr *subagent.Manager) {
+	if b.cfg == nil {
+		return
+	}
+
+	for name, sa := range b.cfg.Subagents {
+		_ = mgr.Register(overlaySpec(mgr.Spec(name), name, sa))
+	}
+}
+
+func overlaySpec(existing *subagent.Spec, name string, sa config.SubagentConfigV2) *subagent.Spec {
+	spec := &subagent.Spec{Name: name, Description: name}
+
+	if existing != nil {
+		copied := *existing
+		spec = &copied
+	}
+
+	spec.ModelOverride = sa.Model
+	spec.MaxIterations = sa.EffectiveMaxIterations()
+
+	return spec
 }
 
 // getLogger returns the configured logger or creates a default one.
@@ -348,6 +428,10 @@ func (b *Builder) getLogger() *slog.Logger {
 	}
 
 	return slog.Default()
+}
+
+type shellTaskProvider interface {
+	TaskManager() *executor.TaskManagerAdapter
 }
 
 // initializeCoreDependencies sets up optional dependencies (storage, auth).
@@ -452,6 +536,7 @@ func (b *Builder) buildHarnessExecutor(
 	aceSvc *ace.Service,
 	aceConfig *ace.Config,
 	env *agent.Environment,
+	hookRunner *hooks.Runner,
 ) (*bridge.TurnExecutor, error) {
 	logger := b.getLogger()
 
@@ -469,26 +554,7 @@ func (b *Builder) buildHarnessExecutor(
 		MaxTokens:     b.cfg.LLM.MaxTokens,
 	})
 
-	// Compose system prompt from modular sections.
-	composer := prompt.NewComposer()
-	for _, section := range prompt.DefaultRegularSections() {
-		composer.AddSection(section)
-	}
-
-	// Inject project instructions from AGENTS.md if available.
-	if agentsMD := b.resolveAgentsMDContent(); agentsMD != "" {
-		composer.AddSection(prompt.ProjectInstructionsSection(agentsMD))
-	}
-
-	// Set environment variables for ${VAR} substitution.
-	composer.SetVar("WORK_DIR", b.workDir)
-
-	if env != nil && env.ProjectType != "" {
-		composer.SetVar("PROJECT_TYPE", env.ProjectType)
-	}
-
-	// Compose system prompt from active sections (cacheable first, dynamic last).
-	systemPrompt := composer.Compose(env)
+	systemPrompt := b.composeSystemPrompt(env)
 
 	// Compile scaffold.Spec via Factory (replaces manual construction).
 	factory, factoryErr := scaffold.NewFactory(b.cfg, toolReg, nil)
@@ -510,7 +576,11 @@ func (b *Builder) buildHarnessExecutor(
 	// Build guards, middleware chain, and harness options.
 	guards := b.buildHarnessGuards()
 	middlewares := b.buildHarnessMiddlewares(aceSvc, aceConfig, undoSvc, logger)
+
 	harnessOpts := b.buildHarnessOpts()
+	if hookRunner != nil {
+		harnessOpts = append(harnessOpts, harness.WithHookRunner(hookRunner))
+	}
 
 	harnessExec, err := bridge.BuildExecutor(bridge.Config{
 		Spec:        spec,
@@ -580,7 +650,7 @@ func (b *Builder) buildHarnessGuards() []harness.Guard {
 }
 
 // maxHarnessOpts is the expected maximum number of harness options.
-const maxHarnessOpts = 4
+const maxHarnessOpts = 5
 
 // buildHarnessOpts creates harness options for contexteng adapters.
 func (b *Builder) buildHarnessOpts() []harness.Option {
@@ -664,6 +734,28 @@ func (b *Builder) initProviderCache(ctx context.Context, logger *slog.Logger) {
 			FunctionCalling: caps.FunctionCalling,
 		})
 	}
+}
+
+// composeSystemPrompt builds the Composer output used by TUI and exec.
+func (b *Builder) composeSystemPrompt(env *agent.Environment) string {
+	composer := prompt.NewComposer()
+	for _, section := range prompt.DefaultRegularSections() {
+		composer.AddSection(section)
+	}
+
+	if agentsMD := b.resolveAgentsMDContent(); agentsMD != "" {
+		composer.AddSection(prompt.ProjectInstructionsSection(agentsMD))
+	}
+
+	prompt.ApplyCatalog(composer, b.skillCatalog())
+	prompt.ApplyTaskFrame(composer, frame.FromMode(agent.ModeRegular))
+	composer.SetVar("WORK_DIR", b.workDir)
+
+	if env != nil && env.ProjectType != "" {
+		composer.SetVar("PROJECT_TYPE", env.ProjectType)
+	}
+
+	return composer.Compose(env)
 }
 
 // resolveAgentsMDContent reads AGENTS.md from the work directory if it exists.

@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/dmytrogajewski/spin/internal/agent/frame"
 )
 
 // ErrUnknownMode is a sentinel error.
@@ -223,6 +225,8 @@ func runModeDescribe(cmd *cobra.Command, args []string) error {
 
 	// Print detailed mode information.
 	fmt.Fprintf(out, "Mode: %s\n", info.name)
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "TaskFrame phase: %s\n", frame.PhaseForMode(modeName))
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "Description:\n  %s\n", info.description)
 	fmt.Fprintln(out)

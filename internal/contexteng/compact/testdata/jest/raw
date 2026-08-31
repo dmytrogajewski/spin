@@ -1,0 +1,7 @@
+PASS src/ok.test.js
+FAIL src/bad.test.js
+  ● breaks
+
+    expect(1).toBe(2)
+
+Tests:       1 failed, 1 passed, 2 total

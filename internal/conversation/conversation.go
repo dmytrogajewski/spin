@@ -10,7 +10,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/frame"
 	"github.com/dmytrogajewski/spin/internal/agent/subagent"
+	"github.com/dmytrogajewski/spin/internal/agent/tasks"
 	"github.com/dmytrogajewski/spin/internal/contexteng/history"
 	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -21,6 +23,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
+	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
@@ -70,7 +73,9 @@ type Conversation struct {
 	harnessExecutor HarnessTurnExecutor
 
 	// Hook runner for lifecycle events (optional, nil = no hooks).
-	hookRunner *hooks.Runner
+	hookRunner interface {
+		Execute(ctx context.Context, event hooks.Event, evtCtx hooks.EventContext) hooks.HookResult
+	}
 
 	// Transcript writer for JSONL persistence (optional, nil = no persistence).
 	transcriptWriter *session.TranscriptWriter
@@ -84,6 +89,12 @@ type Conversation struct {
 	// SubAgent manager for spawning specialized subagents (optional).
 	subagentManager *subagent.Manager
 
+	// A2A task registry for background children (optional).
+	taskRegistry *tasks.Registry
+
+	// Shell background processes for the unified /tasks view (optional).
+	shellTasks *tools.ShellAdapter
+
 	// Context retrieval pipeline for assembling context fragments (optional).
 	retrievalPipeline *retrieval.Pipeline
 
@@ -95,6 +106,7 @@ type Conversation struct {
 	cancel      context.CancelFunc // Cancellation context.
 	transformer EventTransformer   // Optional event transformer for protocol adapters.
 	protocolMu  sync.RWMutex       // Protects protocol fields (turnID, cancel, transformer).
+	closeOnce   sync.Once          // SESSION_END / resource close run once (Ctrl-C + defer).
 }
 
 // generateConversationID creates a new unique conversation ID.
@@ -167,6 +179,7 @@ func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
 		taskMode:        "regular",
 		id:              id,
 		workDir:         cfg.WorkDir,
+		taskRegistry:    tasks.New(),
 	}, nil
 }
 
@@ -197,6 +210,7 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	}
 
 	historyMessages := c.history.MessagesForLLM()
+	c.bindRetrievalPipeline()
 
 	_, messages, execErr := c.harnessExecutor.Execute(ctx, input, historyMessages)
 	if execErr != nil {
@@ -261,6 +275,11 @@ func (c *Conversation) GetTaskMode() string {
 	return c.taskMode
 }
 
+// CurrentFrame returns the TaskFrame for the session's /mode value.
+func (c *Conversation) CurrentFrame() frame.TaskFrame {
+	return frame.FromMode(c.GetTaskMode())
+}
+
 // GetTokenCount returns the total number of tokens used in the conversation history.
 func (c *Conversation) GetTokenCount() int {
 	return c.history.TokenCount()
@@ -303,19 +322,37 @@ func (c *Conversation) Stream() <-chan events.Event {
 	return c.emitter.Events()
 }
 
-// Close closes the conversation and cleans up resources.
-// Note: Services (git, shell, mcp) are owned by the application layer
-// and are NOT closed here - they can be shared across conversations.
+// Close cancels running A2A tasks, fires STOP then SESSION_END, and
+// cleans up resources. Services (git, shell, mcp) are owned by the
+// application layer and are NOT closed here.
 func (c *Conversation) Close(ctx context.Context) error {
-	if c.lspManager != nil {
-		_ = c.lspManager.Close(ctx)
+	var err error
+
+	c.closeOnce.Do(func() {
+		_ = c.taskRegistry.CancelAll(context.WithoutCancel(ctx))
+		c.fireStopThenSessionEnd(ctx)
+
+		if c.lspManager != nil {
+			_ = c.lspManager.Close(ctx)
+		}
+
+		if c.transcriptWriter != nil {
+			err = c.transcriptWriter.Close()
+		}
+	})
+
+	return err
+}
+
+func (c *Conversation) fireStopThenSessionEnd(ctx context.Context) {
+	if c.hookRunner == nil {
+		return
 	}
 
-	if c.transcriptWriter != nil {
-		return c.transcriptWriter.Close()
-	}
-
-	return nil
+	hookCtx := context.WithoutCancel(ctx)
+	evtCtx := hooks.EventContext{SessionID: c.id, WorkDir: c.workDir}
+	c.hookRunner.Execute(hookCtx, hooks.EventStop, evtCtx)
+	c.hookRunner.Execute(hookCtx, hooks.EventSessionEnd, evtCtx)
 }
 
 // GetTurnID returns the current turn ID.
@@ -402,10 +439,43 @@ func (c *Conversation) GetSubagentManager() *subagent.Manager {
 	return c.subagentManager
 }
 
+// GetTaskRegistry returns the A2A task registry for wait/list/cancel.
+func (c *Conversation) GetTaskRegistry() *tasks.Registry {
+	if c == nil {
+		return nil
+	}
+
+	return c.taskRegistry
+}
+
+// GetShellTasks returns the shell background adapter for the unified /tasks view.
+func (c *Conversation) GetShellTasks() *tools.ShellAdapter {
+	if c == nil {
+		return nil
+	}
+
+	return c.shellTasks
+}
+
 // GetRetrievalPipeline returns the context retrieval pipeline.
 // Returns nil if no retrieval sources are configured.
 func (c *Conversation) GetRetrievalPipeline() *retrieval.Pipeline {
 	return c.retrievalPipeline
+}
+
+type retrievalBinder interface {
+	BindRetrieval(p *retrieval.Pipeline)
+}
+
+func (c *Conversation) bindRetrievalPipeline() {
+	p := c.GetRetrievalPipeline()
+
+	binder, ok := c.harnessExecutor.(retrievalBinder)
+	if !ok {
+		return
+	}
+
+	binder.BindRetrieval(p)
 }
 
 // GetSessionIndex returns the session index for session management operations

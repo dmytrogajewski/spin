@@ -104,6 +104,10 @@ func convertEventToSessionUpdate(event events.Event, tracker *fileContentTracker
 		return convertToolCallProgress(event)
 	case events.EventToolCallComplete:
 		return convertToolCallComplete(event, tracker)
+	case events.EventSubagentSpawn, events.EventSubagentComplete,
+		events.EventBackgroundTaskStarted, events.EventBackgroundTaskStopped,
+		events.EventHookVeto:
+		return convertA2AThought(event)
 	default:
 		// Event type not mapped to ACP notification.
 		return acp.SessionUpdate{}, false
@@ -383,4 +387,35 @@ func convertToolCallComplete(event events.Event, tracker *fileContentTracker) (a
 	update := acp.UpdateToolCall(toolCallID, opts...)
 
 	return update, true
+}
+
+const kindA2A = "kind=a2a"
+
+func convertA2AThought(event events.Event) (acp.SessionUpdate, bool) {
+	text := formatA2AThought(event)
+	if text == "" {
+		return acp.SessionUpdate{}, false
+	}
+
+	return acp.UpdateAgentThoughtText(text + "\n"), true
+}
+
+func formatA2AThought(event events.Event) string {
+	if data, ok := event.TaskStateData(); ok {
+		return kindA2A + " task=" + data.TaskID + " state=" + data.State
+	}
+
+	if data, ok := event.SubagentSpawnData(); ok {
+		return kindA2A + " subagent=" + data.AgentType + " state=spawn"
+	}
+
+	if data, ok := event.SubagentCompleteData(); ok {
+		return kindA2A + " subagent=" + data.AgentType + " state=complete"
+	}
+
+	if data, ok := event.HookVetoData(); ok {
+		return kindA2A + " hook=" + data.Event + " reason=" + data.Reason
+	}
+
+	return ""
 }

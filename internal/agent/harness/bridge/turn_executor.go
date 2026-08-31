@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/dmytrogajewski/spin/internal/agent/harness"
+	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
 	"github.com/dmytrogajewski/spin/internal/message"
 )
 
@@ -29,4 +30,13 @@ func (t *TurnExecutor) Execute(
 	}
 
 	return resp.Output, resp.Messages, nil
+}
+
+// BindRetrieval attaches the conversation retrieval pipeline for Assemble.
+func (t *TurnExecutor) BindRetrieval(p *retrieval.Pipeline) {
+	if t == nil || t.executor == nil {
+		return
+	}
+
+	t.executor.SetRetrievalPipeline(p)
 }

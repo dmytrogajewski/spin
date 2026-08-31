@@ -1,10 +1,14 @@
 package conversation
 
+// Journey: specs/journeys/JOURNEY-002-discover-skill-catalog.md.
+
 import (
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +24,8 @@ import (
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/safety"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
+	"github.com/dmytrogajewski/spin/internal/skills"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // testConfig creates a valid test configuration.
@@ -162,6 +168,7 @@ func TestBuilder_Build_Minimal(t *testing.T) {
 	assert.NotNil(t, conv.agent)
 	assert.NotNil(t, conv.history)
 	assert.NotNil(t, conv.emitter)
+	assert.NotNil(t, conv.GetShellTasks())
 
 	// Services should be nil (not provided).
 	assert.Nil(t, conv.gitService)
@@ -301,4 +308,109 @@ func TestBuilder_ServiceReuse(t *testing.T) {
 	assert.NotNil(t, conv2.gitService)
 	info := conv2.gitService.GetContextInfo()
 	assert.NotNil(t, info)
+}
+
+func TestBuilder_composeSystemPrompt_IncludesProjectSkills(t *testing.T) {
+	t.Parallel()
+
+	workDir := t.TempDir()
+	skillDir := filepath.Join(workDir, ".agents", "skills", "alpha")
+	require.NoError(t, os.MkdirAll(skillDir, 0o750))
+
+	content := "---\nname: alpha\ndescription: Project alpha description.\n---\n\n## MustNotAppearInCatalog\n\nSecret body.\n"
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, skills.FileName), []byte(content), 0o600))
+
+	rt, emitter, provider := createTestRuntime(t, workDir)
+	b := NewBuilder(testConfig(), workDir, rt, emitter, provider)
+
+	composed := b.composeSystemPrompt(nil)
+	require.Contains(t, composed, "alpha")
+	require.Contains(t, composed, "Project alpha description.")
+	require.NotContains(t, composed, "## MustNotAppearInCatalog")
+	require.NotContains(t, composed, "Secret body.")
+}
+
+// Journey: specs/journeys/JOURNEY-014-taskframe-on-every-parent-turn.md.
+func TestBuilder_composeSystemPrompt_IncludesTaskFrame(t *testing.T) {
+	t.Parallel()
+
+	workDir := t.TempDir()
+	rt, emitter, provider := createTestRuntime(t, workDir)
+	b := NewBuilder(testConfig(), workDir, rt, emitter, provider)
+
+	composed := b.composeSystemPrompt(nil)
+	require.Contains(t, composed, "# Task Frame")
+	require.Contains(t, composed, `"phase":"regular"`)
+}
+
+func TestBuilder_composeSystemPrompt_FrameOmitsAgentsBody(t *testing.T) {
+	t.Parallel()
+
+	const bodySentinel = "UNIQUE_JOURNEY014_AGENTS_BODY"
+
+	workDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(workDir, "AGENTS.md"),
+		[]byte(bodySentinel+"\nDo not copy this into the frame.\n"), 0o600))
+
+	rt, emitter, provider := createTestRuntime(t, workDir)
+	b := NewBuilder(testConfig(), workDir, rt, emitter, provider)
+
+	composed := b.composeSystemPrompt(nil)
+	idx := strings.Index(composed, "# Task Frame")
+	require.GreaterOrEqual(t, idx, 0)
+	require.NotContains(t, composed[idx:], bodySentinel)
+}
+
+func TestBuilder_SkillTool_ProgressiveDisclosure(t *testing.T) {
+	t.Parallel()
+
+	const (
+		skillBodyHeading = "## MustNotAppearInCatalog"
+		extraSentinel    = "UNIQUE_BUILDER_EXTRA_SENTINEL"
+		nestedSentinel   = "UNIQUE_BUILDER_NESTED_SENTINEL"
+	)
+
+	workDir := t.TempDir()
+	skillDir := filepath.Join(workDir, ".agents", "skills", "alpha")
+	require.NoError(t, os.MkdirAll(filepath.Join(skillDir, "references"), 0o750))
+
+	content := "---\nname: alpha\ndescription: Project alpha description.\n---\n\n" +
+		skillBodyHeading + "\n\nSecret body.\nSee [extra](references/extra.md).\n"
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, skills.FileName), []byte(content), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "references", "extra.md"),
+		[]byte(extraSentinel+"\n\nSee [nested](nested.md).\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "references", "nested.md"),
+		[]byte(nestedSentinel+"\n"), 0o600))
+
+	rt, emitter, provider := createTestRuntime(t, workDir)
+	b := NewBuilder(testConfig(), workDir, rt, emitter, provider)
+
+	composed := b.composeSystemPrompt(nil)
+	require.Contains(t, composed, "alpha")
+	require.Contains(t, composed, "Project alpha description.")
+	require.NotContains(t, composed, skillBodyHeading)
+	require.NotContains(t, composed, extraSentinel)
+
+	reg := b.buildToolRegistry(nil, nil, &agent.Environment{WorkDir: workDir})
+	tool, err := reg.Get("skill")
+	require.NoError(t, err)
+
+	params, err := tools.FromMap(map[string]any{"name": "alpha"})
+	require.NoError(t, err)
+
+	activated, execErr := tool.Execute(context.Background(), params)
+	require.NoError(t, execErr)
+	require.True(t, activated.Success)
+	require.Contains(t, activated.Output, skillBodyHeading)
+	require.Contains(t, activated.Output, skillDir)
+	require.NotContains(t, activated.Output, extraSentinel)
+
+	readParams, err := tools.FromMap(map[string]any{"name": "alpha", "path": "references/extra.md"})
+	require.NoError(t, err)
+
+	read, readErr := tool.Execute(context.Background(), readParams)
+	require.NoError(t, readErr)
+	require.True(t, read.Success)
+	require.Contains(t, read.Output, extraSentinel)
+	require.NotContains(t, read.Output, nestedSentinel)
 }

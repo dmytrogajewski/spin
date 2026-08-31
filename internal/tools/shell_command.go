@@ -8,14 +8,16 @@ import (
 
 	"github.com/google/shlex"
 
+	"github.com/dmytrogajewski/spin/internal/contexteng/compact"
 	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 const (
-	classificationLow    = 2
-	classificationMedium = 3
-	classificationHigh   = 4
-	shellCommandName     = "shell_command"
+	classificationLow     = 2
+	classificationMedium  = 3
+	classificationHigh    = 4
+	shellCommandName      = "shell_command"
+	compactLedgerKeyCount = 2
 )
 
 // CommandValidator validates commands for security (to avoid import cycle with security package).
@@ -68,9 +70,10 @@ type ExecutionResult interface {
 
 // ShellCommandTool provides unified shell command execution and introspection.
 type ShellCommandTool struct {
-	validator CommandValidator
-	shellCtx  ShellContext
-	executor  CommandExecutor
+	validator      CommandValidator
+	shellCtx       ShellContext
+	executor       CommandExecutor
+	compactEnabled *bool
 }
 
 // simpleCommand implements CommandInfo interface.
@@ -100,6 +103,19 @@ func NewShellCommandTool(validator CommandValidator, shellCtx ShellContext, exec
 		shellCtx:  shellCtx,
 		executor:  executor,
 	}
+}
+
+// SetCompactEnabled overrides default-on compact for this tool.
+func (t *ShellCommandTool) SetCompactEnabled(enabled bool) {
+	t.compactEnabled = &enabled
+}
+
+func (t *ShellCommandTool) compactOn() bool {
+	if t.compactEnabled != nil {
+		return *t.compactEnabled
+	}
+
+	return true
 }
 
 // Name returns the tool name.
@@ -204,7 +220,7 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 		return t.buildErrorResult(result, execErr), nil
 	}
 
-	return t.buildSuccessResult(result), nil
+	return t.buildSuccessResult(result, cmdStr), nil
 }
 
 // resolveWorkDir resolves the working directory from params, shell context, or os.
@@ -279,13 +295,23 @@ func (t *ShellCommandTool) buildErrorResult(result ExecutionResult, execErr erro
 }
 
 // buildSuccessResult constructs a ToolResult from a successful execution.
-func (t *ShellCommandTool) buildSuccessResult(result ExecutionResult) ToolResult {
+func (t *ShellCommandTool) buildSuccessResult(result ExecutionResult, cmdStr string) ToolResult {
 	if result == nil {
 		return NewToolResult("")
 	}
 
 	exitCode := result.GetExitCode()
-	output := execx.MergeOutputs(result.GetStdout(), result.GetStderr())
+	stdout, stderr := result.GetStdout(), result.GetStderr()
+
+	meta := result.GetMetadata()
+
+	if compact.ShouldApply(t.compactOn(), cmdStr) {
+		applied := compact.Default().Apply(cmdStr, []byte(stdout), []byte(stderr), exitCode)
+		stdout, stderr = string(applied.Stdout), string(applied.Stderr)
+		meta = withCompactLedger(meta, applied.Ledger)
+	}
+
+	output := execx.MergeOutputs(stdout, stderr)
 
 	var errorMsg string
 	if exitCode != 0 {
@@ -296,8 +322,20 @@ func (t *ShellCommandTool) buildSuccessResult(result ExecutionResult) ToolResult
 		Success:  exitCode == 0,
 		Output:   TruncateOutput(output),
 		Error:    errorMsg,
-		Metadata: result.GetMetadata(),
+		ExitCode: exitCode,
+		Metadata: meta,
 	}
+}
+
+func withCompactLedger(meta map[string]any, led compact.Ledger) map[string]any {
+	if meta == nil {
+		meta = make(map[string]any, compactLedgerKeyCount)
+	}
+
+	meta[compact.MetaBytesIn] = led.BytesIn
+	meta[compact.MetaBytesOut] = led.BytesOut
+
+	return meta
 }
 
 // getEnvironment returns environment variables.

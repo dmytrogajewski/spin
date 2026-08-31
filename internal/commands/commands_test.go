@@ -1,11 +1,17 @@
 package commands
 
+// Journey: specs/journeys/JOURNEY-002-discover-skill-catalog.md.
+
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/skills"
 )
 
 // mockCommandContext is a mock implementation of CommandContext for testing.
@@ -120,11 +126,20 @@ func TestHelpCommand(t *testing.T) {
 	assert.Contains(t, result, "/mode")
 	assert.Contains(t, result, "/help")
 	assert.Contains(t, result, "/resume")
+	assert.Contains(t, result, "/skills")
+	assert.Contains(t, result, "/tasks")
+	assert.Contains(t, result, "/agents")
+	assert.Contains(t, result, "/task wait")
 	assert.Contains(t, result, "Available modes:")
 	assert.Contains(t, result, "regular")
 	assert.Contains(t, result, "review")
 	assert.Contains(t, result, "compact")
 	assert.Contains(t, result, "planning")
+	assert.Contains(t, result, "SPIN_COMPACT=0")
+	assert.Contains(t, result, "compact.enabled")
+	assert.Contains(t, result, "/<skill>")
+	assert.Contains(t, result, "@path")
+	assert.Contains(t, result, "Ctrl-V")
 }
 
 // TestExitCommand tests the /exit command.
@@ -206,6 +221,9 @@ func TestIsTUIOnly(t *testing.T) {
 	assert.True(t, IsTUIOnly("/resume"))
 	assert.True(t, IsTUIOnly("/exit"))
 	assert.False(t, IsTUIOnly("/mode"))
+	assert.False(t, IsTUIOnly("/skills"))
+	assert.False(t, IsTUIOnly("/tasks"))
+	assert.False(t, IsTUIOnly("/agents"))
 }
 
 // TestExecuteCommand tests command execution.
@@ -249,4 +267,47 @@ func TestListCommands(t *testing.T) {
 	assert.True(t, commandNames["/exit"], "should have /exit command")
 	assert.True(t, commandNames["/quit"], "should have /quit command")
 	assert.True(t, commandNames["/resume"], "should have /resume command")
+	assert.True(t, commandNames["/skills"], "should have /skills command")
+	assert.True(t, commandNames["/tasks"], "should have /tasks command")
+	assert.True(t, commandNames["/task"], "should have /task command")
+	assert.True(t, commandNames["/agents"], "should have /agents command")
+}
+
+func TestSkillsCommand_ListsCatalog(t *testing.T) {
+	t.Parallel()
+
+	workDir := t.TempDir()
+	skillDir := filepath.Join(workDir, ".agents", "skills", "alpha")
+	require.NoError(t, os.MkdirAll(skillDir, 0o750))
+
+	content := "---\nname: alpha\ndescription: Project alpha description.\n---\n\n## MustNotAppearInCatalog\n"
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, skills.FileName), []byte(content), 0o600))
+
+	cmd := &SkillsCommand{
+		options: func(dir string) skills.Options {
+			return skills.Options{WorkDir: dir}
+		},
+	}
+	assert.Equal(t, "/skills", cmd.Name())
+	assert.NotEmpty(t, cmd.Description())
+
+	result, err := cmd.Execute(context.Background(), nil, &mockCommandContext{workDir: workDir})
+	require.NoError(t, err)
+	assert.Contains(t, result, "alpha")
+	assert.Contains(t, result, string(skills.SourceProject))
+	assert.Contains(t, result, "Project alpha description.")
+	assert.NotContains(t, result, "## MustNotAppearInCatalog")
+}
+
+func TestSkillsCommand_EmptyCatalog(t *testing.T) {
+	t.Parallel()
+
+	cmd := &SkillsCommand{
+		options: func(dir string) skills.Options {
+			return skills.Options{WorkDir: dir}
+		},
+	}
+	result, err := cmd.Execute(context.Background(), nil, &mockCommandContext{workDir: t.TempDir()})
+	require.NoError(t, err)
+	assert.Equal(t, skills.EmptyCatalogMessage, result)
 }
