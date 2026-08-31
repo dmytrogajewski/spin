@@ -1,5 +1,7 @@
 package subagent
 
+import "fmt"
+
 const (
 	// NameExplorer is the read-only codebase navigation subagent.
 	NameExplorer = "explorer"
@@ -100,4 +102,15 @@ func Builtins() []*Spec {
 			MaxIterations: defaultMaxIterations,
 		},
 	}
+}
+
+// Lookup returns the builtin Spec with the given name.
+func Lookup(name string) (*Spec, error) {
+	for _, spec := range Builtins() {
+		if spec.Name == name {
+			return spec, nil
+		}
+	}
+
+	return nil, fmt.Errorf("%w: %q", ErrSpecNotFound, name)
 }

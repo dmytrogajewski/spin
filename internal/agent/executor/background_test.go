@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
+	agtasks "github.com/dmytrogajewski/spin/internal/agent/tasks"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 const (
@@ -134,6 +136,23 @@ func TestBackgroundTask_GracefulKill(t *testing.T) {
 
 	killErr := mgr.Kill(taskID)
 	require.NoError(t, killErr)
+
+	info := findTask(t, mgr, taskID)
+	require.Equal(t, executor.TaskKilled, info.State)
+}
+
+// Journey: specs/journeys/JOURNEY-021-unified-task-view.md.
+func TestCancelView_ShellRowUsesGracefulKill(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	taskID, _, err := mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
+	require.NoError(t, err)
+
+	time.Sleep(testSleepDuration)
+
+	src := tools.AsShellSource(executor.NewTaskManagerAdapter(mgr))
+	require.NoError(t, agtasks.CancelView(t.Context(), agtasks.TypedID(agtasks.KindShell, taskID), agtasks.New(), src))
 
 	info := findTask(t, mgr, taskID)
 	require.Equal(t, executor.TaskKilled, info.State)

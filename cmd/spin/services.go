@@ -189,6 +189,8 @@ func createBuiltinRuntime(
 	validator := securitySvc.Validator()
 
 	// Create builtin executor.
+	compactOn := cfg.Compact.Active()
+
 	return executor.NewBuiltinRuntime(executor.BuiltinRuntimeConfig{
 		WorkDir:         workDir,
 		Emitter:         emitter,
@@ -201,6 +203,7 @@ func createBuiltinRuntime(
 		UI:              ui,
 		ApprovalHandler: approvalHandler,
 		Logger:          logger,
+		CompactEnabled:  &compactOn,
 	})
 }
 

@@ -8,6 +8,13 @@ type CostTracking struct {
 	APICallCount int     `json:"api_call_count"`
 }
 
+// AgentTask is a persisted A2A registry row (id, spec, state).
+type AgentTask struct {
+	ID    string `json:"id"`
+	Spec  string `json:"spec"`
+	State string `json:"state"`
+}
+
 // Metadata contains session metadata.
 type Metadata struct {
 	Title        string       // User-friendly session title.
@@ -17,4 +24,5 @@ type Metadata struct {
 	TokensUsed   int          // Total tokens consumed (input + output).
 	LastError    string       // Last error message (if any).
 	CostTracking CostTracking `json:"cost_tracking"`
+	AgentTasks   []AgentTask  `json:"agent_tasks,omitempty"`
 }

@@ -35,6 +35,7 @@ func TestKeyKind_String(t *testing.T) {
 		{KeyCtrlK, "Ctrl-K"},
 		{KeyCtrlW, "Ctrl-W"},
 		{KeyCtrlL, "Ctrl-L"},
+		{KeyCtrlV, "Ctrl-V"},
 		{KeyPaste, "Paste"},
 		{KeyF1, "F1"},
 		{KeyF2, "F2"},
@@ -117,6 +118,7 @@ func TestReadKeys_ControlKeys(t *testing.T) {
 		{"Ctrl-K", []byte{0x0b}, KeyCtrlK},
 		{"Ctrl-W", []byte{0x17}, KeyCtrlW},
 		{"Ctrl-L", []byte{0x0c}, KeyCtrlL},
+		{"Ctrl-V", []byte{0x16}, KeyCtrlV},
 	}
 
 	for _, tt := range tests {

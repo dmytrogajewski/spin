@@ -1,0 +1,5 @@
+=================================== FAILURES ===================================
+E       assert 1 == 2
+test_demo.py:4: AssertionError
+FAILED test_demo.py::test_broken - assert 1 == 2
+========================= 1 failed, 2 passed in 0.01s ==========================

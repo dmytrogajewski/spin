@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/rivo/uniseg"
 )
 
 // redrawCase is a test case for renderer redraw tests.
@@ -361,6 +363,100 @@ func assertRedrawNoError(t *testing.T, width int, prefix, text string, cursor in
 
 	if err := r.Redraw(model, ""); err != nil {
 		t.Errorf("Redraw() unexpected error: %v", err)
+	}
+}
+
+// Journey: specs/bugs/BUG-tui-visual-polish.md.
+func TestRenderer_InputBar_FullWidthGrey(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	const width = 20
+
+	r := NewTermRenderer(&buf, width, DefaultPrefix)
+	r.SetInputBar(true)
+
+	model := NewModel(100)
+	if err := r.Redraw(model, ""); err != nil {
+		t.Fatalf("Redraw() error = %v", err)
+	}
+
+	got := buf.String()
+	if !strings.Contains(got, ColorPromptBar) {
+		t.Fatalf("input bar missing grey background, got %q", got)
+	}
+
+	inset := strings.Repeat(" ", InputBarPad)
+	if !strings.Contains(got, inset+DefaultPrefix) {
+		t.Fatalf("input bar missing %d-cell inset before prefix, got %q", InputBarPad, got)
+	}
+
+	if !strings.Contains(got, ColorCursorCell) {
+		t.Fatalf("input bar missing block caret, got %q", got)
+	}
+
+	used := InputBarPad + uniseg.StringWidth(DefaultPrefix) + 1 // inset + prefix + caret.
+	if used > width || !strings.Contains(got, strings.Repeat(" ", width-used)) {
+		t.Fatalf("input bar not padded to width %d, got %q", width, got)
+	}
+
+	if !strings.Contains(got, "\x1b[0m") {
+		t.Fatalf("input bar missing reset, got %q", got)
+	}
+}
+
+func TestRenderer_InputBar_PaintsVerticalPadding(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	r := NewTermRenderer(&buf, 20, DefaultPrefix)
+	r.SetInputBar(true)
+	r.SetHeight(10)
+
+	if err := r.Redraw(NewModel(100), ""); err != nil {
+		t.Fatalf("Redraw() error = %v", err)
+	}
+
+	got := buf.String()
+	if !strings.Contains(got, "\x1b[8;1H") || !strings.Contains(got, "\x1b[10;1H") {
+		t.Fatalf("padded bar must occupy rows height-2..height, got %q", got)
+	}
+
+	if !strings.Contains(got, "\x1b[9;1H") {
+		t.Fatalf("text row should be the middle bar line, got %q", got)
+	}
+
+	if !strings.Contains(got, "\x1b[7;1H\x1b[2K") {
+		t.Fatalf("one blank gap row must sit above the box, got %q", got)
+	}
+
+	barRows := strings.Count(got, ColorPromptBar)
+	if barRows < 3 {
+		t.Fatalf("want at least 3 grey bar rows, got %d in %q", barRows, got)
+	}
+}
+
+func TestRenderer_InputBar_CaretFollowsText(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	r := NewTermRenderer(&buf, 40, DefaultPrefix)
+	r.SetInputBar(true)
+
+	model := NewModel(100)
+	model.buffer.SetText("hi")
+	model.buffer.SetCursor(2)
+
+	if err := r.Redraw(model, ""); err != nil {
+		t.Fatalf("Redraw() error = %v", err)
+	}
+
+	got := buf.String()
+	if !strings.Contains(got, "hi"+ColorCursorCell+" ") {
+		t.Fatalf("caret should sit after typed text, got %q", got)
 	}
 }
 

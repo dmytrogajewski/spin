@@ -1,0 +1,6 @@
+{"Action":"run","Package":"demo","Test":"TestOk"}
+{"Action":"pass","Package":"demo","Test":"TestOk"}
+{"Action":"run","Package":"demo","Test":"TestFail"}
+{"Action":"output","Package":"demo","Test":"TestFail","Output":"    fail_test.go:8: boom\n"}
+{"Action":"fail","Package":"demo","Test":"TestFail"}
+{"Action":"fail","Package":"demo"}

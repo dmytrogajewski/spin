@@ -538,3 +538,112 @@ func TestFormatFull_HidesHotkeysOnNarrowerTerminals(t *testing.T) {
 	// 	t.Errorf("Should not show hotkeys on terminals <120 cols, got: %s", result)
 	// }.
 }
+
+// Journey: specs/journeys/JOURNEY-013-compact-status-chip-and-operator-escape.md.
+func TestFormatCompactChip_ZeroMidHundred(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		bytesIn  int
+		bytesOut int
+		want     string
+	}{
+		{"zero_identity", 100, 100, compactMinus + "0%"},
+		{"mid_seventy_two", 1000, 280, compactMinus + "72%"},
+		{"hundred_empty_out", 500, 0, compactMinus + "100%"},
+		{"spec_example", 50000, 14000, compactMinus + "72%"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := FormatCompactChip(true, tt.bytesIn, tt.bytesOut)
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("FormatCompactChip(%d, %d) = %q, want substring %q",
+					tt.bytesIn, tt.bytesOut, got, tt.want)
+			}
+
+			if !strings.Contains(got, compactChipOn) {
+				t.Errorf("enabled chip = %q, want %q", got, compactChipOn)
+			}
+		})
+	}
+}
+
+func TestFormatCompactChip_SpecExampleSize(t *testing.T) {
+	t.Parallel()
+
+	got := FormatCompactChip(true, 50000, 14000)
+	if !strings.Contains(got, "14kB") {
+		t.Fatalf("SPEC chip %q want 14kB", got)
+	}
+}
+
+func TestFormatMetrics_IncludesCompactChip(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+	m.SetCompactEnabled(true)
+	m.SetCompactSavings(1000, 280)
+
+	got := m.FormatMedium(80)
+	if !strings.Contains(got, compactChipOn) || !strings.Contains(got, compactMinus+"72%") {
+		t.Errorf("status %q want on and −72%%", got)
+	}
+
+	m.SetCompactEnabled(false)
+
+	got = m.FormatMedium(80)
+	if !strings.Contains(got, compactChipOff) || strings.Contains(got, compactChipOn) {
+		t.Errorf("disabled status %q must show off, not on", got)
+	}
+}
+
+// Journey: specs/journeys/JOURNEY-023-tui-and-acp-surfaces.md.
+func TestFormatMetrics_TasksHiddenWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+	m.SetCompactEnabled(true)
+
+	got := m.FormatMedium(80)
+	if strings.Contains(got, "tasks ") {
+		t.Errorf("empty registry status %q must omit tasks N/M", got)
+	}
+
+	if !strings.Contains(got, compactChipOn) {
+		t.Errorf("status %q must keep compact chip", got)
+	}
+}
+
+func TestFormatMetrics_TasksNofM(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+	m.SetCompactEnabled(true)
+	m.SetTaskCounts(1, 2)
+
+	got := m.FormatMedium(80)
+	if !strings.Contains(got, "tasks 1/2") {
+		t.Errorf("status %q want tasks 1/2", got)
+	}
+
+	if !strings.Contains(got, compactChipOn) {
+		t.Errorf("status %q must keep compact chip", got)
+	}
+}
+
+func TestFormatCompactChip_OffDoesNotClaimOn(t *testing.T) {
+	t.Parallel()
+
+	got := FormatCompactChip(false, 1000, 280)
+	if got != compactChipOff {
+		t.Errorf("disabled chip = %q, want %q", got, compactChipOff)
+	}
+
+	if strings.Contains(got, compactChipOn) {
+		t.Errorf("disabled chip %q must not claim %q", got, compactChipOn)
+	}
+}

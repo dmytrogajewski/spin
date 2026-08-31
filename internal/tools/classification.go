@@ -43,11 +43,16 @@ func buildToolClassifier() *classify.Classifier[string, ToolCategory] {
 		return func(s string) bool { return set[s] }
 	}
 
-	c.AddRule("read_files", isOneOf("read_file", "list_directory", "get_process_output", "list_processes"), CategoryRead)
-	c.AddRule("notice", isOneOf(gitContextName, getContextName), CategoryNotice)
+	c.AddRule("read_files", isOneOf(
+		"read_file", "list_directory", "get_process_output", "list_processes", listAgentTasksName,
+	), CategoryRead)
+	c.AddRule("notice", isOneOf(gitContextName, getContextName, skillToolName, loadSkillToolName), CategoryNotice)
 	c.AddRule("edit_files", isOneOf("write_file", "edit_file", applyPatchName), CategoryEdit)
-	c.AddRule("execute", isOneOf("execute_command", shellCommandName, "start_process", "git_operation", "kill_process"), CategoryExecute)
-	c.AddRule("search", isOneOf(fileSearchName, "find_symbol", "find_references"), CategorySearch)
+	c.AddRule("execute", isOneOf(
+		"execute_command", shellCommandName, "start_process", "git_operation",
+		"kill_process", waitAgentTaskName, cancelAgentTaskName,
+	), CategoryExecute)
+	c.AddRule("search", isOneOf(fileSearchName, grepToolName, "find_symbol", "find_references", navigateToolName), CategorySearch)
 	c.AddRule("move", isOneOf("rename_symbol"), CategoryMove)
 	c.AddRule("fetch", isOneOf("fetch_url", "web_search", "capture_web_screenshot", "open_browser"), CategoryFetch)
 	c.AddRule("think", isOneOf("memory", "scratchpad"), CategoryThink)

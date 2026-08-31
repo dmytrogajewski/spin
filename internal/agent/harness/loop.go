@@ -3,11 +3,14 @@ package harness
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
+	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 )
 
 // Execute runs the ReAct loop: call LLM, check guards, dispatch tools, repeat.
@@ -21,6 +24,7 @@ func (e *Executor) Execute(
 	resp := &Response{}
 
 	err := e.runLoop(ctx, iterCtx, resp)
+	e.fireHook(context.WithoutCancel(ctx), hooks.EventStop)
 
 	resp.Duration = time.Since(start)
 	resp.Messages = iterCtx.Messages
@@ -72,6 +76,7 @@ func (e *Executor) runLoop(
 		}
 
 		e.runBeforeTurn(ctx, iterCtx)
+		e.phaseRetrieval(ctx, iterCtx)
 
 		if err := e.phaseCompaction(ctx, iterCtx); err != nil {
 			return err
@@ -199,6 +204,8 @@ func (e *Executor) phaseCompaction(
 		return nil
 	}
 
+	e.fireHook(ctx, hooks.EventPreCompact)
+
 	compacted, changed, err := e.compactor.Compact(ctx, iterCtx.Messages)
 	if err != nil {
 		return fmt.Errorf("compaction failed at turn %d: %w", iterCtx.Turn, err)
@@ -271,4 +278,68 @@ func (e *Executor) emit(event events.Event) {
 	}
 
 	e.emitter.Emit(event)
+}
+
+func (e *Executor) fireHook(ctx context.Context, event hooks.Event) {
+	if e.hookRunner == nil {
+		return
+	}
+
+	e.hookRunner.Execute(ctx, event, hooks.EventContext{})
+}
+
+const retrievedContextHeading = "# Retrieved Context"
+
+// phaseRetrieval runs Assemble once (ReAct turn 0) and injects fragments
+// that are not already present in the turn messages.
+func (e *Executor) phaseRetrieval(ctx context.Context, iterCtx *IterationContext) {
+	if e.retrievalPipeline == nil || iterCtx.Turn != 0 {
+		return
+	}
+
+	req := retrieval.Request{Turn: iterCtx.Turn}
+	if iterCtx.TrajectoryCtx != nil {
+		req.Query = iterCtx.TrajectoryCtx.Query
+		req.TrajectoryCtx = iterCtx.TrajectoryCtx
+	}
+
+	result := e.retrievalPipeline.Assemble(ctx, req)
+
+	body := formatRetrievedFragments(result.Fragments, iterCtx.Messages)
+	if body == "" {
+		return
+	}
+
+	iterCtx.Messages = append(iterCtx.Messages, message.Message{
+		Role:    message.RoleUser,
+		Content: body,
+	})
+}
+
+func formatRetrievedFragments(frags []retrieval.Fragment, msgs []message.Message) string {
+	var kept []string
+
+	for _, frag := range frags {
+		if frag.Content == "" || fragmentAlreadyPresent(msgs, frag.Content) {
+			continue
+		}
+
+		kept = append(kept, frag.Content)
+	}
+
+	if len(kept) == 0 {
+		return ""
+	}
+
+	return retrievedContextHeading + "\n" + strings.Join(kept, "\n")
+}
+
+func fragmentAlreadyPresent(msgs []message.Message, content string) bool {
+	for _, msg := range msgs {
+		if strings.Contains(msg.Content, content) {
+			return true
+		}
+	}
+
+	return false
 }

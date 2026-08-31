@@ -261,6 +261,20 @@ func TestExecuteMeta_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestSkillMeta_Validate(t *testing.T) {
+	t.Parallel()
+
+	valid := &SkillMeta{Name: "alpha", Source: "project"}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("Validate() unexpected error: %v", err)
+	}
+
+	empty := &SkillMeta{}
+	if err := empty.Validate(); err == nil {
+		t.Error("Validate() expected error for empty name")
+	}
+}
+
 // Helper functions for creating pointers.
 func intPtr(i int) *int {
 	return &i

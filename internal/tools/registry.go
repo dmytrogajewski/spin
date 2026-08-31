@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/dmytrogajewski/spin/internal/nav"
+	"github.com/dmytrogajewski/spin/internal/skills"
 	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 )
 
@@ -52,7 +54,10 @@ func NewRegistryWithBuiltins() *Registry {
 //   - get_context (requires env interface{}, can be *agent.Environment or nil)
 //   - apply_patch (requires workDir string)
 //   - file_search (requires workDir string)
+//   - grep (requires workDir string)
 //   - git_context (requires workDir string)
+//   - skill, load_skill (catalog)
+//   - navigate (structured index: skill|plugin|session|peer|path|symbol)
 //
 // This is the recommended factory for most use cases where tools need proper configuration.
 // If workDir is empty, tools that require WorkDir are created with empty string.
@@ -76,9 +81,16 @@ func NewDefaultRegistry(workDir string, env fmt.Stringer) *Registry {
 		panic(fmt.Sprintf("failed to register file_search tool: %v", err))
 	}
 
+	if err := registry.RegisterOrReplace(NewGrepTool(workDir)); err != nil {
+		panic(fmt.Sprintf("failed to register grep tool: %v", err))
+	}
+
 	if err := registry.RegisterOrReplace(NewGitContextTool(workDir)); err != nil {
 		panic(fmt.Sprintf("failed to register git_context tool: %v", err))
 	}
+
+	RegisterSkillTools(registry, skills.Discover(skills.OptionsFor(workDir)))
+	RegisterNavigateTool(registry, nav.Live(workDir, nil))
 
 	return registry
 }

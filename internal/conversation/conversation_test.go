@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
@@ -303,6 +304,41 @@ func TestConversation_SetTaskMode(t *testing.T) {
 
 	if got := conv.GetTaskMode(); got != testModeRegular {
 		t.Errorf("expected mode 'regular', got %q", got)
+	}
+}
+
+// TestConversation_CurrentFrame_ModeReview maps /mode review onto phase review.
+// Journey: specs/journeys/JOURNEY-014-taskframe-on-every-parent-turn.md.
+func TestConversation_CurrentFrame_ModeReview(t *testing.T) {
+	t.Parallel()
+
+	conv := setupTestConv(t)
+	if err := conv.SetTaskMode(agent.ModeReview); err != nil {
+		t.Fatalf("SetTaskMode(review) failed: %v", err)
+	}
+
+	if got := conv.CurrentFrame().Phase; got != agent.ModeReview {
+		t.Errorf("phase = %q, want %q", got, agent.ModeReview)
+	}
+}
+
+func TestConversation_CurrentFrame_AllModes(t *testing.T) {
+	t.Parallel()
+
+	modes := []string{agent.ModeRegular, agent.ModeReview, agent.ModeCompact, agent.ModePlanning}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+
+			conv := setupTestConv(t)
+			if err := conv.SetTaskMode(mode); err != nil {
+				t.Fatalf("SetTaskMode(%s) failed: %v", mode, err)
+			}
+
+			if got := conv.CurrentFrame().Phase; got != mode {
+				t.Errorf("phase = %q, want %q", got, mode)
+			}
+		})
 	}
 }
 

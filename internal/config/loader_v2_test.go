@@ -170,6 +170,32 @@ func TestLoaderV2_LoadFromEnv(t *testing.T) {
 	assert.Equal(t, "firejail", cfg.Security.SandboxMode)
 }
 
+// Journey: specs/journeys/JOURNEY-011-apply-compact-to-shell-exec.md.
+func TestLoaderV2_CompactDefaultsOn(t *testing.T) {
+	t.Setenv("SPIN_LLM_PROVIDER", "ollama")
+	t.Setenv("SPIN_LLM_MODEL", "test")
+
+	loader := NewLoaderV2()
+	cfg, err := loader.LoadWithEnv()
+	require.NoError(t, err)
+	assert.True(t, cfg.Compact.Enabled, "compact.enabled must default on when unset")
+	assert.Empty(t, cfg.Compact.Backend)
+	assert.Equal(t, DefaultCompactReadLevel, cfg.Compact.ReadLevel)
+}
+
+func TestLoaderV2_CompactEnabledFalseAndRTK(t *testing.T) {
+	t.Setenv("SPIN_LLM_PROVIDER", "ollama")
+	t.Setenv("SPIN_LLM_MODEL", "test")
+	t.Setenv("SPIN_COMPACT_ENABLED", "false")
+	t.Setenv("SPIN_COMPACT_BACKEND", CompactBackendRTK)
+
+	loader := NewLoaderV2()
+	cfg, err := loader.LoadWithEnv()
+	require.NoError(t, err)
+	assert.False(t, cfg.Compact.Enabled)
+	assert.Equal(t, CompactBackendRTK, cfg.Compact.Backend)
+}
+
 // TestLoaderV2_Precedence tests that configuration sources have correct precedence.
 // Kills mutant: changing precedence order would make this test fail.
 func TestLoaderV2_Precedence(t *testing.T) {

@@ -24,6 +24,17 @@ const (
 
 	// CarriageRet moves cursor to column 0 of current line.
 	CarriageRet = "\r"
+
+	// ClearHome homes the cursor, clears the display, and purges scrollback
+	// (ED3, same as clear(1)). Used on TUI start and on TUI exit so leftover
+	// frames do not remain on the regular screen (no alt-buffer).
+	ClearHome = "\x1b[H\x1b[2J\x1b[3J"
+
+	// CursorBlock selects a steady block cursor (DECSCUSR 2).
+	CursorBlock = "\x1b[2 q"
+
+	// CursorDefault restores the terminal's default cursor shape.
+	CursorDefault = "\x1b[0 q"
 )
 
 // MoveCursorToCol returns an ANSI escape sequence that moves the cursor to the specified column.

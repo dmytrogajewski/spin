@@ -21,6 +21,11 @@ func TestGetTagColor(t *testing.T) {
 		{"Testing", BlockTypeTesting, ColorBlue},
 		{"Notice", BlockTypeNotice, ColorMuted},
 		{"Error", BlockTypeError, ColorRed},
+		{"Skill", BlockTypeSkill, ColorMagenta},
+		{"Task", BlockTypeTask, ColorCyan},
+		{"Subagent", BlockTypeSubagent, ColorBlue},
+		{"Hook", BlockTypeHook, ColorYellow},
+		{"Compact", BlockTypeCompact, ColorMuted},
 		{"Unknown", BlockType("UNKNOWN"), ColorMuted},
 	}
 

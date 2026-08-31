@@ -22,6 +22,7 @@ type HookResult struct {
 	Blocked bool
 	// Reason explains why the operation was blocked (from hook stdout).
 	Reason string
-	// UpdatedInput contains mutated tool input from the hook (JSON field).
+	// UpdatedInput is a full replacement of tool argument JSON when the hook
+	// returns that field. Empty means the original arguments are unchanged.
 	UpdatedInput string
 }

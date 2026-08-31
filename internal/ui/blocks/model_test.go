@@ -25,6 +25,11 @@ func TestNewBlock(t *testing.T) {
 		{"summary", BlockTypeSummary},
 		{"testing", BlockTypeTesting},
 		{"notice", BlockTypeNotice},
+		{"skill", BlockTypeSkill},
+		{"task", BlockTypeTask},
+		{"subagent", BlockTypeSubagent},
+		{"hook", BlockTypeHook},
+		{"compact", BlockTypeCompact},
 		{"error", BlockTypeError},
 	}
 	for _, tt := range tests {

@@ -18,7 +18,7 @@ import (
 	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
-const builtinToolCount = 13
+const builtinToolCount = 14
 
 // BuiltinRuntime implements Runtime for builtin/TUI/EXEC modes.
 // Uses local execution, TUI notifications, and TUI approval dialogs.
@@ -35,6 +35,8 @@ type BuiltinRuntime struct {
 	approvalHandler safety.ApprovalHandler
 	logger          *slog.Logger
 	operationLog    *undo.OperationLog
+	compactEnabled  *bool
+	taskManager     *TaskManagerAdapter
 }
 
 // BuiltinRuntimeConfig configures the builtin runtime.
@@ -53,6 +55,8 @@ type BuiltinRuntimeConfig struct {
 	// OperationLog is an optional pre-created operation log from undo.Service.
 	// If nil, RegisterTools creates a local one.
 	OperationLog *undo.OperationLog
+	// CompactEnabled overrides default-on shell compact when non-nil.
+	CompactEnabled *bool
 }
 
 // NewBuiltinRuntime creates a new builtin runtime.
@@ -90,6 +94,7 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 		approvalHandler: cfg.ApprovalHandler,
 		logger:          logger,
 		operationLog:    opLog,
+		compactEnabled:  cfg.CompactEnabled,
 	}, nil
 }
 
@@ -138,7 +143,12 @@ func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 		execAdapt = NewAdapterWithPipeline(r.executor, pipeline)
 	}
 
-	_ = registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
+	shell := tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt)
+	if r.compactEnabled != nil {
+		shell.SetCompactEnabled(*r.compactEnabled)
+	}
+
+	_ = registry.Register(shell)
 
 	// Background task tools (process management).
 	taskOutputDir := filepath.Join(r.workDir, ".spin", "tasks")
@@ -149,19 +159,33 @@ func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 	}
 
 	taskAdapt := NewTaskManagerAdapter(taskMgr)
+	r.taskManager = taskAdapt
 
 	_ = registry.Register(tools.NewStartProcessTool(taskAdapt))
 	_ = registry.Register(tools.NewListProcessesTool(taskAdapt))
 	_ = registry.Register(tools.NewGetProcessOutputTool(taskAdapt))
 	_ = registry.Register(tools.NewKillProcessTool(taskAdapt))
 
-	// Utility tools (context, search, patching).
+	r.registerSearchTools(registry)
+
+	r.logger.Debug("registered builtin tools", "count", builtinToolCount)
+}
+
+// TaskManager returns the shell background adapter used by start_process tools.
+func (r *BuiltinRuntime) TaskManager() *TaskManagerAdapter {
+	return r.taskManager
+}
+
+func (r *BuiltinRuntime) registerSearchTools(registry *tools.Registry) {
 	_ = registry.Register(tools.NewGetContextTool(nil))
 	_ = registry.Register(tools.NewApplyPatchTool(r.workDir))
 	_ = registry.Register(tools.NewFileSearchTool(r.workDir))
+	_ = registry.Register(tools.NewGrepTool(r.workDir))
 	_ = registry.Register(tools.NewGitContextTool(r.workDir))
 
-	r.logger.Debug("registered builtin tools", "count", builtinToolCount)
+	if r.compactEnabled != nil {
+		tools.ApplyCompactSettings(registry, *r.compactEnabled, "")
+	}
 }
 
 // NotificationSender returns the TUI notification sender (TUIMapper).

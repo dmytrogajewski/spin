@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/agent/tasks"
 	"github.com/dmytrogajewski/spin/internal/commands"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/session"
+	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
@@ -34,6 +36,24 @@ func (c *tuiCommandContext) SetMode(_ context.Context, mode string) error {
 // GetWorkDir returns the working directory for the session.
 func (c *tuiCommandContext) GetWorkDir() string {
 	return c.conv.GetWorkDir()
+}
+
+// AgentTasks implements commands.TaskSource.
+func (c *tuiCommandContext) AgentTasks() *tasks.Registry {
+	if c == nil || c.conv == nil {
+		return nil
+	}
+
+	return c.conv.GetTaskRegistry()
+}
+
+// ShellTasks implements commands.ShellTaskSource.
+func (c *tuiCommandContext) ShellTasks() *tools.ShellAdapter {
+	if c == nil || c.conv == nil {
+		return nil
+	}
+
+	return c.conv.GetShellTasks()
 }
 
 // ResumeCatalog implements commands.SessionBrowser.

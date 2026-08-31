@@ -13,6 +13,8 @@ const defaultFileSearchLimit = 10
 
 // FileSearchTool implements file search functionality with fuzzy matching.
 type FileSearchTool struct {
+	compactControl
+
 	workspaceRoot string
 	searcher      *filesearch.Searcher
 	mu            sync.RWMutex
@@ -97,19 +99,16 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 	// Search.
 	matches := searcher.Search(query, limit)
 
-	// Format output.
-	var output strings.Builder
 	if len(matches) == 0 {
-		fmt.Fprintf(&output, "No files found matching '%s'\n", query)
-	} else {
-		fmt.Fprintf(&output, "Found %d file(s) matching '%s':\n\n", len(matches), query)
-
-		for i, match := range matches {
-			fmt.Fprintf(&output, "%d. %s (score: %d)\n", i+1, match.Path, match.Score)
-		}
+		return NewToolResult(fmt.Sprintf("No files found matching '%s'\n", query)), nil
 	}
 
-	return NewToolResult(output.String()), nil
+	var output strings.Builder
+	for _, match := range matches {
+		fmt.Fprintln(&output, "./"+strings.TrimPrefix(match.Path, "./"))
+	}
+
+	return applyBuiltinCompact(t.compactOn(), "ls", output.String()), nil
 }
 
 // getOrCreateSearcher returns the searcher for the given workspace, creating it if needed.

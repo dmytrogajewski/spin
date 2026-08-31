@@ -24,6 +24,16 @@ const (
 	BlockTypeNotice BlockType = "NOTICE"
 	// BlockTypeError represents an error message block.
 	BlockTypeError BlockType = "ERROR"
+	// BlockTypeSkill represents a skill activation block.
+	BlockTypeSkill BlockType = "SKILL"
+	// BlockTypeTask represents an A2A or shell task-state block.
+	BlockTypeTask BlockType = "TASK"
+	// BlockTypeSubagent represents a child-process spawn/complete block.
+	BlockTypeSubagent BlockType = "SUBAGENT"
+	// BlockTypeHook represents a lifecycle hook result (including veto).
+	BlockTypeHook BlockType = "HOOK"
+	// BlockTypeCompact represents a history-compact event block.
+	BlockTypeCompact BlockType = "COMPACT"
 )
 
 // String returns the string representation of the block type.
@@ -36,7 +46,8 @@ func (bt BlockType) Valid() bool {
 	switch bt {
 	case BlockTypeExecute, BlockTypePlan, BlockTypeRead, BlockTypeGrep,
 		BlockTypeApplyPatch, BlockTypeSummary, BlockTypeTool, BlockTypeTesting,
-		BlockTypeNotice, BlockTypeError:
+		BlockTypeNotice, BlockTypeError, BlockTypeSkill,
+		BlockTypeTask, BlockTypeSubagent, BlockTypeHook, BlockTypeCompact:
 		return true
 	}
 

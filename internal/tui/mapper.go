@@ -96,8 +96,7 @@ func (m *Mapper) MapEvent(ctx context.Context, event events.Event) error {
 	case events.EventInfo, events.EventWarning:
 		return m.handleSystemEvent(event)
 	default:
-		// Ignore unknown events gracefully.
-		return nil
+		return m.handleHarnessEvent(event)
 	}
 }
 
@@ -184,6 +183,8 @@ func (m *Mapper) createBlockForTool(data events.ToolCallStartData) *blocks.Block
 		return m.createNoticeBlock(data, "Git Context")
 	case "get_context":
 		return m.createNoticeBlock(data, "Environment Context")
+	case "skill", "load_skill":
+		return m.createSkillBlock(data)
 	}
 
 	// Category-based routing via shared classification.
@@ -370,6 +371,21 @@ func (m *Mapper) createGrepBlockFromSearch(data events.ToolCallStartData) *block
 	block.ID = data.ToolID
 
 	query := data.Parameters.GetStringOr("query", "")
+	if query == "" {
+		query = data.Parameters.GetStringOr("pattern", "")
+	}
+
+	path := data.Parameters.GetStringOr("path", "")
+	if path == "" {
+		path = data.Parameters.GetStringOr("workspace_root", "")
+	}
+
+	if path == "" {
+		path = data.Parameters.GetStringOr("include", "")
+	}
+
+	block.Title = path
+
 	// Map file_search semantics to GREP meta for consistent rendering.
 	meta := &blocks.GrepMeta{
 		Pattern: query,
@@ -378,6 +394,20 @@ func (m *Mapper) createGrepBlockFromSearch(data events.ToolCallStartData) *block
 
 	trySetMeta(block, func() error { return blocks.SetGrepMeta(block, meta) },
 		map[string]any{"pattern": query, "mode": "files_with_matches"})
+
+	return block
+}
+
+// createSkillBlock creates a SKILL timeline block for skill / load_skill.
+func (m *Mapper) createSkillBlock(data events.ToolCallStartData) *blocks.Block {
+	block := blocks.NewBlock(blocks.BlockTypeSkill)
+	block.ID = data.ToolID
+
+	name := data.Parameters.GetStringOr("name", "")
+	block.Title = name
+
+	meta := &blocks.SkillMeta{Name: name}
+	trySetMeta(block, func() error { return blocks.SetSkillMeta(block, meta) }, map[string]any{"name": name})
 
 	return block
 }
@@ -484,6 +514,8 @@ func (m *Mapper) updateBlockMetadata(block *blocks.Block, data events.ToolCallCo
 		m.updateExecuteBlockMetadata(block, data)
 	case blocks.BlockTypeApplyPatch:
 		m.updatePatchBlockMetadata(block, data)
+	case blocks.BlockTypeSkill:
+		m.updateSkillBlockMetadata(block, data)
 	default:
 		// No metadata updates for other block types.
 	}
@@ -516,6 +548,33 @@ func (m *Mapper) updatePatchBlockMetadata(block *blocks.Block, data events.ToolC
 	meta.Succeeded = data.Success
 	meta.Completed = true
 	_ = blocks.SetPatchMeta(block, meta)
+}
+
+// updateSkillBlockMetadata attaches name + source from the tool result.
+func (m *Mapper) updateSkillBlockMetadata(block *blocks.Block, data events.ToolCallCompleteData) {
+	meta, err := blocks.ParseSkillMeta(block)
+	if err != nil || meta == nil {
+		meta = &blocks.SkillMeta{Name: block.Title}
+	}
+
+	if data.Metadata != nil {
+		if name, ok := data.Metadata["name"].(string); ok && name != "" {
+			meta.Name = name
+		}
+
+		if source, ok := data.Metadata["source"].(string); ok {
+			meta.Source = source
+		}
+	}
+
+	if meta.Name != "" {
+		block.Title = meta.Name
+		if meta.Source != "" {
+			block.Title = meta.Name + " · " + meta.Source
+		}
+	}
+
+	_ = blocks.SetSkillMeta(block, meta)
 }
 
 // cleanupToolRegistry removes tool ID from registry.

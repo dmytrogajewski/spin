@@ -57,6 +57,8 @@ const (
 	KeyCtrlL
 	// KeyCtrlP represents the ctrl+p key combination (command palette).
 	KeyCtrlP
+	// KeyCtrlV represents the ctrl+v key combination (clipboard attach).
+	KeyCtrlV
 	// KeyPaste represents a bracketed paste event.
 	KeyPaste
 	// KeyF1 represents the F1 key.
@@ -112,6 +114,7 @@ func (k KeyKind) String() string {
 		KeyCtrlW:     "Ctrl-W",
 		KeyCtrlL:     "Ctrl-L",
 		KeyCtrlP:     "Ctrl-P",
+		KeyCtrlV:     "Ctrl-V",
 		KeyPaste:     "Paste",
 		KeyF1:        "F1",
 		KeyF2:        "F2",
@@ -165,6 +168,7 @@ const (
 	byteCtrlK     = 0x0b // Ctrl-K.
 	byteCtrlL     = 0x0c // Ctrl-L.
 	byteCtrlP     = 0x10 // Ctrl-P.
+	byteCtrlV     = 0x16 // Ctrl-V.
 	byteCtrlU     = 0x15 // Ctrl-U.
 	byteCtrlW     = 0x17 // Ctrl-W.
 
@@ -297,6 +301,8 @@ func (p *keyParser) parseControlChar(b byte) KeyEvent {
 		return KeyEvent{Kind: KeyCtrlL, Raw: []byte{b}}
 	case byteCtrlP:
 		return KeyEvent{Kind: KeyCtrlP, Raw: []byte{b}}
+	case byteCtrlV:
+		return KeyEvent{Kind: KeyCtrlV, Raw: []byte{b}}
 	case byteCtrlU:
 		return KeyEvent{Kind: KeyCtrlU, Raw: []byte{b}}
 	case byteCtrlW:

@@ -20,6 +20,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/dmytrogajewski/spin/internal/ui/banner"
+	spinterm "github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
 // newTUICmd creates the TUI command for interactive terminal mode.
@@ -153,7 +154,7 @@ func setupTUIProvider(
 		return nil, nil, nil, fmt.Errorf("create TUI: %w", err)
 	}
 
-	printTUIWelcome(ui)
+	printTUIWelcome(ui, cfg.Compact.Active())
 
 	configureMaxTokens(ui, cfg, provider)
 
@@ -287,14 +288,19 @@ func handleTUIInput(
 	conv *conversation.Conversation, mapper *tui.Mapper,
 	streamDone chan struct{},
 ) (shouldExit bool, newStreamDone chan struct{}) {
-	cmdResult := parseCommand(line)
-	if cmdResult.isCommand {
-		exit := handleTUICommand(ctx, ui, conv, cmdResult)
+	composed := composeTUILine(line, conv.GetWorkDir())
+	if composed.IsCommand {
+		exit := handleTUICommand(ctx, ui, conv, commandResult{
+			isCommand: true,
+			command:   composed.Command,
+			args:      composed.Args,
+			rawInput:  line,
+		})
 
 		return exit, streamDone
 	}
 
-	newDone := executeTurn(ctx, line, conv, mapper, ui, streamDone)
+	newDone := executeTurn(ctx, composed.Prompt, conv, mapper, ui, streamDone)
 
 	return false, newDone
 }
@@ -352,6 +358,8 @@ func executeTurn(
 const tuiEventBuffer = 100
 
 func runTUI(cmd *cobra.Command, _ []string) error {
+	reapParentOrphans()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -391,7 +399,9 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
-	defer conv.Close(ctx)
+
+	closeConv := func() { _ = conv.Close(context.WithoutCancel(ctx)) }
+	defer closeConv()
 
 	initializeUI(ui, conv, provider, cfg)
 
@@ -413,13 +423,13 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			<-eventDone
+			stopTUILoop(cancel, eventDone, closeConv)
 
 			return fmt.Errorf("TUI loop canceled: %w", ctx.Err())
 
 		case line, ok := <-inputCh:
 			if !ok {
-				<-eventDone
+				stopTUILoop(cancel, eventDone, closeConv)
 
 				return nil
 			}
@@ -432,12 +442,24 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 			streamDone = newDone
 
 			if shouldExit {
-				<-eventDone
+				stopTUILoop(cancel, eventDone, closeConv)
 
 				return nil
 			}
 		}
 	}
+}
+
+// stopTUILoop closes the conversation (STOP then SESSION_END) then cancels
+// the TUI context so the event loop can exit. Close runs here so Ctrl-C
+// cannot skip SESSION_END after the conversation context is canceled.
+func stopTUILoop(cancel context.CancelFunc, eventDone <-chan struct{}, closeFn func()) {
+	if closeFn != nil {
+		closeFn()
+	}
+
+	cancel()
+	<-eventDone
 }
 
 // setupSignalHandling sets up signal handling for graceful shutdown.
@@ -459,30 +481,34 @@ func setupSignalHandling(cancel context.CancelFunc, shutdownMsg ...string) {
 
 // Welcome banner layout constants.
 const (
-	// termClearHome homes the cursor, clears the screen, and purges the
-	// terminal scrollback (ED3, same as clear(1)). The clear gives the
-	// banner a deterministic row (required by the idle blink overlay);
-	// the purge removes stale frames from previous runs that terminals
-	// like xterm.js would otherwise keep forever at the top of scrollback.
-	termClearHome = "\x1b[H\x1b[2J\x1b[3J"
 	// bannerBaseRow is the terminal row of the banner's first line after clearing.
 	bannerBaseRow = 1
 	// welcomeFooterLines is the number of lines printed below the banner.
-	welcomeFooterLines = 5
-	// statusReserveLines is the bottom area reserved for the status bar and prompt.
-	statusReserveLines = 2
+	welcomeFooterLines = 7
+	// statusReserveLines is the bottom chrome: status + gap + 3-line input bar.
+	statusReserveLines = 5
 	// minBlinkTermWidth guards against banner line wrapping which would
 	// break the blink overlay row math.
 	minBlinkTermWidth = 60
 )
 
-func printTUIWelcome(ui *adapters.PureTTY) {
-	_, _ = io.WriteString(ui.Out(), termClearHome)
+func printTUIWelcome(ui *adapters.PureTTY, compactOn bool) {
+	_, _ = io.WriteString(ui.Out(), spinterm.ClearHome)
 	_ = banner.Play(ui.Out(), banner.PlayOptions{})
 	_, _ = io.WriteString(ui.Out(),
 		"\nType your prompt and press Enter.\n"+
-			"Commands: /mode [name], /resume, /help, /exit (or press Ctrl-D)\n"+
-			"Shift+Tab: cycle approvals (ask / yolo)\n")
+			"Commands: /mode [name], /resume, /skills, /tasks, /agents, /help, /exit\n"+
+			"Type / for commands and skills, @ to attach a file, Ctrl-V to paste files.\n"+
+			"Shift+Tab: cycle approvals (ask / yolo)\n"+
+			compactWelcomeLine(compactOn))
+}
+
+func compactWelcomeLine(on bool) string {
+	if on {
+		return "Tool output compact: on (SPIN_COMPACT=0 or compact.enabled: false to disable)\n"
+	}
+
+	return "Tool output compact: off\n"
 }
 
 // startCatBlink keeps the welcome mascot blinking until the returned stop
@@ -531,4 +557,5 @@ func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provide
 
 	sessionID := conv.ID()
 	ui.SetConversationID(sessionID)
+	ui.SetCompactEnabled(cfg.Compact.Active())
 }

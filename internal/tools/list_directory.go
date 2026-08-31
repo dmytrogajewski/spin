@@ -12,6 +12,8 @@ import (
 
 // ListDirectoryTool implements directory listing functionality.
 type ListDirectoryTool struct {
+	compactControl
+
 	workDir string
 }
 
@@ -76,18 +78,13 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) 
 	var output strings.Builder
 
 	for _, entry := range entries {
-		info, infoErr := entry.Info()
-		if infoErr != nil {
-			continue
-		}
-
-		typeStr := "file"
+		name := entry.Name()
 		if entry.IsDir() {
-			typeStr = "dir"
+			name += "/"
 		}
 
-		fmt.Fprintf(&output, "%s\t%s\t%d bytes\n", entry.Name(), typeStr, info.Size())
+		fmt.Fprintln(&output, "./"+name)
 	}
 
-	return NewToolResult(output.String()), nil
+	return applyBuiltinCompact(t.compactOn(), "ls", output.String()), nil
 }

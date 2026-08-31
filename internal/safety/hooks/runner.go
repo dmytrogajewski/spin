@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // Exit code indicating the hook wants to block the operation.
@@ -27,8 +29,21 @@ var ErrHookFailed = errors.New("hook failed")
 
 // hookOutputJSON is the structure returned by blocking hooks on stdout.
 type hookOutputJSON struct {
-	Reason       string `json:"reason"`
-	UpdatedInput string `json:"updated_input"`
+	Reason       string          `json:"reason"`
+	UpdatedInput json.RawMessage `json:"updated_input"`
+}
+
+func decodeUpdatedInput(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+
+	var asString string
+	if json.Unmarshal(raw, &asString) == nil {
+		return asString
+	}
+
+	return string(raw)
 }
 
 // Config configures hook discovery and execution.
@@ -42,6 +57,18 @@ type Config struct {
 	Timeout time.Duration
 	// Logger for hook execution events.
 	Logger *slog.Logger
+	// PluginScripts are extra scripts from com.spin.agent plugin packages.
+	PluginScripts []PluginScript
+}
+
+// PluginScript is a hook script registered from a plugin package.
+type PluginScript struct {
+	// Name is Event.ScriptName() (for example pre-tool-use).
+	Name string
+	// Path is the absolute script path.
+	Path string
+	// Cwd is the working directory for execution (plugin root).
+	Cwd string
 }
 
 // Runner discovers and executes lifecycle hook scripts.
@@ -51,6 +78,7 @@ type Runner struct {
 	timeout          time.Duration
 	logger           *slog.Logger
 	validScriptNames map[string]bool
+	pluginScripts    []PluginScript
 }
 
 // NewRunner creates a Runner from the given configuration.
@@ -71,12 +99,18 @@ func NewRunner(cfg Config) *Runner {
 		validNames[evt.ScriptName()] = true
 	}
 
+	globalDir := cfg.GlobalDir
+	if expanded, err := pathx.ExpandHome(globalDir); err == nil {
+		globalDir = expanded
+	}
+
 	return &Runner{
-		globalDir:        cfg.GlobalDir,
+		globalDir:        globalDir,
 		projectDir:       cfg.ProjectDir,
 		timeout:          timeout,
 		logger:           logger,
 		validScriptNames: validNames,
+		pluginScripts:    cfg.PluginScripts,
 	}
 }
 
@@ -106,12 +140,18 @@ func (r *Runner) Execute(
 	return HookResult{}
 }
 
+// hookFile is one script path plus an optional execution cwd.
+type hookFile struct {
+	path string
+	cwd  string
+}
+
 // discoverScripts finds hook scripts for the event in global and project dirs.
 // Project scripts run after global scripts (global first for org-wide policies).
-func (r *Runner) discoverScripts(event Event) []string {
+func (r *Runner) discoverScripts(event Event) []hookFile {
 	name := event.ScriptName()
 
-	var scripts []string
+	var scripts []hookFile
 
 	for _, dir := range []string{r.globalDir, r.projectDir} {
 		if dir == "" {
@@ -126,8 +166,22 @@ func (r *Runner) discoverScripts(event Event) []string {
 		}
 
 		if info.Mode().IsRegular() {
-			scripts = append(scripts, path)
+			scripts = append(scripts, hookFile{path: path})
 		}
+	}
+
+	return append(scripts, r.pluginHookFiles(name)...)
+}
+
+func (r *Runner) pluginHookFiles(name string) []hookFile {
+	scripts := make([]hookFile, 0)
+
+	for _, extra := range r.pluginScripts {
+		if extra.Name != name || !r.validScriptNames[extra.Name] {
+			continue
+		}
+
+		scripts = append(scripts, hookFile{path: extra.Path, cwd: extra.Cwd})
 	}
 
 	return scripts
@@ -137,14 +191,16 @@ func (r *Runner) discoverScripts(event Event) []string {
 // code 2 blocks the operation.
 func (r *Runner) executeBlocking(
 	ctx context.Context,
-	scripts []string,
+	scripts []hookFile,
 	evtCtx EventContext,
 ) HookResult {
+	var allowed HookResult
+
 	for _, script := range scripts {
 		result, err := r.runScript(ctx, script, evtCtx)
 		if err != nil {
 			r.logger.WarnContext(ctx, "hook script error",
-				slog.String("script", script),
+				slog.String("script", script.path),
 				slog.String("error", err.Error()),
 			)
 
@@ -154,23 +210,27 @@ func (r *Runner) executeBlocking(
 		if result.Blocked {
 			return result
 		}
+
+		if result.UpdatedInput != "" {
+			allowed.UpdatedInput = result.UpdatedInput
+		}
 	}
 
-	return HookResult{}
+	return allowed
 }
 
 // executeAsync fires all scripts in goroutines (non-blocking events).
 func (r *Runner) executeAsync(
 	ctx context.Context,
-	scripts []string,
+	scripts []hookFile,
 	evtCtx EventContext,
 ) {
 	for _, script := range scripts {
-		go func(s string) {
+		go func(s hookFile) {
 			_, err := r.runScript(ctx, s, evtCtx)
 			if err != nil {
 				r.logger.WarnContext(ctx, "async hook error",
-					slog.String("script", s),
+					slog.String("script", s.path),
 					slog.String("error", err.Error()),
 				)
 			}
@@ -181,7 +241,7 @@ func (r *Runner) executeAsync(
 // runScript executes a single hook script with timeout.
 func (r *Runner) runScript(
 	ctx context.Context,
-	scriptPath string,
+	script hookFile,
 	evtCtx EventContext,
 ) (HookResult, error) {
 	inputJSON, err := json.Marshal(evtCtx)
@@ -192,9 +252,13 @@ func (r *Runner) runScript(
 	execCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(execCtx, "/bin/sh", scriptPath)
+	cmd := exec.CommandContext(execCtx, "/bin/sh", script.path)
 	cmd.Stdin = bytes.NewReader(inputJSON)
 	cmd.WaitDelay = time.Second
+
+	if script.cwd != "" {
+		cmd.Dir = script.cwd
+	}
 
 	var stdout, stderr bytes.Buffer
 
@@ -205,7 +269,7 @@ func (r *Runner) runScript(
 
 	if execCtx.Err() != nil && errors.Is(execCtx.Err(), context.DeadlineExceeded) {
 		r.logger.WarnContext(ctx, "hook timed out, treating as non-blocking",
-			slog.String("script", scriptPath),
+			slog.String("script", script.path),
 			slog.Duration("timeout", r.timeout),
 		)
 
@@ -230,7 +294,16 @@ func (r *Runner) runScript(
 		return HookResult{}, fmt.Errorf("hook exec: %w", err)
 	}
 
-	return HookResult{}, nil
+	return r.parseAllowResult(stdout.String()), nil
+}
+
+func (r *Runner) parseAllowResult(output string) HookResult {
+	var parsed hookOutputJSON
+	if json.Unmarshal([]byte(strings.TrimSpace(output)), &parsed) != nil {
+		return HookResult{}
+	}
+
+	return HookResult{UpdatedInput: decodeUpdatedInput(parsed.UpdatedInput)}
 }
 
 // parseBlockResult extracts block reason and optional updated input from
@@ -243,7 +316,7 @@ func (r *Runner) parseBlockResult(output string) HookResult {
 		return HookResult{
 			Blocked:      true,
 			Reason:       parsed.Reason,
-			UpdatedInput: parsed.UpdatedInput,
+			UpdatedInput: decodeUpdatedInput(parsed.UpdatedInput),
 		}
 	}
 

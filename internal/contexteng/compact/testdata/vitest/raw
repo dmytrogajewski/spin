@@ -1,0 +1,5 @@
+ ✓ ok.test.ts
+ × bad.test.ts > breaks
+   → expected 1 to be 2
+
+ Test Files  1 failed | 1 passed

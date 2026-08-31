@@ -1,0 +1,8 @@
+.
+├── README.md
+├── cmd
+│   └── spin
+│       └── main.go
+└── internal
+    ├── bar.go
+    └── foo.go

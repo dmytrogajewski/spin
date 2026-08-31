@@ -1,0 +1,8 @@
+. (4 files)
+README.md
+cmd/ (1 file)
+  spin/ (1 file)
+    main.go
+internal/ (2 files)
+  bar.go
+  foo.go

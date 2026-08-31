@@ -25,7 +25,26 @@ var (
 	ErrCommandIsNotAllowedForRemote = errors.New("command is not allowed for remote transport")
 	// ErrOauthClientIDIsRequired is a sentinel error.
 	ErrOauthClientIDIsRequired = errors.New("oauth client_id is required")
+	// ErrTransportRequired is returned when a plugin mcp.json server omits type.
+	ErrTransportRequired = errors.New("mcp transport type is required")
 )
+
+// ParsePluginTransport maps an Agent Plugins mcp.json type to a TransportType.
+// Empty type is rejected; transport is never guessed.
+func ParsePluginTransport(value string) (TransportType, error) {
+	switch value {
+	case string(TransportStdio):
+		return TransportStdio, nil
+	case string(TransportStreamableHTTP):
+		return TransportStreamableHTTP, nil
+	case string(TransportSSE):
+		return TransportSSE, nil
+	case "":
+		return "", ErrTransportRequired
+	default:
+		return "", fmt.Errorf("invalid transport: %s: %w", value, ErrUnsupportedTransport)
+	}
+}
 
 // TransportType defines the MCP server connection transport.
 type TransportType string

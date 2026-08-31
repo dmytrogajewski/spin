@@ -77,6 +77,7 @@ func TestEventType_String(t *testing.T) {
 		{EventSnapshotTaken, "snapshot_taken"},
 		{EventSessionIndexRebuilt, "session_index_rebuilt"},
 		{EventLSPDiagnostics, "lsp_diagnostics"},
+		{EventHookVeto, "hook_veto"},
 	}
 
 	for _, tt := range tests {

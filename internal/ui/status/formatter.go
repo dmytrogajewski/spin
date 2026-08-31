@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dmytrogajewski/spin/internal/contexteng/compact"
 	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
@@ -44,6 +45,12 @@ const (
 
 	// tpsNoiseThreshold filters out negligible TPS values.
 	tpsNoiseThreshold = 1.0
+
+	// Compact status chip (tool-output compact, not task mode).
+	compactChipOn  = "on"
+	compactChipOff = "off"
+	compactMinus   = "\u2212" // SPEC −N% (minus, not hyphen).
+	compactDot     = "\u00b7"
 )
 
 // FormatAdaptive selects the appropriate detail level based on terminal width.
@@ -153,6 +160,13 @@ func FormatMetrics(metrics *Metrics, level DetailLevel, spinnerFrame string) str
 	// Agent state.
 	parts = appendStateParts(parts, metrics, level)
 
+	// Tool-output compact on/off and last-turn output-bytes chip.
+	parts = append(parts, FormatCompactChip(metrics.CompactEnabled, metrics.CompactBytesIn, metrics.CompactBytesOut))
+
+	if chip := FormatTaskCount(metrics.TasksActive, metrics.TasksTotal); chip != "" {
+		parts = append(parts, chip)
+	}
+
 	// Approval mode (medium and up, only when not the default "ask").
 	parts = appendApprovalMode(parts, metrics, level)
 
@@ -168,6 +182,40 @@ func FormatMetrics(metrics *Metrics, level DetailLevel, spinnerFrame string) str
 	}
 
 	return strings.Join(parts, sep)
+}
+
+// FormatCompactChip formats compact on/off and last-turn output-bytes reduction.
+// Percent uses ledger BytesIn/BytesOut, not a tokenizer or bill savings.
+func FormatCompactChip(enabled bool, bytesIn, bytesOut int) string {
+	if !enabled {
+		return compactChipOff
+	}
+
+	pct := compact.ByteReductionPct(bytesIn, bytesOut)
+	chip := compactChipOn + " " + compactMinus + formatPercentage(pct)
+
+	if bytesOut <= 0 {
+		return chip
+	}
+
+	return chip + " " + compactDot + " " + formatCompactBytes(bytesOut)
+}
+
+// FormatTaskCount returns "tasks N/M" when the registry is non-empty.
+func FormatTaskCount(active, total int) string {
+	if total <= 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("tasks %d/%d", active, total)
+}
+
+func formatCompactBytes(n int) string {
+	if n < kiloThreshold {
+		return strconv.Itoa(n) + "B"
+	}
+
+	return fmt.Sprintf("%.0fkB", float64(n)/kiloThreshold)
 }
 
 // appendContextParts appends context usage percentage (and absolute counts at full level).

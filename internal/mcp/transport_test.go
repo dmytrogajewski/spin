@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTransportType_String(t *testing.T) {
@@ -82,6 +83,28 @@ func TestTransportType_IsValid(t *testing.T) {
 			assert.Equal(t, tt.want, tt.transport.IsValid())
 		})
 	}
+}
+
+func TestParsePluginTransport_ExplicitOnly(t *testing.T) {
+	t.Parallel()
+
+	stdio, err := ParsePluginTransport("stdio")
+	require.NoError(t, err)
+	assert.Equal(t, TransportStdio, stdio)
+
+	httpTransport, err := ParsePluginTransport("streamable-http")
+	require.NoError(t, err)
+	assert.Equal(t, TransportStreamableHTTP, httpTransport)
+
+	sse, err := ParsePluginTransport("sse")
+	require.NoError(t, err)
+	assert.Equal(t, TransportSSE, sse)
+
+	_, err = ParsePluginTransport("")
+	require.ErrorIs(t, err, ErrTransportRequired)
+
+	_, err = ParsePluginTransport("websocket")
+	require.ErrorIs(t, err, ErrUnsupportedTransport)
 }
 
 func TestTransportType_IsRemote(t *testing.T) {

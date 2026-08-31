@@ -235,6 +235,24 @@ func TestManager_SetAgentState(t *testing.T) {
 	}
 }
 
+// Journey: specs/journeys/JOURNEY-013-compact-status-chip-and-operator-escape.md.
+func TestManager_SetCompactEnabledAndSavings(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+	if m.GetMetrics().CompactEnabled {
+		t.Fatal("unset CompactEnabled must not claim on")
+	}
+
+	m.SetCompactEnabled(true)
+	m.SetCompactSavings(1000, 280)
+
+	got := m.GetMetrics()
+	if !got.CompactEnabled || got.CompactBytesIn != 1000 || got.CompactBytesOut != 280 {
+		t.Fatalf("metrics = enabled=%v in=%d out=%d", got.CompactEnabled, got.CompactBytesIn, got.CompactBytesOut)
+	}
+}
+
 func TestManager_SetTaskMode(t *testing.T) {
 	t.Parallel()
 

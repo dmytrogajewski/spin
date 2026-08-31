@@ -1,5 +1,7 @@
 package acp
 
+// Journey: specs/journeys/JOURNEY-025-parent-shutdown-cancels-children.md.
+
 import (
 	"context"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dmytrogajewski/spin/internal/agent/tasks"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
@@ -260,4 +263,64 @@ func (m *mockConnectionForCancel) GetNotifications() []acp.SessionNotification {
 	defer m.mu.Unlock()
 
 	return append([]acp.SessionNotification{}, m.notifications...)
+}
+
+type acpShutdownHandle struct {
+	calls []string
+}
+
+func (h *acpShutdownHandle) Get(context.Context) (string, error) {
+	return tasks.StateWorking, nil
+}
+
+func (h *acpShutdownHandle) Cancel(context.Context) error {
+	h.calls = append(h.calls, "cancel")
+
+	return nil
+}
+
+func (h *acpShutdownHandle) SignalTERM() error {
+	h.calls = append(h.calls, "sigterm")
+
+	return nil
+}
+
+func TestCancel_CancelsRunningA2ATasks(t *testing.T) {
+	t.Parallel()
+
+	agentInstance, emitter := createTestAgentWithEmitter(t)
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
+	storage, err := session.NewFileStorage(t.TempDir())
+	require.NoError(t, err)
+
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	require.NoError(t, err)
+
+	factory := func(_ context.Context, _ string, workDir string) (*conversation.Conversation, error) {
+		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
+			Agent:           agentInstance,
+			HarnessExecutor: &blockingHarnessExecutor{},
+			Emitter:         emitter,
+			WorkDir:         workDir,
+		})
+	}
+
+	mgr, err := conversation.NewManager(conversation.ManagerConfig{Factory: factory})
+	require.NoError(t, err)
+	acpAgent.SetConversationManager(mgr)
+
+	workDir := t.TempDir()
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: workDir})
+	require.NoError(t, err)
+
+	conv, err := mgr.GetOrCreate(context.Background(), string(sessionResp.SessionId), workDir)
+	require.NoError(t, err)
+
+	h := &acpShutdownHandle{}
+	conv.GetTaskRegistry().Register("t1", "explorer", tasks.StateWorking, h)
+
+	require.NoError(t, acpAgent.Cancel(context.Background(), acp.CancelNotification{
+		SessionId: sessionResp.SessionId,
+	}))
+	require.Equal(t, []string{"cancel", "sigterm"}, h.calls)
 }

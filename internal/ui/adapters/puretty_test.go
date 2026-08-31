@@ -836,6 +836,30 @@ func TestPrintLine_TriggersTranscriptStartHook(t *testing.T) {
 	}
 }
 
+// Journey: specs/bugs/BUG-tui-visual-polish.md.
+func TestHandleSubmittedLine_SeparatesUserFromAgent(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	renderer := prompt.NewTermRenderer(&buf, 80, prompt.DefaultPrefix)
+	model := prompt.NewModel(100)
+	printer := output.NewPrinter(&buf)
+	coord := output.NewCoordinatedWriter(printer, &rendererAdapter{renderer: renderer}, model)
+
+	p := &PureTTY{out: &buf, coord: coord, model: model, renderer: renderer}
+	p.handleSubmittedLine("hello")
+
+	got := buf.String()
+	if !strings.Contains(got, prompt.DefaultPrefix+"hello") {
+		t.Fatalf("echo missing arrow prefix, got %q", got)
+	}
+
+	if !strings.Contains(got, prompt.ColorUserEcho) {
+		t.Fatalf("user echo should be cyan, got %q", got)
+	}
+}
+
 func TestWriteRaw_PassesThroughVerbatim(t *testing.T) {
 	t.Parallel()
 

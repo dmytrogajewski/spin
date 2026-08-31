@@ -17,4 +17,4 @@ Do this even if `make test` already compiled `build/bin/spin`. That target does 
 make -B build && make install
 ```
 
-Skip only when the task touched no runnable spin code (docs-only, specs-only, promptkit-only).
+Skip only when the *session* touched no runnable spin code (docs-only, specs-only, promptkit-only). If any earlier step in the same run changed Go/CLI/TUI, still install before yielding — a docs-only last item does not skip.

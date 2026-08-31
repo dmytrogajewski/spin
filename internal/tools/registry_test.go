@@ -903,7 +903,8 @@ func TestNewDefaultRegistry(t *testing.T) {
 	expectedTools := []string{
 		"read_file", "write_file", "list_directory",
 		"shell_command", "get_context", "apply_patch",
-		"file_search", "git_context",
+		"file_search", "grep", "git_context",
+		"skill", "load_skill", "navigate",
 	}
 
 	for _, toolName := range expectedTools {
@@ -982,7 +983,8 @@ func TestNewDefaultRegistry_NilEnvironment(t *testing.T) {
 	expectedTools := []string{
 		"read_file", "write_file", "list_directory",
 		"shell_command", "get_context", "apply_patch",
-		"file_search", "git_context",
+		"file_search", "grep", "git_context",
+		"skill", "load_skill", "navigate",
 	}
 
 	for _, toolName := range expectedTools {
@@ -1015,7 +1017,10 @@ func TestNewDefaultRegistry_EquivalentToManual(t *testing.T) {
 	_ = manual.Register(NewGetContextTool(env))
 	_ = manual.Register(NewApplyPatchTool(workDir))
 	_ = manual.Register(NewFileSearchTool(workDir))
+	_ = manual.Register(NewGrepTool(workDir))
 	_ = manual.Register(NewGitContextTool(workDir))
+	RegisterSkillTools(manual, nil)
+	RegisterNavigateTool(manual, nil)
 
 	// Factory construction (new way).
 	factory := NewDefaultRegistry(workDir, env)
@@ -1060,10 +1065,10 @@ func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
 	env := &registryTestEnv{WorkDir: workDir}
 	registry := NewDefaultRegistry(workDir, env)
 
-	// Verify we have exactly 9 tools (matching BuiltinTools count).
+	// Builtin tools plus skill / load_skill / navigate.
 	allTools := registry.List()
-	if len(allTools) != 9 {
-		t.Errorf("should have exactly 9 builtin tools, got %d", len(allTools))
+	if len(allTools) != 13 {
+		t.Errorf("should have 13 default tools, got %d", len(allTools))
 	}
 
 	// Verify each tool has valid name, description, and schema.

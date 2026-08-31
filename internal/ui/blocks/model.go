@@ -169,6 +169,16 @@ func (b *Block) SetPlanMeta(m *PlanMeta) error {
 	return SetPlanMeta(b, m)
 }
 
+// GetSkillMeta retrieves SkillMeta from the block.
+func (b *Block) GetSkillMeta() (*SkillMeta, error) {
+	return ParseSkillMeta(b)
+}
+
+// SetSkillMeta sets SkillMeta on the block.
+func (b *Block) SetSkillMeta(m *SkillMeta) error {
+	return SetSkillMeta(b, m)
+}
+
 // GenerateBlockID creates a unique block ID.
 //
 // Format: blk_{unix_timestamp_ms}_{sequence}

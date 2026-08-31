@@ -22,6 +22,11 @@ func TestBlockType_String(t *testing.T) {
 		{"testing", BlockTypeTesting, "TESTING"},
 		{"notice", BlockTypeNotice, "NOTICE"},
 		{"error", BlockTypeError, "ERROR"},
+		{"skill", BlockTypeSkill, "SKILL"},
+		{"task", BlockTypeTask, "TASK"},
+		{"subagent", BlockTypeSubagent, "SUBAGENT"},
+		{"hook", BlockTypeHook, "HOOK"},
+		{"compact", BlockTypeCompact, "COMPACT"},
 	}
 
 	for _, tt := range tests {
@@ -54,6 +59,11 @@ func TestBlockType_Valid(t *testing.T) {
 		{"testing", BlockTypeTesting, true},
 		{"notice", BlockTypeNotice, true},
 		{"error", BlockTypeError, true},
+		{"skill", BlockTypeSkill, true},
+		{"task", BlockTypeTask, true},
+		{"subagent", BlockTypeSubagent, true},
+		{"hook", BlockTypeHook, true},
+		{"compact", BlockTypeCompact, true},
 		{"invalid", BlockType("INVALID"), false},
 		{"empty", BlockType(""), false},
 	}
@@ -216,6 +226,26 @@ func TestBlockType_Constants(t *testing.T) {
 	if BlockTypeError != "ERROR" {
 		t.Errorf("BlockTypeError = %v, want %v", BlockTypeError, "ERROR")
 	}
+
+	if BlockTypeSkill != "SKILL" {
+		t.Errorf("BlockTypeSkill = %v, want %v", BlockTypeSkill, "SKILL")
+	}
+
+	if BlockTypeTask != "TASK" {
+		t.Errorf("BlockTypeTask = %v, want %v", BlockTypeTask, "TASK")
+	}
+
+	if BlockTypeSubagent != "SUBAGENT" {
+		t.Errorf("BlockTypeSubagent = %v, want %v", BlockTypeSubagent, "SUBAGENT")
+	}
+
+	if BlockTypeHook != "HOOK" {
+		t.Errorf("BlockTypeHook = %v, want %v", BlockTypeHook, "HOOK")
+	}
+
+	if BlockTypeCompact != "COMPACT" {
+		t.Errorf("BlockTypeCompact = %v, want %v", BlockTypeCompact, "COMPACT")
+	}
 }
 
 func TestFoldState_Constants(t *testing.T) {
@@ -266,6 +296,11 @@ func TestBlockType_AllValid(t *testing.T) {
 		BlockTypeTesting,
 		BlockTypeNotice,
 		BlockTypeError,
+		BlockTypeSkill,
+		BlockTypeTask,
+		BlockTypeSubagent,
+		BlockTypeHook,
+		BlockTypeCompact,
 	}
 
 	for _, bt := range blockTypes {

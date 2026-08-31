@@ -1,0 +1,3 @@
+ok 1
+FAIL TestFail
+    fail_test.go:8: boom

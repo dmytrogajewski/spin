@@ -10,14 +10,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dmytrogajewski/spin/internal/agent/tasks"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // mockTaskManager implements [tools.TaskManager] for testing.
 type mockTaskManager struct {
-	tasks  []tools.TaskSnapshot
-	output string
-	err    error
+	tasks      []tools.TaskSnapshot
+	output     string
+	err        error
+	lastKillID string
 }
 
 func (m *mockTaskManager) List(_ context.Context) []tools.TaskSnapshot {
@@ -28,7 +30,9 @@ func (m *mockTaskManager) GetOutput(_ context.Context, _ string, _ int) (string,
 	return m.output, m.err
 }
 
-func (m *mockTaskManager) Kill(_ context.Context, _ string) error {
+func (m *mockTaskManager) Kill(_ context.Context, taskID string) error {
+	m.lastKillID = taskID
+
 	return m.err
 }
 
@@ -105,6 +109,7 @@ func TestListProcessesTool_ReturnsRunningTasks(t *testing.T) {
 	require.True(t, result.Success)
 	require.Contains(t, result.Output, testTaskID)
 	require.Contains(t, result.Output, "running")
+	require.NotContains(t, result.Output, "kind=agent")
 }
 
 func TestListProcessesTool_EmptyList(t *testing.T) {
@@ -568,4 +573,20 @@ func TestTaskStatus_String(t *testing.T) {
 			require.Equal(t, tt.want, tt.status.String())
 		})
 	}
+}
+
+func TestAsShellSource_ListsAndKillsRawID(t *testing.T) {
+	t.Parallel()
+
+	mgr := &mockTaskManager{tasks: []tools.TaskSnapshot{{
+		ID: testTaskID, Command: testTaskCommand, Status: tools.TaskStatusRunning,
+	}}}
+	src := tools.AsShellSource(mgr)
+	require.Equal(t, []tasks.ShellSnapshot{{
+		ID: testTaskID, Command: testTaskCommand, State: "running",
+	}}, src.List(t.Context()))
+
+	err := tasks.CancelView(t.Context(), tasks.TypedID(tasks.KindShell, testTaskID), tasks.New(), src)
+	require.NoError(t, err)
+	require.Equal(t, testTaskID, mgr.lastKillID)
 }

@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dmytrogajewski/spin/internal/agent/tasks"
 	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 const (
-	// DefaultMaxConcurrent is the default concurrency cap for subagent goroutines.
+	// DefaultMaxConcurrent is the default concurrency cap for admitted children.
 	DefaultMaxConcurrent = 3
 )
 
@@ -26,6 +27,12 @@ var ErrEmptySpecName = errors.New("subagent: spec name must not be empty")
 // ErrPanicked indicates that a subagent executor panicked during execution.
 var ErrPanicked = errors.New("subagent: executor panicked")
 
+// ErrNoBackgroundStarter indicates SpawnBackground has no immediate starter.
+var ErrNoBackgroundStarter = errors.New("subagent: background starter is not set")
+
+// BackgroundStarter starts a child and returns after non-blocking message/send.
+type BackgroundStarter func(ctx context.Context, spec *Spec, query string) (id string, handle tasks.Handle, err error)
+
 // Executor is a function that runs a subagent with the given spec and query,
 // returning a summary string. The Manager calls this function in a goroutine
 // for each spawned subagent.
@@ -38,6 +45,7 @@ type Manager struct {
 	mu            sync.RWMutex
 	maxConcurrent int
 	semaphore     *concurrency.Semaphore
+	background    BackgroundStarter
 }
 
 // NewManager creates a Manager with the given executor and concurrency cap.
@@ -88,6 +96,13 @@ func (m *Manager) Spec(name string) *Spec {
 	return spec
 }
 
+// SetBackgroundStarter installs the non-blocking spawn function.
+func (m *Manager) SetBackgroundStarter(fn BackgroundStarter) {
+	m.mu.Lock()
+	m.background = fn
+	m.mu.Unlock()
+}
+
 // Spawn executes a subagent by name with the given query.
 // It acquires a semaphore slot (blocking if at capacity), runs the executor,
 // and recovers from panics. Each subagent runs with a fresh conversation context.
@@ -116,4 +131,42 @@ func (m *Manager) Spawn(ctx context.Context, specName, query string) (summary st
 	}()
 
 	return m.executor(ctx, spec, query)
+}
+
+// SpawnBackground admits a child, sends immediately, and returns the task id.
+// The caller (parent ReAct loop) continues; Wait must not be used here.
+func (m *Manager) SpawnBackground(
+	ctx context.Context,
+	specName, query string,
+	reg *tasks.Registry,
+) (string, error) {
+	m.mu.RLock()
+	spec, exists := m.specs[specName]
+	start := m.background
+	m.mu.RUnlock()
+
+	if !exists {
+		return "", fmt.Errorf("%w: %q", ErrSpecNotFound, specName)
+	}
+
+	if start == nil {
+		return "", ErrNoBackgroundStarter
+	}
+
+	if acquireErr := m.semaphore.Acquire(ctx); acquireErr != nil {
+		return "", fmt.Errorf("subagent %q: %w", specName, acquireErr)
+	}
+
+	defer m.semaphore.Release()
+
+	id, handle, err := start(ctx, spec, query)
+	if err != nil {
+		return "", err
+	}
+
+	if reg != nil {
+		reg.Register(id, spec.Name, tasks.StateWorking, handle)
+	}
+
+	return id, nil
 }

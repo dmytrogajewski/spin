@@ -5,6 +5,9 @@ package subagent
 
 import "slices"
 
+// ToolSpawn is the parent spawn tool. Children receive it only when allowlisted.
+const ToolSpawn = "spawn"
+
 // Spec defines a subagent's configuration before compilation.
 type Spec struct {
 	// Name identifies this subagent type (e.g., "explorer", "planner").
@@ -28,8 +31,13 @@ type Spec struct {
 }
 
 // HasTool returns true if the named tool is in the AllowedTools list.
-// If AllowedTools is nil (unrestricted), it always returns true.
+// If AllowedTools is nil (unrestricted), it returns true except for ToolSpawn,
+// which requires an explicit allowlist (recursion deny-by-default).
 func (s *Spec) HasTool(name string) bool {
+	if name == ToolSpawn {
+		return slices.Contains(s.AllowedTools, ToolSpawn)
+	}
+
 	if s.AllowedTools == nil {
 		return true
 	}

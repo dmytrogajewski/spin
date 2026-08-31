@@ -4,6 +4,7 @@ package status
 import (
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/contexteng/compact"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
@@ -49,7 +50,7 @@ func (a *Aggregator) applyEvent(event *events.Event) {
 	case events.EventToolCallProgress:
 		a.manager.SetAgentState("Executing")
 	case events.EventToolCallComplete:
-		a.manager.SetAgentState("Complete")
+		a.handleToolCallComplete(event)
 	case events.EventTurnComplete:
 		a.manager.SetAgentState("Idle")
 	case events.EventTurnFailed, events.EventError:
@@ -63,7 +64,7 @@ func (a *Aggregator) applyEvent(event *events.Event) {
 	case events.EventWarning:
 		a.manager.SetAgentState("Warning")
 	default:
-		// For unknown events, keep current state.
+		a.applyTaskCountEvent(event.Type)
 	}
 }
 
@@ -111,7 +112,47 @@ func (a *Aggregator) handleToolCallStart(event *events.Event) {
 	}
 }
 
+func (a *Aggregator) handleToolCallComplete(event *events.Event) {
+	a.manager.SetAgentState("Complete")
+
+	data, ok := event.Data.(events.ToolCallCompleteData)
+	if !ok || data.Metadata == nil {
+		return
+	}
+
+	in, inOK := compactMetaInt(data.Metadata[compact.MetaBytesIn])
+	out, outOK := compactMetaInt(data.Metadata[compact.MetaBytesOut])
+
+	if inOK && outOK {
+		a.manager.SetCompactSavings(in, out)
+	}
+}
+
+func compactMetaInt(v any) (int, bool) {
+	n, ok := v.(int)
+
+	return n, ok
+}
+
 // SetMaxTokens sets the maximum token limit from configuration.
 func (a *Aggregator) SetMaxTokens(maxTokens int64) {
 	a.manager.SetMaxTokens(maxTokens)
+}
+
+func (a *Aggregator) applyTaskCountEvent(eventType events.EventType) {
+	switch eventType {
+	case events.EventBackgroundTaskStarted:
+		a.adjustTaskCounts(1, 1)
+	case events.EventBackgroundTaskStopped:
+		a.adjustTaskCounts(-1, 0)
+	default:
+		// Keep current state for unknown events.
+	}
+}
+
+func (a *Aggregator) adjustTaskCounts(activeDelta, totalDelta int) {
+	cur := a.manager.GetMetrics()
+	active := max(0, cur.TasksActive+activeDelta)
+	total := max(0, cur.TasksTotal+totalDelta)
+	a.manager.SetTaskCounts(active, total)
 }

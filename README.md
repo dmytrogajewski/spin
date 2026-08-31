@@ -58,6 +58,16 @@ spin exec "run tests and fix failures"
 spin exec --auto-approve --provider openai "refactor main.go"
 ```
 
+## SEE ALSO
+
+How-to (landed operator surfaces):
+
+- [docs/how-to/agent-skills.md](docs/how-to/agent-skills.md) — write a skill, `/skills`, `skill` tool
+- [docs/how-to/agent-plugins.md](docs/how-to/agent-plugins.md) — `plugin.json`, containment, MCP isolation
+- [docs/how-to/subagents.md](docs/how-to/subagents.md) — spawn, wait, cancel, local A2A
+
+Reference: [docs/reference/compact.md](docs/reference/compact.md), [docs/reference/hooks.md](docs/reference/hooks.md). Testing: [docs/testing.md](docs/testing.md).
+
 ## ARCHITECTURE
 
 ```

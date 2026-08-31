@@ -1,0 +1,11 @@
+commit 1a2b3c4d5e6f7890abcdef1234567890abcdef12
+Author: Ada Lovelace <ada@example.com>
+Date:   Mon Jan 1 00:00:00 2024 +0000
+
+    Add compact registry
+
+commit 0fedcba9876543210fedcba9876543210fedcba9
+Author: Alan Turing <alan@example.com>
+Date:   Tue Jan 2 00:00:00 2024 +0000
+
+    Fix ledger ceil

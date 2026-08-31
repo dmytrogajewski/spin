@@ -20,10 +20,14 @@ const (
 // TermRenderer renders a prompt model to a terminal using ANSI escape sequences.
 // It handles cursor positioning, wide characters, and optional status text.
 type TermRenderer struct {
-	out    io.Writer // output destination.
-	width  int       // terminal width in cells.
-	height int       // terminal height in lines (for positioning at bottom).
-	prefix string    // prompt prefix (e.g., "> ").
+	out      io.Writer // output destination.
+	width    int       // terminal width in cells.
+	height   int       // terminal height in lines (for positioning at bottom).
+	prefix   string    // prompt prefix (e.g., "→ ").
+	inputBar bool      // paint a full-width grey background on the prompt line.
+	hints    []string  // completion rows drawn above the prompt.
+	hintSel  int
+	hintPrev int // prior hint row count so leftovers can be cleared.
 }
 
 // NewTermRenderer creates a new renderer with the specified output writer,
@@ -72,11 +76,11 @@ type visibleInfo struct {
 
 // calculateWidths calculates all width-related values.
 func (r *TermRenderer) calculateWidths(bufferText, status string) widthInfo {
-	prefixWidth := uniseg.StringWidth(r.prefix)
+	prefixWidth := r.barInset() + uniseg.StringWidth(r.prefix)
 	bufferWidth := uniseg.StringWidth(bufferText)
 	statusWidth := uniseg.StringWidth(status)
 
-	availableWidth := max(r.width-prefixWidth, 0)
+	availableWidth := max(r.width-prefixWidth-r.barInset()-r.caretReserve(), 0)
 
 	return widthInfo{
 		prefixWidth:    prefixWidth,
@@ -84,6 +88,22 @@ func (r *TermRenderer) calculateWidths(bufferText, status string) widthInfo {
 		statusWidth:    statusWidth,
 		availableWidth: availableWidth,
 	}
+}
+
+func (r *TermRenderer) barInset() int {
+	if r.inputBar {
+		return InputBarPad
+	}
+
+	return 0
+}
+
+func (r *TermRenderer) caretReserve() int {
+	if r.inputBar {
+		return 1
+	}
+
+	return 0
 }
 
 // calculateCursorInfo calculates cursor position information.
@@ -154,13 +174,29 @@ func (r *TermRenderer) addEllipses(visibleBuffer string, scrollStart, scrollEnd,
 }
 
 // renderOutput renders the final output.
-func (r *TermRenderer) renderOutput(_ *Model, status string, visibleInfo visibleInfo, cursorInfo cursorInfo, widths widthInfo) error {
+func (r *TermRenderer) renderOutput(model *Model, status string, visibleInfo visibleInfo, cursorInfo cursorInfo, widths widthInfo) error {
 	var out strings.Builder
 
-	r.writePromptLine(&out)
+	if r.inputBar {
+		r.writeHintRows(&out, r.inputBarTopRow()-InputBarGapLines)
+		r.writeGapRow(&out, r.inputBarTopRow()-InputBarGapLines)
+		r.writeFullBarRow(&out, r.inputBarTopRow())
+		r.writePromptLineAt(&out, r.inputBarTextRow())
+		out.WriteString(ColorPromptBar)
+	} else {
+		r.writeHintRows(&out, r.height)
+		r.writePromptLine(&out)
+	}
+
 	r.writePrefix(&out)
-	r.writeVisibleBuffer(&out, visibleInfo.visibleBuffer)
+	r.writeVisibleBuffer(&out, visibleInfo.visibleBuffer, model, widths)
 	r.writeStatus(&out, status, widths)
+
+	if r.inputBar {
+		r.padInputBar(&out, status, visibleInfo.visibleBuffer, widths, model)
+		out.WriteString(ansiReset)
+		r.writeFullBarRow(&out, r.inputBarTopRow()+InputBarLines-1)
+	}
 
 	cursorCol := widths.prefixWidth + cursorInfo.cursorOffset + 1
 	fmt.Fprintf(&out, "\x1b[%dG", cursorCol)
@@ -171,6 +207,53 @@ func (r *TermRenderer) renderOutput(_ *Model, status string, visibleInfo visible
 	}
 
 	return nil
+}
+
+// SetHints stores completion rows drawn above the prompt on the next Redraw.
+func (r *TermRenderer) SetHints(lines []string, selected int) {
+	r.hints = append([]string(nil), lines...)
+	r.hintSel = selected
+}
+
+func (r *TermRenderer) hintCount() int {
+	return len(r.hints)
+}
+
+func (r *TermRenderer) inputBarTopRow() int {
+	if r.height <= 0 {
+		return 1
+	}
+
+	return max(r.height-InputBarLines+1, 1)
+}
+
+func (r *TermRenderer) inputBarTextRow() int {
+	return r.inputBarTopRow() + 1
+}
+
+func (r *TermRenderer) writeGapRow(out *strings.Builder, row int) {
+	if row < 1 {
+		return
+	}
+
+	out.WriteString(ansiReset)
+	fmt.Fprintf(out, "\x1b[%d;1H\x1b[2K", row)
+}
+
+func (r *TermRenderer) writeFullBarRow(out *strings.Builder, row int) {
+	fmt.Fprintf(out, "\x1b[%d;1H\x1b[2K", row)
+	out.WriteString(ColorPromptBar)
+
+	if r.width > 0 {
+		out.WriteString(strings.Repeat(" ", r.width))
+	}
+
+	out.WriteString(ansiReset)
+}
+
+func (r *TermRenderer) writePromptLineAt(out *strings.Builder, row int) {
+	fmt.Fprintf(out, "\x1b[%d;1H", row)
+	out.WriteString("\x1b[2K")
 }
 
 // writePromptLine writes the prompt line positioning.
@@ -186,12 +269,70 @@ func (r *TermRenderer) writePromptLine(out *strings.Builder) {
 
 // writePrefix writes the prompt prefix.
 func (r *TermRenderer) writePrefix(out *strings.Builder) {
+	if n := r.barInset(); n > 0 {
+		out.WriteString(strings.Repeat(" ", n))
+	}
+
 	out.WriteString(r.prefix)
 }
 
 // writeVisibleBuffer writes the visible buffer content.
-func (r *TermRenderer) writeVisibleBuffer(out *strings.Builder, visibleBuffer string) {
-	out.WriteString(visibleBuffer)
+func (r *TermRenderer) writeVisibleBuffer(out *strings.Builder, visibleBuffer string, model *Model, widths widthInfo) {
+	if !r.inputBar || model == nil {
+		out.WriteString(visibleBuffer)
+
+		return
+	}
+
+	full := model.Text()
+	cursorRune := model.Cursor()
+
+	if r.isScrolling(widths.bufferWidth, widths.availableWidth) {
+		out.WriteString(visibleBuffer)
+
+		if cursorRune >= len([]rune(full)) {
+			r.writeCaretCell(out, "")
+		}
+
+		return
+	}
+
+	before, at, after := splitAtRune(full, cursorRune)
+	out.WriteString(before)
+	r.writeCaretCell(out, at)
+	out.WriteString(after)
+}
+
+func (r *TermRenderer) writeCaretCell(out *strings.Builder, at string) {
+	out.WriteString(ColorCursorCell)
+
+	if at == "" {
+		out.WriteString(" ")
+	} else {
+		out.WriteString(at)
+	}
+
+	out.WriteString(ColorPromptBar)
+}
+
+func splitAtRune(text string, cursorRune int) (before, at, after string) {
+	runes := []rune(text)
+
+	if cursorRune < 0 {
+		cursorRune = 0
+	}
+
+	if cursorRune > len(runes) {
+		cursorRune = len(runes)
+	}
+
+	before = string(runes[:cursorRune])
+	if cursorRune < len(runes) {
+		at = string(runes[cursorRune])
+		after = string(runes[cursorRune+1:])
+	}
+
+	return before, at, after
 }
 
 // writeStatus writes the status text if there's space.
@@ -258,6 +399,52 @@ func (r *TermRenderer) ClearScreen() error {
 	return nil
 }
 
+// padInputBar fills the remainder of the prompt line so the grey bar is full width.
+func (r *TermRenderer) padInputBar(out *strings.Builder, status, visible string, widths widthInfo, model *Model) {
+	if r.width <= 0 {
+		return
+	}
+
+	used := r.inputBarUsedCells(status, visible, widths, model)
+	if pad := r.width - used; pad > 0 {
+		out.WriteString(strings.Repeat(" ", pad))
+	}
+}
+
+func (r *TermRenderer) inputBarUsedCells(status, visible string, widths widthInfo, model *Model) int {
+	used := widths.prefixWidth + uniseg.StringWidth(visible)
+	if r.caretAtEnd(model) {
+		used++
+	}
+
+	if status == "" || r.isScrolling(widths.bufferWidth, widths.availableWidth) {
+		return used
+	}
+
+	contentWidth := widths.prefixWidth + widths.bufferWidth
+
+	requiredSpace := contentWidth + minStatusGap + widths.statusWidth
+	if requiredSpace <= r.width {
+		return r.width
+	}
+
+	if r.width-contentWidth >= minStatusGap {
+		truncated := textwidth.TruncateLeft(status, r.width-contentWidth-minStatusGap)
+
+		return contentWidth + minStatusGap + uniseg.StringWidth(truncated)
+	}
+
+	return used
+}
+
+func (r *TermRenderer) caretAtEnd(model *Model) bool {
+	if !r.inputBar || model == nil {
+		return false
+	}
+
+	return model.Cursor() >= len([]rune(model.Text()))
+}
+
 // isScrolling returns true if buffer requires horizontal scrolling.
 func (r *TermRenderer) isScrolling(bufferWidth, availableWidth int) bool {
 	return bufferWidth > availableWidth
@@ -302,4 +489,46 @@ func extractVisibleSlice(text string, startWidth, endWidth int) (visible string,
 	}
 
 	return result.String(), actualStart
+}
+
+func (r *TermRenderer) writeHintRows(out *strings.Builder, promptTop int) {
+	n := r.hintCount()
+	if n == 0 && r.hintPrev == 0 {
+		return
+	}
+
+	clearFrom := max(promptTop-max(r.hintPrev, n), 1)
+	for row := clearFrom; row < promptTop; row++ {
+		fmt.Fprintf(out, "\x1b[%d;1H\x1b[2K", row)
+	}
+
+	start := promptTop - n
+	for i, line := range r.hints {
+		row := start + i
+		if row < 1 {
+			continue
+		}
+
+		fmt.Fprintf(out, "\x1b[%d;1H\x1b[2K", row)
+
+		if i == r.hintSel {
+			out.WriteString(colorHintSel)
+		}
+
+		out.WriteString(truncateHint(line, r.width))
+
+		if i == r.hintSel {
+			out.WriteString(ansiReset)
+		}
+	}
+
+	r.hintPrev = n
+}
+
+func truncateHint(line string, width int) string {
+	if width <= 0 {
+		return line
+	}
+
+	return textwidth.TruncateRight(line, width)
 }

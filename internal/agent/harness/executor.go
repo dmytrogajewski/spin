@@ -1,11 +1,14 @@
 package harness
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
 	"github.com/dmytrogajewski/spin/internal/agent/scaffold"
+	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -57,6 +60,26 @@ func WithRegistry(r *tools.Registry) Option {
 	}
 }
 
+// HookRunner executes lifecycle hook events. *hooks.Runner implements this.
+type HookRunner interface {
+	Execute(ctx context.Context, event hooks.Event, evtCtx hooks.EventContext) hooks.HookResult
+}
+
+// WithHookRunner sets the lifecycle hook runner for PRE_COMPACT and STOP.
+func WithHookRunner(r HookRunner) Option {
+	return func(e *Executor) {
+		e.hookRunner = r
+	}
+}
+
+// WithRetrievalPipeline sets the context retrieval pipeline for Assemble.
+// A nil pipeline is a no-op on the turn path.
+func WithRetrievalPipeline(p *retrieval.Pipeline) Option {
+	return func(e *Executor) {
+		e.retrievalPipeline = p
+	}
+}
+
 // Executor runs the Extended ReAct execution loop.
 // It consumes a compiled scaffold.Spec and orchestrates LLM calls,
 // tool dispatch, guard checks, and middleware hooks.
@@ -74,6 +97,8 @@ type Executor struct {
 	reminderInjector      ReminderInjector
 	observationSummarizer ObservationSummarizer
 	emitter               *events.EventEmitter
+	hookRunner            HookRunner
+	retrievalPipeline     *retrieval.Pipeline
 }
 
 // NewExecutor creates an Executor from a compiled spec and its dependencies.
@@ -120,6 +145,11 @@ func NewExecutor(
 	}
 
 	return exec, nil
+}
+
+// SetRetrievalPipeline replaces the retrieval pipeline. A nil value disables Assemble.
+func (e *Executor) SetRetrievalPipeline(p *retrieval.Pipeline) {
+	e.retrievalPipeline = p
 }
 
 // currentToolSchemas returns live tool schemas from registry if available,

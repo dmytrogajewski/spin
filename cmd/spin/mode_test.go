@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/dmytrogajewski/spin/internal/agent/frame"
 )
 
 func TestNewModeCmd(t *testing.T) {
@@ -102,6 +105,26 @@ func TestRunModeDescribe_ValidMode(t *testing.T) {
 
 			verifyModeInfo(t, modeName, allModes[modeName])
 		})
+	}
+}
+
+func TestRunModeDescribe_PrintsTaskFramePhase(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	cmd := newModeDescribeCmd()
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"review"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "TaskFrame phase: " + frame.PhaseForMode("review")
+	if !strings.Contains(buf.String(), want) {
+		t.Errorf("describe output missing %q\n%s", want, buf.String())
 	}
 }
 

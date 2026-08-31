@@ -12,7 +12,8 @@ const (
 	listProcessesDescription = "List all background tasks managed by the agent"
 )
 
-// ListProcessesTool lists background tasks and their states.
+// ListProcessesTool lists shell background tasks and their states.
+// A2A rows are not included; the unified view is /tasks (kind=agent|shell).
 type ListProcessesTool struct {
 	manager TaskManager
 }

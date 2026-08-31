@@ -39,6 +39,10 @@ func TestMetadata_DefaultValues(t *testing.T) {
 	if session.Metadata.LastError != "" {
 		t.Errorf("LastError = %s, want empty string", session.Metadata.LastError)
 	}
+
+	if len(session.Metadata.AgentTasks) != 0 {
+		t.Errorf("AgentTasks length = %d, want 0", len(session.Metadata.AgentTasks))
+	}
 }
 
 // Test Token Tracking.

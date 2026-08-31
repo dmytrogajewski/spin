@@ -19,6 +19,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
 	"github.com/dmytrogajewski/spin/internal/ui/status"
+	"github.com/dmytrogajewski/spin/internal/ui/suggest"
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
@@ -141,7 +142,7 @@ func WithKeyboardEvents(keyEvents <-chan term.KeyEvent) PureTTYOption {
 }
 
 // NewPureTTY creates a new PureTTY adapter.
-// Defaults: stdin/stdout TTY, 100-entry history, "> " prefix.
+// Defaults: stdin/stdout TTY, 100-entry history, "→ " prefix.
 func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 	p := &PureTTY{
 		out:            out,
@@ -184,7 +185,8 @@ func (p *PureTTY) initCoreDeps(out io.Writer) error {
 
 	if p.renderer == nil {
 		w, h := p.tty.Size()
-		p.renderer = prompt.NewTermRenderer(out, w, "> ")
+		p.renderer = prompt.NewTermRenderer(out, w, prompt.DefaultPrefix)
+		p.renderer.SetInputBar(true)
 		p.renderer.SetHeight(h)
 	}
 
@@ -287,8 +289,21 @@ func (p *PureTTY) Run(ctx context.Context) error {
 	}
 
 	defer func() {
-		// Reset scrolling region before exiting.
-		fmt.Fprint(p.out, "\x1b[r") // Reset scroll region to full screen.
+		// Stop welcome blink and spinner before wiping so they cannot
+		// redraw onto the cleared screen while the process is exiting.
+		p.notifyTranscriptStart()
+
+		p.mu.Lock()
+		sm := p.statusManager
+		p.mu.Unlock()
+
+		if sm != nil {
+			sm.StopSpinner()
+		}
+
+		// Reset scroll region, then wipe the regular screen (no alt-buffer)
+		// so Ctrl+C / quit leaves a clean terminal like clear(1).
+		writeExitClear(p.out)
 		_ = p.tty.Exit()
 	}()
 
@@ -678,6 +693,18 @@ func (p *PureTTY) handleApprovalKey(event term.KeyEvent, dialog *overlay.Approva
 func (p *PureTTY) startPromptLoop(ctx context.Context, keys <-chan term.KeyEvent) <-chan string {
 	loop := prompt.NewLoop(p.model, p.renderer, keys)
 
+	workDir, err := os.Getwd()
+	if err != nil {
+		workDir = ""
+	}
+
+	src := suggest.NewSource(workDir, nil)
+	src.Load(ctx)
+
+	loop.SetWorkDir(workDir)
+	loop.SetSource(src)
+	loop.SetClipper(suggest.OSClipboard)
+
 	return loop.Run(ctx)
 }
 
@@ -701,10 +728,11 @@ func (p *PureTTY) handleResize(w, h int) {
 	}
 }
 
-// handleSubmittedLine echoes user input to transcript.
+// handleSubmittedLine echoes user input so it stays distinct from agent work.
 func (p *PureTTY) handleSubmittedLine(line string) {
-	// Echo user input with prompt prefix.
-	_ = p.coord.PrintLine("> " + line)
+	_ = p.coord.PrintLine("")
+	_ = p.coord.PrintLine(prompt.FormatUserEcho(line))
+	_ = p.coord.PrintLine("")
 }
 
 // rendererAdapter adapts prompt.TermRenderer to output.PromptRenderer interface.
@@ -827,6 +855,14 @@ func (p *PureTTY) ApprovalMode() string {
 	defer p.mu.Unlock()
 
 	return normalizeApprovalMode(p.approvalMode)
+}
+
+// SetCompactEnabled sets tool-output compact on/off on the status bar.
+func (p *PureTTY) SetCompactEnabled(enabled bool) {
+	if p.statusManager != nil {
+		p.statusManager.SetCompactEnabled(enabled)
+		p.updateStatusBar()
+	}
 }
 
 // SetApprovalMode sets the approval mode and refreshes the status bar.
@@ -1168,6 +1204,8 @@ func (p *PureTTY) registerDefaultCommands() {
 			return p.executeChangeThemeCommand(ctx)
 		},
 	))
+
+	overlay.RegisterHarnessCommands(p.paletteRegistry)
 }
 
 // executeRunCommand implements the "Run..." command.
@@ -1239,6 +1277,11 @@ func (p *PureTTY) showStatusMessage(msg string) {
 	}
 
 	_ = p.statusRenderer.Render(msg)
+}
+
+// writeExitClear keeps the existing ClearHome teardown (scroll-region reset + wipe).
+func writeExitClear(w io.Writer) {
+	fmt.Fprint(w, "\x1b[r"+term.ClearHome)
 }
 
 // Verify PureTTY implements ports.UI.

@@ -3,6 +3,7 @@ package status
 import (
 	"testing"
 
+	"github.com/dmytrogajewski/spin/internal/contexteng/compact"
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
@@ -237,6 +238,29 @@ func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
 	}
 }
 
+// Journey: specs/journeys/JOURNEY-013-compact-status-chip-and-operator-escape.md.
+func TestAggregator_ToolComplete_LedgerBytes(t *testing.T) {
+	t.Parallel()
+
+	manager := NewManager()
+	aggregator := NewAggregator(manager)
+
+	aggregator.ProcessEvent(&events.Event{
+		Type: events.EventToolCallComplete,
+		Data: events.ToolCallCompleteData{
+			Metadata: map[string]any{
+				compact.MetaBytesIn:  1000,
+				compact.MetaBytesOut: 280,
+			},
+		},
+	})
+
+	got := manager.GetMetrics()
+	if got.CompactBytesIn != 1000 || got.CompactBytesOut != 280 {
+		t.Fatalf("savings in=%d out=%d, want 1000/280", got.CompactBytesIn, got.CompactBytesOut)
+	}
+}
+
 func TestAggregator_ProcessEvent_TurnComplete(t *testing.T) {
 	t.Parallel()
 
@@ -290,5 +314,27 @@ func TestAggregator_ProcessEvent_ContentComplete_ResetsStreaming(t *testing.T) {
 	// TPS should be reset to 0.
 	if metrics.TokensPerSec != 0 {
 		t.Errorf("Expected TPS to be reset to 0 after content complete, got %.2f", metrics.TokensPerSec)
+	}
+}
+
+// Journey: specs/journeys/JOURNEY-023-tui-and-acp-surfaces.md.
+func TestAggregator_BackgroundTaskUpdatesCounts(t *testing.T) {
+	t.Parallel()
+
+	manager := NewManager()
+	aggregator := NewAggregator(manager)
+
+	aggregator.ProcessEvent(&events.Event{Type: events.EventBackgroundTaskStarted})
+
+	got := manager.GetMetrics()
+	if got.TasksActive != 1 || got.TasksTotal != 1 {
+		t.Fatalf("after start active=%d total=%d", got.TasksActive, got.TasksTotal)
+	}
+
+	aggregator.ProcessEvent(&events.Event{Type: events.EventBackgroundTaskStopped})
+
+	got = manager.GetMetrics()
+	if got.TasksActive != 0 || got.TasksTotal != 1 {
+		t.Fatalf("after stop active=%d total=%d", got.TasksActive, got.TasksTotal)
 	}
 }

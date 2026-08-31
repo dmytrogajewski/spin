@@ -1,0 +1,5 @@
+pkg/a.go
+  10: this is a very long matching line that should be truncated because it exceeds...
+  20: short match
+pkg/b.go
+  5: other file match
